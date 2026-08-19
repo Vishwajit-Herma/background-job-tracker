@@ -62,6 +62,7 @@ LOCAL_APPS = [
     "apps.users",
     "apps.api",
     "apps.teams",
+    "apps.config_management",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -201,8 +202,9 @@ REST_FRAMEWORK: dict[str, Any] = {
         "rest_framework.filters.SearchFilter",
         "rest_framework.filters.OrderingFilter",
     ],
-    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "DEFAULT_PAGINATION_CLASS": "apps.config_management.pagination.Pagination",
     "PAGE_SIZE": 25,
+    "EXCEPTION_HANDLER": "apps.config_management.responses.custom_exception_handler",
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_RENDERER_CLASSES": [
         "rest_framework.renderers.JSONRenderer",
@@ -235,6 +237,8 @@ CORS_ALLOW_CREDENTIALS = True
 
 
 # Celery
+from celery.schedules import crontab
+
 CELERY_BROKER_URL = env("CELERY_BROKER_URL", default="redis://localhost:6379/1")
 CELERY_RESULT_BACKEND = "django-db"
 CELERY_CACHE_BACKEND = "django-cache"
@@ -244,6 +248,13 @@ CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = TIME_ZONE
+
+CELERY_BEAT_SCHEDULE = {
+    "hard-delete-soft-deleted-records": {
+        "task": "config_management.hard_delete_soft_deleted_records",
+        "schedule": crontab(hour=0, minute=0),  # Runs every day at midnight
+    },
+}
 
 
 # Email
