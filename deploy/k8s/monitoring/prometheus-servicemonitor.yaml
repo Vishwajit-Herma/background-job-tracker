@@ -1,0 +1,14 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: background_job_tracker
+  labels:
+    app: background_job_tracker
+spec:
+  selector:
+    matchLabels:
+      app: background_job_tracker
+  endpoints:
+    - port: metrics
+      interval: 30s
+      path: /metrics

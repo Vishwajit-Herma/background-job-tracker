@@ -1,0 +1,34 @@
+"""Signal handlers for graceful shutdown (12-factor IX: Disposability)."""
+
+import logging
+import signal
+import sys
+import threading
+
+logger = logging.getLogger(__name__)
+
+
+def graceful_shutdown(signum, frame):
+    """Handle graceful shutdown on SIGTERM."""
+    logger.info(f"Received signal {signum}. Performing graceful shutdown...")
+
+    # Perform cleanup tasks
+    logger.info("Closing database connections...")
+    from django.db import connections
+
+    for conn in connections.all():
+        conn.close()
+
+    logger.info("Graceful shutdown complete.")
+    sys.exit(0)
+
+
+def setup_signal_handlers():
+    """Register signal handlers for graceful shutdown."""
+    if threading.current_thread() is not threading.main_thread():
+        # runserver's autoreloader imports wsgi/asgi in a worker thread where
+        # signal.signal() raises ValueError; the reloader handles signals itself.
+        return
+    signal.signal(signal.SIGTERM, graceful_shutdown)
+    signal.signal(signal.SIGINT, graceful_shutdown)
+    logger.info("Signal handlers registered for graceful shutdown")

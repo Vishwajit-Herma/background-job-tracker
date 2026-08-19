@@ -1,0 +1,62 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: background-job-tracker-pg
+spec:
+  ports:
+    - port: 5432
+      targetPort: 5432
+  selector:
+    app: background-job-tracker
+    component: postgresql
+  clusterIP: None
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: background-job-tracker-pg
+spec:
+  serviceName: background-job-tracker-pg
+  replicas: 1
+  selector:
+    matchLabels:
+      app: background-job-tracker
+      component: postgresql
+  template:
+    metadata:
+      labels:
+        app: background-job-tracker
+        component: postgresql
+    spec:
+      containers:
+        - name: postgresql
+          image: postgres:17-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: background_job_tracker_db
+            - name: POSTGRES_USER
+              value: background_job_tracker_user
+            - name: POSTGRES_PASSWORD
+              value: changeme
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: postgresql-data
+              mountPath: /var/lib/postgresql/data
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+  volumeClaimTemplates:
+    - metadata:
+        name: postgresql-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi

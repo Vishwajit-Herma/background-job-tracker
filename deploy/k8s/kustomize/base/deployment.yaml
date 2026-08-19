@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: background-job-tracker-web
+  labels:
+    app: background-job-tracker
+    component: web
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: background-job-tracker
+      component: web
+  template:
+    metadata:
+      labels:
+        app: background-job-tracker
+        component: web
+    spec:
+      initContainers:
+        - name: migrate
+          image: background-job-tracker:latest
+          imagePullPolicy: Never
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              uv run python manage.py migrate --noinput &&
+              uv run python manage.py collectstatic --noinput
+              envFrom:
+            - configMapRef:
+                name: background-job-tracker-config
+            - secretRef:
+                name: background-job-tracker-secrets
+          volumeMounts:
+            - name: static-files
+              mountPath: /app/staticfiles
+      containers:
+        - name: web
+          image: background-job-tracker:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8000
+              name: http
+          envFrom:
+            - configMapRef:
+                name: background-job-tracker-config
+            - secretRef:
+                name: background-job-tracker-secrets
+          volumeMounts:
+            - name: static-files
+              mountPath: /app/staticfiles
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            limits:
+              cpu: 2000m
+              memory: 1Gi
+            requests:
+              cpu: 500m
+              memory: 512Mi
+      volumes:
+        - name: static-files
+          emptyDir: {}

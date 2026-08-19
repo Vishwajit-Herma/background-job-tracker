@@ -1,0 +1,48 @@
+"""Utility functions for teams."""
+
+from django.conf import settings
+from django.core.mail import send_mail
+from django.template.loader import render_to_string
+from django.urls import reverse
+
+
+def send_team_invitation_email(invitation):
+    """Send team invitation email."""
+    accept_url = settings.SITE_URL + reverse(
+        "teams:invitation_accept", kwargs={"token": invitation.token}
+    )
+
+    subject = f"You've been invited to join {invitation.team.name}"
+    context = {
+        "invitation": invitation,
+        "team": invitation.team,
+        "invited_by": invitation.invited_by,
+        "accept_url": accept_url,
+    }
+    message = render_to_string("teams/emails/invitation.txt", context)
+    html_message = render_to_string("teams/emails/invitation.html", context)
+    send_mail(
+        subject=subject,
+        message=message,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=[invitation.email],
+        html_message=html_message,
+        fail_silently=False,
+    )
+
+
+def get_user_teams(user):
+    """Get all teams for a user."""
+    from apps.teams.models import Team
+
+    return Team.objects.filter(
+        members__user=user,
+        members__is_active=True,
+        is_active=True,
+    ).distinct()
+
+
+def get_user_default_team(user):
+    """Get user's default team (first team they joined)."""
+    teams = get_user_teams(user)
+    return teams.first() if teams.exists() else None

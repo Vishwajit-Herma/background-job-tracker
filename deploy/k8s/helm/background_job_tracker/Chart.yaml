@@ -1,0 +1,6 @@
+apiVersion: v2
+name: background_job_tracker
+description: A Django Project to track Background jobs.
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
