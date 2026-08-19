@@ -266,20 +266,25 @@ class CustomResponseMixin:
 
             custom_message = self._extract_message(getattr(response, "data", None))
 
-            if response.status_code < 400:
-                meta = getattr(response, "meta", None)
-                if meta is None:
-                    meta = response.data.get("meta") if isinstance(response.data, dict) else None
-                response = self._format_success_response(
-                    response.data, response.status_code, custom_message, meta=meta
-                )
-            else:
-                meta = getattr(response, "meta", None)
-                if meta is None:
-                    meta = response.data.get("meta") if isinstance(response.data, dict) else None
-                response = self._format_error_response(
-                    response.data, response.status_code, custom_message, meta=meta
-                )
+            if response.status_code != status.HTTP_204_NO_CONTENT:
+                if response.status_code < 400:
+                    meta = getattr(response, "meta", None)
+                    if meta is None:
+                        meta = (
+                            response.data.get("meta") if isinstance(response.data, dict) else None
+                        )
+                    response = self._format_success_response(
+                        response.data, response.status_code, custom_message, meta=meta
+                    )
+                else:
+                    meta = getattr(response, "meta", None)
+                    if meta is None:
+                        meta = (
+                            response.data.get("meta") if isinstance(response.data, dict) else None
+                        )
+                    response = self._format_error_response(
+                        response.data, response.status_code, custom_message, meta=meta
+                    )
 
             if renderer_context:
                 response.accepted_renderer = renderer_context.get("accepted_renderer")

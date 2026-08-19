@@ -22,13 +22,13 @@ Thank you for your interest in contributing! This document provides guidelines a
 2. Install dependencies
    ```bash
    uv sync
-   
+
    ```
 
 3. Set up pre-commit hooks
    ```bash
    uv run pre-commit install
-   
+
    ```
 
 4. Start development services
