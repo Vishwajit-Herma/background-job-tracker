@@ -19,6 +19,7 @@ def test_intra_batch_merging(project1):
     payload = [
         {
             "task_identifier": job.task_identifier,
+            "event_id": "evt-5b4f3f9e",
             "external_id": "exec_batch_1",
             "status": "running",
             "worker": "worker-A",
@@ -28,6 +29,7 @@ def test_intra_batch_merging(project1):
         },
         {
             "task_identifier": job.task_identifier,
+            "event_id": "evt-e1543021",
             "external_id": "exec_batch_1",
             "status": "success",
             "finished_at": finish_time,

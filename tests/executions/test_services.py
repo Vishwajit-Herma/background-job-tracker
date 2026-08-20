@@ -15,6 +15,7 @@ class TestServices:
         now = timezone.now()
         data = [
             {
+                "event_id": "evt-b482a9a1",
                 "external_id": "ext_1",
                 "task_identifier": "tasks.new_job",
                 "status": "success",
@@ -41,6 +42,7 @@ class TestServices:
         # Initial ingestion - newer event arrives first
         data1 = [
             {
+                "event_id": "evt-b9c17caf",
                 "external_id": "ext_1",
                 "task_identifier": "tasks.job",
                 "status": "success",
@@ -52,6 +54,7 @@ class TestServices:
         # Stale ingestion - older event arrives later
         data2 = [
             {
+                "event_id": "evt-247c7229",
                 "external_id": "ext_1",
                 "task_identifier": "tasks.job",
                 "status": "running",
@@ -61,9 +64,9 @@ class TestServices:
         ]
         result = ingest_executions_batch(project1, data2)
 
-        # Stale events should be counted as duplicates and ignored
-        assert result["duplicates"] == 1
-        assert result["accepted"] == 0
+        # Stale events are now persisted as history, so they are accepted. They just don't regress Execution.
+        assert result["duplicates"] == 0
+        assert result["accepted"] == 1
 
         # Verify state did not regress or merge
         exec_obj = Execution.objects.get(external_id="ext_1")
@@ -77,6 +80,7 @@ class TestServices:
 
         data = [
             {
+                "event_id": "evt-e8849a0f",
                 "external_id": "ext_1",
                 "task_identifier": "tasks.job",
                 "status": "success",
@@ -99,6 +103,7 @@ class TestServices:
         # Event 1: newer timestamp, Event 2: older timestamp
         data = [
             {
+                "event_id": "evt-74a03f3f",
                 "external_id": "ext_1",
                 "task_identifier": "tasks.job",
                 "status": "success",
@@ -106,6 +111,7 @@ class TestServices:
                 "event_timestamp": now,
             },
             {
+                "event_id": "evt-950e278d",
                 "external_id": "ext_1",
                 "task_identifier": "tasks.job",
                 "status": "running",
@@ -117,7 +123,7 @@ class TestServices:
 
         result = ingest_executions_batch(project1, data)
 
-        # In a batch of 2, the older one is treated as an intra-batch duplicate (or just safely merged out).
+        # The older event is retained as historical telemetry but must not override the newer Execution snapshot.
         # We assert that the batch resolves correctly.
         assert result["duplicates"] == 0
         assert result["rejected"] == 0
@@ -140,6 +146,7 @@ class TestServices:
 
         data = [
             {
+                "event_id": "evt-68f537e6",
                 "external_id": "ext_1",
                 "task_identifier": "tasks.job",
                 "status": "success",
@@ -158,6 +165,7 @@ class TestServices:
 
         data1 = [
             {
+                "event_id": "evt-e4f47e87",
                 "external_id": "ext_1",
                 "task_identifier": "tasks.new",
                 "status": "success",
@@ -169,6 +177,7 @@ class TestServices:
 
         data2 = [
             {
+                "event_id": "evt-a2408d9a",
                 "external_id": "ext_1",
                 "task_identifier": "tasks.new",
                 "status": "running",
@@ -176,19 +185,21 @@ class TestServices:
             }
         ]
         result2 = ingest_executions_batch(project1, data2)
-        assert result2["duplicates"] == 1
-        assert result2["accepted"] == 0
+        assert result2["duplicates"] == 0
+        assert result2["accepted"] == 1
 
     def test_same_external_id_for_different_jobs_allowed(self, project1):
         now = timezone.now()
         data = [
             {
+                "event_id": "evt-ae3db5f9",
                 "external_id": "ext_1",
                 "task_identifier": "tasks.a",
                 "status": "success",
                 "event_timestamp": now,
             },
             {
+                "event_id": "evt-139f1548",
                 "external_id": "ext_1",
                 "task_identifier": "tasks.b",
                 "status": "success",
@@ -203,6 +214,7 @@ class TestServices:
         now = timezone.now()
         data = [
             {
+                "event_id": "evt-2837652a",
                 "external_id": "ext_1",
                 "task_identifier": "tasks.a",
                 "status": "success",
@@ -220,12 +232,14 @@ class TestServices:
         now = timezone.now()
         data = [
             {
+                "event_id": "evt-135783ef",
                 "external_id": "ext_1",
                 "task_identifier": "tasks.a",
                 "status": "running",
                 "event_timestamp": now,
             },
             {
+                "event_id": "evt-cd38acf7",
                 "external_id": "ext_1",
                 "task_identifier": "tasks.a",
                 "status": "success",
@@ -233,8 +247,8 @@ class TestServices:
             },
         ]
         result = ingest_executions_batch(project1, data)
-        assert result["accepted"] == 1
-        assert result["duplicates"] == 1
+        assert result["accepted"] == 2
+        assert result["duplicates"] == 0
         assert Execution.objects.count() == 1
 
     def test_batch_older_newer_oldest(self, project1):
@@ -244,18 +258,21 @@ class TestServices:
 
         data = [
             {
+                "event_id": "evt-ef6cbd68",
                 "external_id": "ext_1",
                 "task_identifier": "tasks.a",
                 "status": "pending",
                 "event_timestamp": t_older,
             },
             {
+                "event_id": "evt-3113f18e",
                 "external_id": "ext_1",
                 "task_identifier": "tasks.a",
                 "status": "success",
                 "event_timestamp": t_newer,
             },
             {
+                "event_id": "evt-62579eed",
                 "external_id": "ext_1",
                 "task_identifier": "tasks.a",
                 "status": "running",
@@ -278,6 +295,7 @@ class TestServices:
 
         data = [
             {
+                "event_id": "evt-a5a2b797",
                 "external_id": "ext_1",
                 "task_identifier": "tasks.a",
                 "status": "success",
@@ -293,3 +311,85 @@ class TestServices:
                 ingest_executions_batch(project1, data)
 
         assert Execution.objects.count() == 0
+
+    def test_actual_execution_event_persistence(self, project1):
+        Job.objects.create(project=project1, name="Job", task_identifier="tasks.job")
+        now = timezone.now()
+        older = now - timedelta(seconds=10)
+
+        data = [
+            {
+                "event_id": "evt-new-123",
+                "external_id": "ext_1",
+                "task_identifier": "tasks.job",
+                "status": "success",
+                "event_timestamp": now,
+            },
+            {
+                "event_id": "evt-old-456",
+                "external_id": "ext_1",
+                "task_identifier": "tasks.job",
+                "status": "running",
+                "event_timestamp": older,
+            },
+        ]
+
+        result = ingest_executions_batch(project1, data)
+        assert result["accepted"] == 2
+        assert result["duplicates"] == 0
+
+        from apps.executions.models import ExecutionEvent
+
+        exec_obj = Execution.objects.get(external_id="ext_1")
+
+        events = ExecutionEvent.objects.filter(execution=exec_obj).order_by("-event_timestamp")
+        assert events.count() == 2
+
+        assert events[0].event_id == "evt-new-123"
+        assert events[0].status == "success"
+        assert events[0].event_timestamp == now
+
+        assert events[1].event_id == "evt-old-456"
+        assert events[1].status == "running"
+        assert events[1].event_timestamp == older
+
+    def test_event_id_idempotency(self, project1):
+        Job.objects.create(project=project1, name="Job", task_identifier="tasks.job")
+        now = timezone.now()
+
+        # Request 1
+        data1 = [
+            {
+                "event_id": "EVT-123",
+                "external_id": "ext_1",
+                "task_identifier": "tasks.job",
+                "status": "running",
+                "event_timestamp": now,
+            }
+        ]
+        result1 = ingest_executions_batch(project1, data1)
+        assert result1["accepted"] == 1
+        assert result1["duplicates"] == 0
+
+        # Request 2 (Retry of Request 1 with same event_id)
+        data2 = [
+            {
+                "event_id": "EVT-123",
+                "external_id": "ext_1",
+                "task_identifier": "tasks.job",
+                "status": "running",
+                "event_timestamp": now,
+            }
+        ]
+        result2 = ingest_executions_batch(project1, data2)
+        assert result2["accepted"] == 0
+        assert result2["duplicates"] == 1
+
+        from apps.executions.models import ExecutionEvent
+
+        exec_obj = Execution.objects.get(external_id="ext_1")
+
+        # Explicitly verify the DB only has 1 event despite 2 requests
+        events = ExecutionEvent.objects.filter(execution=exec_obj)
+        assert events.count() == 1
+        assert events[0].event_id == "EVT-123"

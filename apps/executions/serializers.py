@@ -2,7 +2,7 @@ from django.conf import settings
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 
-from .models import Execution
+from .models import Execution, ExecutionEvent
 
 
 class ExecutionSerializer(serializers.ModelSerializer):
@@ -34,11 +34,41 @@ class ExecutionSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+class ExecutionEventSerializer(serializers.ModelSerializer):
+    """
+    Serializer for retrieving historical execution telemetry events.
+    All fields are read-only since events are immutable.
+    """
+
+    class Meta:
+        model = ExecutionEvent
+        fields = [
+            "id",
+            "execution",
+            "event_id",
+            "status",
+            "event_timestamp",
+            "received_at",
+            "started_at",
+            "finished_at",
+            "duration_ms",
+            "queue",
+            "worker",
+            "retry_count",
+            "error_type",
+            "error_message",
+            "traceback",
+            "metadata",
+        ]
+        read_only_fields = fields
+
+
 class ExecutionIngestSerializer(serializers.Serializer):
     """
     Validates a single execution telemetry payload from the SDK.
     """
 
+    event_id = serializers.CharField(max_length=255, required=True, allow_blank=False)
     external_id = serializers.CharField(max_length=255, required=True, allow_blank=False)
     task_identifier = serializers.CharField(max_length=255, required=True, allow_blank=False)
     event_timestamp = serializers.DateTimeField(required=True)
@@ -87,9 +117,9 @@ class ExecutionBatchIngestSerializer(serializers.Serializer):
     Validates a batch payload of executions.
 
     API Semantic Definitions:
-    - accepted: The total number of unique execution events that were chronologically valid and successfully processed/merged. This counts telemetry events, not database rows.
-    - duplicates: Events that were ignored because they were chronologically stale (older than or equal to the stored last_event_at) or exact timestamp duplicates within the same batch.
-    - rejected: Events that were dropped because their target Job was INACTIVE or deleted.
+    - accepted: Number of unique telemetry events successfully persisted/processed. Accepted counts successfully persisted telemetry events, not Execution rows updated.
+    - duplicates: Events whose event_id was already seen for the same Execution, including retries of an already persisted event.
+    - rejected: Events rejected because of validation or business rules such as inactive/deleted Jobs.
     """
 
     executions = serializers.ListField(
