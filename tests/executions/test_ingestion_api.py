@@ -39,6 +39,7 @@ class TestIngestionAPI:
         url = reverse("api:executions:ingestion-list")
 
         data = {
+            "event_id": "evt-28f60f40",
             "external_id": "exec_1",
             "task_identifier": "tasks.test_task",
             "status": "success",
@@ -67,12 +68,14 @@ class TestIngestionAPI:
         data = {
             "executions": [
                 {
+                    "event_id": "evt-dfb0cd85",
                     "external_id": "exec_1",
                     "task_identifier": "tasks.test_task",
                     "status": "running",
                     "event_timestamp": "2026-08-20T10:00:00Z",
                 },
                 {
+                    "event_id": "evt-1c4fbbe3",
                     "external_id": "exec_2",
                     "task_identifier": "tasks.test_task_2",
                     "status": "pending",
@@ -80,6 +83,7 @@ class TestIngestionAPI:
                 },
                 # Duplicate ID to test batch idempotency
                 {
+                    "event_id": "evt-6bf4f02b",
                     "external_id": "exec_1",
                     "task_identifier": "tasks.test_task",
                     "status": "success",
@@ -126,6 +130,7 @@ class TestIngestionAPI:
         now = timezone.now()
 
         data = {
+            "event_id": "evt-e1995590",
             "external_id": "exec_retry",
             "task_identifier": "tasks.test_retry",
             "status": "success",
@@ -159,10 +164,10 @@ class TestIngestionAPI:
 
         assert response.status_code == status.HTTP_202_ACCEPTED
 
-        # Because Request A created it with the exact same timestamp (now),
-        # Request B (the retry) will see it as a duplicate!
-        assert response.data["data"]["duplicates"] == 1
-        assert response.data["data"]["accepted"] == 0
+        # Because Request A only created the Execution and no ExecutionEvent,
+        # Request B's completely fresh event_id is accepted as historical telemetry.
+        assert response.data["data"]["duplicates"] == 0
+        assert response.data["data"]["accepted"] == 1
 
         exec_obj = Execution.objects.get(job=job, external_id="exec_retry")
         # Ensure it didn't overwrite status because timestamp was equal

@@ -7,9 +7,10 @@ from django.db import IntegrityError
 from django_filters.rest_framework import DjangoFilterBackend
 
 from apps.config_management.views import CustomBaseViewSet
-from .models import Execution
+from .models import Execution, ExecutionEvent
 from .serializers import (
     ExecutionSerializer,
+    ExecutionEventSerializer,
     ExecutionIngestSerializer,
     ExecutionBatchIngestSerializer,
 )
@@ -127,7 +128,7 @@ class ExecutionViewSet(CustomBaseViewSet):
         Enforce strict tenant isolation: only return executions belonging to
         projects that the user is an active member of.
         """
-        qs = Execution.objects.select_related("job", "job__project").filter(
+        qs = Execution.objects.filter(
             job__is_deleted=False,
             job__project__is_deleted=False,
             job__project__team__is_active=True,
@@ -135,3 +136,23 @@ class ExecutionViewSet(CustomBaseViewSet):
             job__project__team__members__is_active=True,
         )
         return qs
+
+    @extend_schema(
+        summary="Execution Timeline",
+        description="Returns the historical timeline of telemetry events for this execution.",
+        responses={200: ExecutionEventSerializer(many=True)},
+    )
+    @action(detail=True, methods=["get"])
+    def events(self, request, pk=None):
+        execution = self.get_object()
+        events_qs = ExecutionEvent.objects.filter(execution=execution).order_by(
+            "-event_timestamp", "-id"
+        )
+
+        page = self.paginate_queryset(events_qs)
+        if page is not None:
+            serializer = ExecutionEventSerializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = ExecutionEventSerializer(events_qs, many=True)
+        return Response(serializer.data)

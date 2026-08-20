@@ -66,3 +66,59 @@ class Execution(models.Model):
 
     def __str__(self):
         return f"Execution {self.external_id} ({self.status})"
+
+
+class ExecutionEvent(models.Model):
+    """
+    Immutable historical telemetry event for an Execution.
+    """
+
+    execution = models.ForeignKey(
+        Execution,
+        on_delete=models.CASCADE,
+        related_name="events",
+        verbose_name=_("execution"),
+    )
+
+    event_id = models.CharField(_("event ID"), max_length=255)
+
+    status = models.CharField(
+        _("status"),
+        max_length=20,
+        choices=Execution.Status.choices,
+    )
+
+    event_timestamp = models.DateTimeField(_("event timestamp"))
+    received_at = models.DateTimeField(_("received at"), auto_now_add=True)
+
+    started_at = models.DateTimeField(_("started at"), null=True, blank=True)
+    finished_at = models.DateTimeField(_("finished at"), null=True, blank=True)
+    duration_ms = models.IntegerField(_("duration in ms"), null=True, blank=True)
+
+    queue = models.CharField(_("queue"), max_length=255, blank=True)
+    worker = models.CharField(_("worker"), max_length=255, blank=True)
+    retry_count = models.IntegerField(_("retry count"), default=0)
+
+    error_type = models.CharField(_("error type"), max_length=255, blank=True)
+    error_message = models.TextField(_("error message"), blank=True)
+    traceback = models.TextField(_("traceback"), blank=True)
+
+    metadata = models.JSONField(_("metadata"), default=dict, blank=True)
+
+    class Meta:
+        verbose_name = _("execution event")
+        verbose_name_plural = _("execution events")
+        ordering = ["-event_timestamp", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["execution", "event_id"],
+                name="unique_event_id_per_execution",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["execution", "-event_timestamp"]),
+            models.Index(fields=["event_timestamp"]),
+        ]
+
+    def __str__(self):
+        return f"Event {self.event_id} ({self.status}) for {self.execution.external_id}"
