@@ -1,0 +1,3 @@
+"""Teams app for multi-tenancy support."""
+
+default_app_config = "apps.teams.apps.TeamsConfig"

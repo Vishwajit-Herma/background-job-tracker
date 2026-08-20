@@ -1,0 +1,32 @@
+# Changes here will be overwritten by Copier
+_src_path: /tmp/copier._vcs.clone.j9ib0jug
+_commit: cd95c94aacd9e752907dca1e8b313d11a4c8c568
+project_type: custom
+project_name: Background Job Tracker
+project_slug: background_job_tracker
+project_description: A Django Project to track Background jobs.
+author_name: Vishwajit Herma
+author_email: vishuherma@gmail.com
+git_repository_url: https://github.com/Vishwajit-Herma/background-job-tracker
+python_version: 3.14
+dependency_manager: uv
+database: postgresql
+cache: redis
+api_style: drf
+frontend: none
+background_tasks: celery
+use_channels: False
+auth_backend: allauth
+use_2fa: False
+observability_level: full
+use_sentry: False
+deployment_targets: ['kubernetes']
+media_storage: local-whitenoise
+security_profile: standard
+use_sops: False
+use_teams: True
+use_stripe: False
+use_search: none
+use_i18n: False
+ci_provider: github-actions
+license: MIT

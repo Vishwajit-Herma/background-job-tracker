@@ -1,0 +1,76 @@
+# Default values for background_job_tracker
+
+replicaCount: 2
+
+# Environment injection for all pods (web, celery worker/beat). Both refs must
+# exist in the namespace before install; the kustomize base ships matching
+# ConfigMap/Secret manifests, or create them from your .env file.
+envFrom:
+  configMapName: background-job-tracker-config
+  secretName: background-job-tracker-secrets
+
+image:
+  repository: background_job_tracker
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8000
+
+ingress:
+  enabled: true
+  className: "traefik"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  hosts:
+    - host: background_job_tracker.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: background_job_tracker-tls
+      hosts:
+        - background_job_tracker.example.com
+
+resources:
+  limits:
+    cpu: 1000m
+    memory: 512Mi
+  requests:
+    cpu: 250m
+    memory: 256Mi
+
+postgresql:
+  enabled: true
+  auth:
+    database: background_job_tracker_db
+    username: background_job_tracker_user
+    password: changeme
+
+redis:
+  enabled: true
+  architecture: standalone
+
+
+celery:
+  worker:
+    replicaCount: 2
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 100m
+        memory: 256Mi
+
+  beat:
+    enabled: true
+    resources:
+      limits:
+        cpu: 100m
+        memory: 128Mi
+      requests:
+        cpu: 50m
+        memory: 64Mi

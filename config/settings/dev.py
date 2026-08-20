@@ -1,0 +1,37 @@
+"""Development settings."""
+
+from .base import *  # noqa: F403, F401
+
+DEBUG = True
+
+# Email - SMTP when EMAIL_HOST is set (docker compose points it at Mailpit),
+# console backend otherwise
+EMAIL_HOST = env("EMAIL_HOST", default="")  # noqa: F405
+if EMAIL_HOST:
+    EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+    EMAIL_PORT = env.int("EMAIL_PORT", default=1025)  # noqa: F405
+else:
+    EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+
+# Debug Toolbar
+if "django_debug_toolbar" in INSTALLED_APPS:  # noqa: F405
+    MIDDLEWARE.insert(0, "debug_toolbar.middleware.DebugToolbarMiddleware")  # noqa: F405
+    INTERNAL_IPS = ["127.0.0.1", "localhost"]
+
+# Allow all hosts in development
+ALLOWED_HOSTS = ALLOWED_HOSTS or ["*"]  # noqa: F405
+
+# Disable HTTPS redirects in development
+SECURE_SSL_REDIRECT = False
+SESSION_COOKIE_SECURE = False
+CSRF_COOKIE_SECURE = False
+
+# Add browsable API renderer for development
+REST_FRAMEWORK["DEFAULT_RENDERER_CLASSES"].append(  # noqa: F405
+    "rest_framework.renderers.BrowsableAPIRenderer"
+)
+
+
+# Celery - eager mode for development
+CELERY_TASK_ALWAYS_EAGER = env.bool("CELERY_TASK_ALWAYS_EAGER", default=False)  # noqa: F405
+CELERY_TASK_EAGER_PROPAGATES = True
