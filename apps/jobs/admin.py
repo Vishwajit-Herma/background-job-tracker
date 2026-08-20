@@ -16,6 +16,7 @@ class JobAdmin(admin.ModelAdmin):
     )
     list_filter = ("project", "status", "verification_status", "is_deleted")
     search_fields = ("name", "task_identifier", "project__name")
+    list_select_related = ("project",)
 
     def get_queryset(self, request):
         # Allow viewing soft-deleted jobs in the admin, similar to Project
@@ -36,3 +37,4 @@ class TaskRegistryAdmin(admin.ModelAdmin):
     )
     list_filter = ("project",)
     search_fields = ("task_identifier", "project__name")
+    list_select_related = ("project",)
