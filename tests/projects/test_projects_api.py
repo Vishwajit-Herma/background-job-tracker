@@ -62,8 +62,8 @@ class TestProjectAPI:
         response = api_client.get(detail_url)
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
-    def test_member_can_create_and_update(self, api_client, user1, team1):
-        """Active members can create and update projects."""
+    def test_owner_can_create_and_update(self, api_client, user1, team1):
+        """Owners can create and update projects."""
         api_client.force_authenticate(user=user1)
         url = reverse("api:projects:project-list")
 
@@ -72,6 +72,7 @@ class TestProjectAPI:
         response = api_client.post(url, data)
         assert response.status_code == status.HTTP_201_CREATED
         project_id = response.json()["data"]["id"]
+        assert response.json()["data"]["status"] == "active"
 
         # Update
         detail_url = reverse("api:projects:project-detail", args=[project_id])
@@ -79,6 +80,59 @@ class TestProjectAPI:
         response = api_client.patch(detail_url, update_data)
         assert response.status_code == status.HTTP_200_OK
         assert response.json()["data"]["name"] == "Updated Project"
+
+    def test_member_cannot_create_or_update(self, api_client, user2, team1, project1):
+        """Regular members cannot create or update projects."""
+        team1.add_user(user2, role="member")
+        api_client.force_authenticate(user=user2)
+        url = reverse("api:projects:project-list")
+
+        data = {"team": team1.id, "name": "Hacked Project"}
+        response = api_client.post(url, data)
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
+        detail_url = reverse("api:projects:project-detail", args=[project1.id])
+        response = api_client.patch(detail_url, {"name": "Hacked Update"})
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    def test_change_project_status(self, api_client, user1, team1, project1):
+        """Owners can change project status between active and inactive."""
+        api_client.force_authenticate(user=user1)
+        detail_url = reverse("api:projects:project-detail", args=[project1.id])
+
+        # Active -> Inactive
+        response = api_client.patch(detail_url, {"status": "inactive"})
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json()["data"]["status"] == "inactive"
+
+        # Inactive -> Active
+        response = api_client.patch(detail_url, {"status": "active"})
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json()["data"]["status"] == "active"
+
+    def test_deleted_project_status(self, api_client, user1, team1, project1):
+        """A deleted project must return status 'deleted' and cannot have its status updated."""
+        api_client.force_authenticate(user=user1)
+        project1.soft_delete(user=user1)
+
+        # Direct fetch should be 404 through normal list, so we must use a workaround
+        # to test serialization, or just restore it and check it. Wait, the user asked:
+        # "deleted Project remains deleted regardless of status"
+        # "status cannot be changed for a deleted Project."
+        # If a project is soft-deleted, we can only update it if we restore it,
+        # or if we try to patch it. Wait, if it's soft-deleted, it's 404 on normal endpoints!
+        # So PATCH will return 404 anyway. But just in case, we can test it using the restore endpoint.
+
+        detail_url = reverse("api:projects:project-detail", args=[project1.id])
+        response = api_client.patch(detail_url, {"status": "active"})
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+        # To test representation, let's create a serializer instance directly.
+        from apps.projects.serializers import ProjectSerializer
+
+        project1.refresh_from_db()
+        data = ProjectSerializer(project1).data
+        assert data["status"] == "deleted"
 
     def test_cannot_create_for_other_team(self, api_client, user1, team2):
         """User cannot create a project for a team they do not belong to."""
@@ -206,7 +260,7 @@ class TestProjectAPI:
         # 2. Owner can restore
         api_client.force_authenticate(user=user1)
         response = api_client.post(restore_url)
-        assert response.status_code == status.HTTP_200_OK
+        assert response.status_code == status.HTTP_204_NO_CONTENT
 
         # Verify it was restored
         project1.refresh_from_db()

@@ -1,11 +1,12 @@
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from apps.config_management.views import CustomBaseViewSet
-from .models import Project
-from .serializers import ProjectSerializer
-from .permissions import ProjectPermission
+from .models import Project, APIKey
+from .serializers import ProjectSerializer, APIKeySerializer, APIKeyCreateSerializer
+from .permissions import ProjectPermission, APIKeyPermission
 
 
 class ProjectViewSet(CustomBaseViewSet):
@@ -14,7 +15,7 @@ class ProjectViewSet(CustomBaseViewSet):
     """
 
     serializer_class = ProjectSerializer
-    permission_classes = CustomBaseViewSet.permission_classes + [ProjectPermission]
+    permission_classes = list(CustomBaseViewSet.permission_classes) + [ProjectPermission]  # type: ignore[operator, list-item]
     search_fields = ["name", "description"]
     ordering_fields = ["name", "created_at", "updated_at"]
     ordering = ["name"]
@@ -41,6 +42,7 @@ class ProjectViewSet(CustomBaseViewSet):
         """
         Restore a soft-deleted project.
         """
+        # The view's get_queryset() will use all_objects due to action == 'restore'
         project = self.get_object()
 
         if not project.is_deleted:
@@ -58,6 +60,56 @@ class ProjectViewSet(CustomBaseViewSet):
             )
 
         project.restore(user=request.user)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
-        serializer = self.get_serializer(project)
+
+class APIKeyViewSet(CustomBaseViewSet):
+    """
+    API endpoints for managing API Keys scoped to a specific Project.
+    """
+
+    permission_classes = list(CustomBaseViewSet.permission_classes) + [APIKeyPermission]  # type: ignore[operator, list-item]
+    http_method_names = ["get", "post"]  # Only CREATE, LIST, GET, plus custom actions
+    search_fields = ["name", "key_prefix"]
+    ordering_fields = ["name", "created_at", "revoked_at"]
+    ordering = ["-created_at"]
+
+    def get_serializer_class(self):
+        if self.action == "create":
+            return APIKeyCreateSerializer
+        return APIKeySerializer
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        if hasattr(self.request, "_project"):
+            context["project"] = self.request._project
+        return context
+
+    def get_queryset(self):
+        """
+        Tenant isolation: The project ID is validated in APIKeyPermission.
+        We simply return the keys for the project_pk.
+        """
+        project_id = self.kwargs.get("project_pk")
+        # Ensure we only return keys for active projects (validated in permission).
+        return APIKey.objects.filter(project_id=project_id)
+
+    @action(detail=True, methods=["post"])
+    def revoke(self, request, project_pk=None, pk=None):
+        """
+        Revoke an API key.
+        Once revoked, it cannot be un-revoked.
+        """
+        key = self.get_object()
+
+        if key.is_revoked:
+            return Response(
+                {"detail": "API key is already revoked."}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        key.revoked_at = timezone.now()
+        key.revoked_by = request.user
+        key.save(update_fields=["revoked_at", "revoked_by"])
+
+        serializer = self.get_serializer(key)
         return Response(serializer.data, status=status.HTTP_200_OK)
