@@ -81,8 +81,12 @@ class ExecutionIngestSerializer(serializers.Serializer):
     finished_at = serializers.DateTimeField(required=False, allow_null=True)
     duration_ms = serializers.IntegerField(required=False, allow_null=True, min_value=0)
 
-    queue = serializers.CharField(max_length=255, required=False, allow_blank=True, default="")
-    worker = serializers.CharField(max_length=255, required=False, allow_blank=True, default="")
+    queue = serializers.CharField(
+        max_length=255, required=False, allow_blank=True, allow_null=True, default=""
+    )
+    worker = serializers.CharField(
+        max_length=255, required=False, allow_blank=True, allow_null=True, default=""
+    )
     retry_count = serializers.IntegerField(required=False, default=0, min_value=0)
 
     error_type = serializers.CharField(max_length=255, required=False, allow_blank=True, default="")
@@ -108,6 +112,12 @@ class ExecutionIngestSerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 {"started_at": "started_at cannot be after finished_at."}
             )
+
+        # Django convention: use empty string instead of null for CharFields
+        if data.get("queue") is None:
+            data["queue"] = ""
+        if data.get("worker") is None:
+            data["worker"] = ""
 
         return data
 

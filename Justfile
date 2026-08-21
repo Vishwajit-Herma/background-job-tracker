@@ -10,7 +10,7 @@ dev:
 
 # Run tests
 test:
-    uv run pytest
+    uv run --extra dev pytest
 
 # Run tests with coverage
 test-cov:

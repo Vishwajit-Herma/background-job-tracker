@@ -59,10 +59,13 @@ class TestJobsDiscovery:
         assert Job.objects.count() == 1
 
     def test_sync_api_endpoint(self, api_client, user1, project1):
-        api_client.force_authenticate(user=user1)
-        url = reverse("api:jobs:job-sync")
+        from apps.projects.models import APIKey
 
-        data = {"project": project1.id, "tasks": ["tasks.a", "tasks.b", "tasks.a"]}
+        api_key_obj, api_key_str = APIKey.create_key(project1, "test_key", user1)
+        api_client.credentials(HTTP_X_API_KEY=api_key_str)
+
+        url = reverse("api:jobs:job-sync")
+        data = {"tasks": ["tasks.a", "tasks.b", "tasks.a"]}
 
         response = api_client.post(url, data)
         assert response.status_code == status.HTTP_200_OK
@@ -72,13 +75,13 @@ class TestJobsDiscovery:
 
     def test_sync_api_endpoint_permission(self, api_client, user2, project1):
         url = reverse("api:jobs:job-sync")
-        data = {"project": project1.id, "tasks": ["tasks.a"]}
+        data = {"tasks": ["tasks.a"]}
 
         # Unauthenticated
         response = api_client.post(url, data)
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
-        # Authenticated but not a member
-        api_client.force_authenticate(user=user2)
+        # Authenticated but wrong key
+        api_client.credentials(HTTP_X_API_KEY="sk_wrong_key")
         response = api_client.post(url, data)
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
