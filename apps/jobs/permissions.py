@@ -55,34 +55,3 @@ class JobPermission(BasePermission):
 
         # All active members can read
         return request.method in ["GET", "HEAD", "OPTIONS"]
-
-
-class TaskRegistryPermission(BasePermission):
-    """
-    For the SDK to push task definitions.
-    Currently placeholder using user auth, but intended for API Key auth.
-    """
-
-    def has_permission(self, request, view):
-        # In a real scenario, this endpoint might be protected by an APIKeyAuthentication class.
-        # For now, we rely on the Project being active and the user having project access.
-        if not request.user or not request.user.is_authenticated:
-            return False
-
-        project_id = view.kwargs.get("project_pk")
-        if not project_id and hasattr(request, "data") and isinstance(request.data, dict):
-            project_id = request.data.get("project")
-
-        if not project_id:
-            return False
-
-        try:
-            return Project.objects.filter(
-                id=project_id,
-                is_deleted=False,
-                team__is_active=True,
-                team__members__user=request.user,
-                team__members__is_active=True,
-            ).exists()
-        except ValueError, TypeError:
-            return False

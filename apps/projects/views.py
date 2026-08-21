@@ -4,9 +4,15 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from apps.config_management.views import CustomBaseViewSet
-from .models import Project, APIKey
-from .serializers import ProjectSerializer, APIKeySerializer, APIKeyCreateSerializer
-from .permissions import ProjectPermission, APIKeyPermission
+from apps.executions.analytics import get_project_analytics, get_trend, parse_analytics_query
+from apps.executions.models import Execution
+from apps.executions.serializers import (
+    ProjectAnalyticsSerializer,
+    TrendResponseSerializer,
+)
+from .models import APIKey, Project
+from .permissions import APIKeyPermission, ProjectPermission
+from .serializers import APIKeyCreateSerializer, APIKeySerializer, ProjectSerializer
 
 
 class ProjectViewSet(CustomBaseViewSet):
@@ -61,6 +67,34 @@ class ProjectViewSet(CustomBaseViewSet):
 
         project.restore(user=request.user)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=["get"])
+    def analytics(self, request, pk=None):
+        """
+        Get analytics for a specific Project.
+        """
+        project = self.get_object()
+        start, end, _, filters = parse_analytics_query(request)
+
+        qs = Execution.objects.filter(**filters) if filters else None
+        metrics = get_project_analytics(project.id, start, end, base_qs=qs)
+
+        serializer = ProjectAnalyticsSerializer(metrics)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["get"], url_path="analytics/trend")
+    def analytics_trend(self, request, pk=None):
+        """
+        Get time-bucketed trend analytics for a specific Project.
+        """
+        project = self.get_object()
+        start, end, bucket_type, filters = parse_analytics_query(request)
+
+        qs = Execution.objects.filter(job__project_id=project.id, **filters)
+
+        trend_data = get_trend(qs, start, end, bucket_type)
+        serializer = TrendResponseSerializer(trend_data)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class APIKeyViewSet(CustomBaseViewSet):

@@ -5,6 +5,8 @@ from celery import shared_task
 from django.apps import apps
 from django.utils import timezone
 
+from apps.config_management.models import AuditModel
+
 logger = logging.getLogger(__name__)
 
 
@@ -17,8 +19,6 @@ def hard_delete_soft_deleted_records():
     This helps keep the database clean while maintaining a 30-day grace period
     for accidental soft-deletes.
     """
-    from apps.config_management.models import AuditModel
-
     # Threshold is 30 days ago
     threshold_date = timezone.now() - timedelta(days=30)
     total_deleted = 0

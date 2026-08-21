@@ -3,15 +3,22 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from apps.config_management.views import CustomBaseViewSet
+from apps.executions.analytics import get_job_analytics, get_trend, parse_analytics_query
+from apps.executions.authentication import ProjectAPIKeyAuthentication
+from apps.executions.models import Execution
+from apps.executions.serializers import (
+    JobAnalyticsSerializer,
+    TrendResponseSerializer,
+)
 from apps.projects.models import Project
 from .models import Job
+from .permissions import JobPermission
 from .serializers import (
-    JobSerializer,
     JobCreateSerializer,
+    JobSerializer,
     JobUpdateSerializer,
     TaskRegistrySyncSerializer,
 )
-from .permissions import JobPermission, TaskRegistryPermission
 from .services import sync_task_registry
 
 
@@ -72,39 +79,64 @@ class JobViewSet(CustomBaseViewSet):
         job.restore(user=request.user)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
-    @action(detail=False, methods=["post"], permission_classes=[TaskRegistryPermission])
+    @action(
+        detail=False,
+        methods=["post"],
+        authentication_classes=[ProjectAPIKeyAuthentication],
+        permission_classes=[],
+    )
     def sync(self, request):
         """
         SDK ingestion endpoint to synchronize discovered task identifiers.
-        Expects a body like {"project": 1, "tasks": ["task1", "task2"]}
+        Expects a body like {"tasks": ["task1", "task2"]}
         """
-        # For this milestone, we expect project ID in the body and validate it via permission classes.
-        # In the future, the Project ID will be implicitly derived from the API Key authentication.
-        project_id = request.data.get("project")
-        if not project_id:
+        project = request.auth
+        if not isinstance(project, Project):
             return Response(
-                {"project": "This field is required."}, status=status.HTTP_400_BAD_REQUEST
+                {"error": "Invalid authentication."}, status=status.HTTP_401_UNAUTHORIZED
             )
 
-        # We pass kwargs to the view to allow the permission class to access the project ID
-        self.kwargs["project_pk"] = project_id
-
-        # Check permission explicitly since this is a list action that manually passes context
-        for permission in self.get_permissions():
-            if not permission.has_permission(request, self):
-                self.permission_denied(request)
+        if project.is_deleted or project.status != Project.Status.ACTIVE:
+            return Response(
+                {"error": "Project is deleted or inactive."}, status=status.HTTP_400_BAD_REQUEST
+            )
 
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-
-        try:
-            project = Project.objects.get(id=project_id, is_deleted=False)
-        except Project.DoesNotExist:
-            return Response(
-                {"project": "Invalid or deleted project."}, status=status.HTTP_400_BAD_REQUEST
-            )
 
         # Execute discovery service logic
         sync_task_registry(project, serializer.validated_data["tasks"])
 
         return Response({"status": "synchronized"}, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["get"])
+    def analytics(self, request, pk=None):
+        """
+        Get analytics for a specific Job.
+        """
+        job = self.get_object()
+        start, end, _, filters = parse_analytics_query(request)
+
+        # Remove job_id__in from filters since Job analytics is for a single job
+        filters.pop("job_id__in", None)
+        qs = Execution.objects.filter(**filters) if filters else None
+
+        metrics = get_job_analytics(job.id, start, end, base_qs=qs)
+
+        serializer = JobAnalyticsSerializer(metrics)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["get"], url_path="analytics/trend")
+    def analytics_trend(self, request, pk=None):
+        """
+        Get time-bucketed trend analytics for a specific Job.
+        """
+        job = self.get_object()
+        start, end, bucket_type, filters = parse_analytics_query(request)
+
+        filters.pop("job_id__in", None)
+        qs = Execution.objects.filter(job_id=job.id, **filters)
+
+        trend_data = get_trend(qs, start, end, bucket_type)
+        serializer = TrendResponseSerializer(trend_data)
+        return Response(serializer.data, status=status.HTTP_200_OK)

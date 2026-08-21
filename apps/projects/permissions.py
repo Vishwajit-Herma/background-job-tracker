@@ -1,6 +1,7 @@
 from rest_framework.permissions import BasePermission
 
 from apps.teams.models import TeamMember
+from .models import Project
 
 
 class ProjectPermission(BasePermission):
@@ -79,7 +80,6 @@ class APIKeyPermission(BasePermission):
         try:
             # User must be an Admin/Owner of the team that owns this project.
             # And the project itself must be active.
-            from .models import Project
 
             project = Project.objects.filter(
                 id=project_id,
