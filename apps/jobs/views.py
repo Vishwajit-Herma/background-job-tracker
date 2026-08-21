@@ -3,17 +3,23 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from apps.config_management.views import CustomBaseViewSet
+from apps.executions.analytics import get_job_analytics, get_trend, parse_analytics_query
+from apps.executions.authentication import ProjectAPIKeyAuthentication
+from apps.executions.models import Execution
+from apps.executions.serializers import (
+    JobAnalyticsSerializer,
+    TrendResponseSerializer,
+)
 from apps.projects.models import Project
 from .models import Job
+from .permissions import JobPermission
 from .serializers import (
-    JobSerializer,
     JobCreateSerializer,
+    JobSerializer,
     JobUpdateSerializer,
     TaskRegistrySyncSerializer,
 )
-from .permissions import JobPermission
 from .services import sync_task_registry
-from apps.executions.authentication import ProjectAPIKeyAuthentication
 
 
 class JobViewSet(CustomBaseViewSet):
@@ -102,3 +108,35 @@ class JobViewSet(CustomBaseViewSet):
         sync_task_registry(project, serializer.validated_data["tasks"])
 
         return Response({"status": "synchronized"}, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["get"])
+    def analytics(self, request, pk=None):
+        """
+        Get analytics for a specific Job.
+        """
+        job = self.get_object()
+        start, end, _, filters = parse_analytics_query(request)
+
+        # Remove job_id__in from filters since Job analytics is for a single job
+        filters.pop("job_id__in", None)
+        qs = Execution.objects.filter(**filters) if filters else None
+
+        metrics = get_job_analytics(job.id, start, end, base_qs=qs)
+
+        serializer = JobAnalyticsSerializer(metrics)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["get"], url_path="analytics/trend")
+    def analytics_trend(self, request, pk=None):
+        """
+        Get time-bucketed trend analytics for a specific Job.
+        """
+        job = self.get_object()
+        start, end, bucket_type, filters = parse_analytics_query(request)
+
+        filters.pop("job_id__in", None)
+        qs = Execution.objects.filter(job_id=job.id, **filters)
+
+        trend_data = get_trend(qs, start, end, bucket_type)
+        serializer = TrendResponseSerializer(trend_data)
+        return Response(serializer.data, status=status.HTTP_200_OK)

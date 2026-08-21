@@ -146,6 +146,7 @@ def test_celery_sdk_e2e(api_client, project, api_key):
 
         # 3. Execute Failing Task
         import contextlib
+
         with contextlib.suppress(ValueError):
             failing_task.apply_async()
 

@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.utils import timezone
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 
@@ -144,3 +145,147 @@ class ExecutionBatchIngestSerializer(serializers.Serializer):
                 f"Batch size exceeds the maximum limit of {max_batch_size} executions per request."
             )
         return value
+
+
+class AnalyticsQuerySerializer(serializers.Serializer):
+    """
+    Validates query parameters for analytics endpoints.
+    """
+
+    start = serializers.DateTimeField(required=False)
+    end = serializers.DateTimeField(required=False)
+    range = serializers.ChoiceField(
+        choices=["last_1_hour", "last_24_hours", "last_7_days", "last_30_days"],
+        required=False,
+    )
+    jobs = serializers.CharField(required=False, help_text="Comma-separated list of Job IDs")
+    queue = serializers.CharField(required=False)
+    worker = serializers.CharField(required=False)
+
+    def validate(self, data):
+        start = data.get("start")
+        end = data.get("end")
+
+        if start and end:
+            if start >= end:
+                raise serializers.ValidationError("start must be before end.")
+            if (end - start).days > 90:
+                raise serializers.ValidationError(
+                    "Time range cannot exceed 90 days to prevent excessive data aggregation."
+                )
+        elif start and not end:
+            if (timezone.now() - start).days > 90:
+                raise serializers.ValidationError(
+                    "Time range cannot exceed 90 days to prevent excessive data aggregation."
+                )
+
+        # Parse comma-separated jobs
+        jobs_str = data.get("jobs", "")
+        if jobs_str:
+            try:
+                data["jobs"] = [int(j.strip()) for j in jobs_str.split(",") if j.strip()]
+            except ValueError as e:
+                raise serializers.ValidationError(
+                    {"jobs": "Must be a comma-separated list of integers."}
+                ) from e
+
+        return data
+
+
+class TrendPointSerializer(serializers.Serializer):
+    timestamp = serializers.DateTimeField()
+    executions = serializers.IntegerField()
+    successes = serializers.IntegerField()
+    failures = serializers.IntegerField()
+    success_rate = serializers.FloatField()
+    average_duration_ms = serializers.IntegerField(allow_null=True)
+    p95_duration_ms = serializers.IntegerField(allow_null=True)
+
+
+class TrendResponseSerializer(serializers.Serializer):
+    trend = TrendPointSerializer(many=True)
+
+
+class AnalyticsQueueSummarySerializer(serializers.Serializer):
+    queue = serializers.CharField()
+    count = serializers.IntegerField()
+    failures = serializers.IntegerField()
+
+
+class AnalyticsWorkerSummarySerializer(serializers.Serializer):
+    worker = serializers.CharField()
+    count = serializers.IntegerField()
+    failures = serializers.IntegerField()
+
+
+class AnalyticsErrorSerializer(serializers.Serializer):
+    error_type = serializers.CharField()
+    count = serializers.IntegerField()
+    affected_jobs = serializers.IntegerField(required=False)
+
+
+class PeriodSerializer(serializers.Serializer):
+    start = serializers.DateTimeField()
+    end = serializers.DateTimeField()
+
+
+class JobAnalyticsSerializer(serializers.Serializer):
+    job_id = serializers.IntegerField()
+    period = PeriodSerializer()
+    executions = serializers.IntegerField()
+    successes = serializers.IntegerField()
+    failures = serializers.IntegerField()
+    retries = serializers.IntegerField()
+    success_rate = serializers.FloatField()
+    failure_rate = serializers.FloatField()
+    retry_rate = serializers.FloatField()
+    average_duration_ms = serializers.IntegerField(allow_null=True)
+    p50_duration_ms = serializers.IntegerField(allow_null=True)
+    p95_duration_ms = serializers.IntegerField(allow_null=True)
+    p99_duration_ms = serializers.IntegerField(allow_null=True)
+    health = serializers.CharField()
+    queue_summary = AnalyticsQueueSummarySerializer(many=True)
+    worker_summary = AnalyticsWorkerSummarySerializer(many=True)
+    errors = AnalyticsErrorSerializer(many=True)
+
+
+class FailingJobSerializer(serializers.Serializer):
+    job_id = serializers.IntegerField()
+    name = serializers.CharField()
+    task_identifier = serializers.CharField()
+    execution_count = serializers.IntegerField()
+    failure_count = serializers.IntegerField()
+    failure_rate = serializers.FloatField()
+
+
+class SlowJobSerializer(serializers.Serializer):
+    job_id = serializers.IntegerField()
+    name = serializers.CharField()
+    task_identifier = serializers.CharField()
+    average_duration_ms = serializers.IntegerField()
+    p95_duration_ms = serializers.IntegerField(allow_null=True)
+
+
+class ProjectAnalyticsSerializer(serializers.Serializer):
+    project_id = serializers.IntegerField()
+    period = PeriodSerializer()
+    executions = serializers.IntegerField()
+    successes = serializers.IntegerField()
+    failures = serializers.IntegerField()
+    retries = serializers.IntegerField()
+    success_rate = serializers.FloatField()
+    failure_rate = serializers.FloatField()
+    retry_rate = serializers.FloatField()
+    average_duration_ms = serializers.IntegerField(allow_null=True)
+    p50_duration_ms = serializers.IntegerField(allow_null=True)
+    p95_duration_ms = serializers.IntegerField(allow_null=True)
+    p99_duration_ms = serializers.IntegerField(allow_null=True)
+    healthy_jobs = serializers.IntegerField()
+    degraded_jobs = serializers.IntegerField()
+    critical_jobs = serializers.IntegerField()
+    health = serializers.CharField()
+    top_failing_jobs = FailingJobSerializer(many=True)
+    slowest_jobs = SlowJobSerializer(many=True)
+    queue_summary = AnalyticsQueueSummarySerializer(many=True)
+    worker_summary = AnalyticsWorkerSummarySerializer(many=True)
+    errors = AnalyticsErrorSerializer(many=True)

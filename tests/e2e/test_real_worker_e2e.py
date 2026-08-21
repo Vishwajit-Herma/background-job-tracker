@@ -78,7 +78,20 @@ def real_task(self):
 
     # Start the worker (using solo pool to simplify test setup)
     worker_proc = subprocess.Popen(
-        [sys.executable, "-m", "celery", "-A", "worker.app", "worker", "-l", "info", "-P", "solo"],
+        [
+            sys.executable,
+            "-m",
+            "celery",
+            "-A",
+            "worker.app",
+            "worker",
+            "-l",
+            "info",
+            "-P",
+            "solo",
+            "-Q",
+            "e2e_queue_1",
+        ],
         cwd=str(tmp_path),
         env=env,
         stdout=subprocess.PIPE,
@@ -101,19 +114,24 @@ def real_task(self):
             result_serializer="json",
             accept_content=["json"],
         )
-        result = app.send_task("e2e.real_task")
+        result = app.send_task("e2e.real_task", queue="e2e_queue_1")
 
         # Wait for task to finish and telemetry to be sent
-        time.sleep(3)
+        execution = None
+        for _ in range(30):  # Wait up to 15 seconds
+            job = Job.objects.filter(project=project, task_identifier="e2e.real_task").first()
+            if job:
+                execution = Execution.objects.filter(job=job, external_id=result.id).first()
+                if execution:
+                    break
+            time.sleep(0.5)
 
         # Check jobs and executions
-        job = Job.objects.filter(project=project, task_identifier="e2e.real_task").first()
         assert job is not None
-
-        execution = Execution.objects.filter(job=job, external_id=result.id).first()
         assert execution is not None
         assert execution.status == "success"
-
+        assert execution.started_at is not None
+        assert execution.finished_at is not None
         events = ExecutionEvent.objects.filter(execution=execution)
         assert events.count() >= 2
         statuses = [e.status for e in events]
@@ -145,7 +163,7 @@ tracker = Tracker(
     task_discovery_interval=1.0,
 )
 
-app = Celery("e2e_prefork_app", broker="redis://localhost:6379/1")
+app = Celery("e2e_prefork_app", broker="redis://localhost:6379/2")
 app.conf.update(
     task_serializer="json",
     result_serializer="json",
@@ -176,11 +194,13 @@ def real_prefork_task(self):
             "info",
             "-P",
             "prefork",
+            "-Q",
+            "e2e_queue_2",
         ],
         cwd=str(tmp_path),
         env=env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        stdout=sys.stdout,
+        stderr=sys.stderr,
     )
 
     try:
@@ -193,22 +213,28 @@ def real_prefork_task(self):
         ).exists()
 
         # Enqueue a task
-        app = Celery("e2e_prefork_app", broker="redis://localhost:6379/1")
+        app = Celery("e2e_prefork_app", broker="redis://localhost:6379/2")
         app.conf.update(
             task_serializer="json",
             result_serializer="json",
             accept_content=["json"],
         )
-        result = app.send_task("e2e.real_prefork_task")
+        result = app.send_task("e2e.real_prefork_task", queue="e2e_queue_2")
 
         # Wait for task to finish and telemetry to be sent
-        time.sleep(3)
+        execution = None
+        for _ in range(30):  # Wait up to 15 seconds
+            job = Job.objects.filter(
+                project=project, task_identifier="e2e.real_prefork_task"
+            ).first()
+            if job:
+                execution = Execution.objects.filter(job=job, external_id=result.id).first()
+                if execution:
+                    break
+            time.sleep(0.5)
 
         # Check jobs and executions
-        job = Job.objects.filter(project=project, task_identifier="e2e.real_prefork_task").first()
         assert job is not None
-
-        execution = Execution.objects.filter(job=job, external_id=result.id).first()
         assert execution is not None
         assert execution.status == "success"
 
