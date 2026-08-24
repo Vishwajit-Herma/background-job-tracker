@@ -1,0 +1,153 @@
+from rest_framework import serializers
+from rest_framework.exceptions import ValidationError as DRFValidationError
+from .models import NotificationChannel, NotificationPolicy, InAppNotification
+
+
+class NotificationChannelSerializer(serializers.ModelSerializer):
+    """
+    Serializer for NotificationChannel model. Validates webhook and email configs.
+    """
+
+    class Meta:
+        model = NotificationChannel
+        fields = [
+            "id",
+            "project",
+            "type",
+            "name",
+            "config",
+            "is_active",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+    def validate(self, attrs):
+        type_ = attrs.get("type") or (self.instance.type if self.instance else None)
+        config = attrs.get("config") or (self.instance.config if self.instance else {})
+
+        if type_ == NotificationChannel.ChannelType.WEBHOOK:
+            if "url" not in config:
+                raise DRFValidationError({"config": "Webhook config must contain 'url'."})
+            if "secret" not in config and not (
+                self.instance and self.instance.config.get("secret")
+            ):
+                # If secret is ********, it's bypassed in perform_update, but we need to pass validation here
+                raise DRFValidationError({"config": "Webhook config must contain 'secret'."})
+
+            secret = config.get("secret", "")
+            if (
+                secret != "********"
+                and len(secret) < 16
+                and not (self.instance and self.instance.config.get("secret"))
+            ):
+                # Only enforce length if they are providing a new secret that isn't the masked value
+                raise DRFValidationError(
+                    {"config": "Webhook secret must be at least 16 characters long."}
+                )
+            elif secret != "********" and len(secret) < 16 and secret != "":
+                raise DRFValidationError(
+                    {"config": "Webhook secret must be at least 16 characters long."}
+                )
+
+            url = config.get("url", "")
+            allow_insecure = config.get("allow_insecure_http", False)
+            if url.startswith("http://") and not allow_insecure:
+                raise DRFValidationError(
+                    {"config": "HTTPS is required for webhooks unless allow_insecure_http is true."}
+                )
+            if not url.startswith("http://") and not url.startswith("https://"):
+                raise DRFValidationError({"config": "Webhook URL must start with http or https."})
+        elif type_ == NotificationChannel.ChannelType.EMAIL:
+            if "recipients" not in config or not isinstance(config["recipients"], list):
+                raise DRFValidationError({"config": "Email config must contain 'recipients' list."})
+
+        return attrs
+
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        # Mask the secret if it exists
+        if instance.type == NotificationChannel.ChannelType.WEBHOOK and "config" in ret:
+            config = ret["config"]
+            if "secret" in config:
+                config["secret"] = "********"  # Masked secret
+                config["secret_configured"] = True
+        return ret
+
+
+class NotificationPolicySerializer(serializers.ModelSerializer):
+    """
+    Serializer for NotificationPolicy model. Validates event types and project active status.
+    """
+
+    class Meta:
+        model = NotificationPolicy
+        fields = [
+            "id",
+            "project",
+            "channel",
+            "severity",
+            "event_types",
+            "is_active",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+    def validate(self, attrs):
+        from apps.incidents.models import IncidentEvent
+
+        project = attrs.get("project") or (self.instance.project if self.instance else None)
+        channel = attrs.get("channel") or (self.instance.channel if self.instance else None)
+        event_types = attrs.get("event_types") or (
+            self.instance.event_types if self.instance else []
+        )
+
+        if channel and project and channel.project_id != project.id:
+            raise DRFValidationError(
+                {"channel": "Channel must belong to the same project as the policy."}
+            )
+
+        if project and (project.is_deleted or project.status != "active"):
+            raise DRFValidationError(
+                {"project": "Cannot create or update a policy for an inactive or deleted project."}
+            )
+
+        valid_events = {
+            IncidentEvent.EventType.CREATED,
+            IncidentEvent.EventType.ASSIGNED,
+            IncidentEvent.EventType.ACKNOWLEDGED,
+            IncidentEvent.EventType.NOTE_ADDED,
+            IncidentEvent.EventType.AUTO_RESOLVED,
+            IncidentEvent.EventType.MANUALLY_RESOLVED,
+            IncidentEvent.EventType.REOPENED,
+        }
+
+        if not isinstance(event_types, list):
+            raise DRFValidationError({"event_types": "Must be a list of event types."})
+
+        for evt in event_types:
+            if evt not in valid_events:
+                raise DRFValidationError({"event_types": f"Invalid event type: {evt}"})
+
+        return attrs
+
+
+class InAppNotificationSerializer(serializers.ModelSerializer):
+    """
+    Serializer for InAppNotification model. Read-only.
+    """
+
+    class Meta:
+        model = InAppNotification
+        fields = [
+            "id",
+            "recipient",
+            "incident_event",
+            "title",
+            "message",
+            "is_read",
+            "read_at",
+            "created_at",
+        ]
+        read_only_fields = fields

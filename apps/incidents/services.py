@@ -5,17 +5,33 @@ from apps.teams.models import TeamMember
 from .models import Incident, IncidentEvent, IncidentNote
 
 
+NOTIFIABLE_EVENTS = {
+    IncidentEvent.EventType.CREATED,
+    IncidentEvent.EventType.ASSIGNED,
+    IncidentEvent.EventType.ACKNOWLEDGED,
+    IncidentEvent.EventType.NOTE_ADDED,
+    IncidentEvent.EventType.AUTO_RESOLVED,
+    IncidentEvent.EventType.MANUALLY_RESOLVED,
+    IncidentEvent.EventType.REOPENED,
+}
+
+
 def _log_incident_event(incident, event_type, actor=None, metadata=None):
     """
     Creates an immutable event for the incident timeline.
     MUST only be called inside the transition transaction to guarantee integrity.
     """
-    IncidentEvent.objects.create(
+    event = IncidentEvent.objects.create(
         incident=incident,
         event_type=event_type,
         actor=actor,
         metadata=metadata or {},
     )
+
+    if event_type in NOTIFIABLE_EVENTS:
+        from apps.notifications.services import dispatch_incident_event
+
+        transaction.on_commit(lambda: dispatch_incident_event(event.id))
 
 
 def assign_incident(incident_id, member_id, actor):
