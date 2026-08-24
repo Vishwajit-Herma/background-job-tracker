@@ -48,7 +48,7 @@ def _base_metrics_aggregations():
         "executions": Count("id"),
         "successes": Count("id", filter=Q(status=Execution.Status.SUCCESS)),
         "failures": Count("id", filter=Q(status=Execution.Status.FAILED)),
-        "retries": Count("id", filter=Q(status=Execution.Status.RETRY)),
+        "retries": Count("id", filter=Q(retry_count__gt=0)),
         "average_duration_ms": Avg("duration_ms"),
         "p50_duration_ms": PercentileCont("duration_ms", 0.50),
         "p95_duration_ms": PercentileCont("duration_ms", 0.95),
@@ -213,7 +213,7 @@ def get_project_analytics(project_id, start_dt, end_dt, base_qs=None):
     job_aggs = qs.values("job_id", "job__name", "job__task_identifier").annotate(
         executions=Count("id"),
         failures=Count("id", filter=Q(status=Execution.Status.FAILED)),
-        retries=Count("id", filter=Q(status=Execution.Status.RETRY)),
+        retries=Count("id", filter=Q(retry_count__gt=0)),
         average_duration_ms=Avg("duration_ms"),
         p95_duration_ms=PercentileCont("duration_ms", 0.95),
     )
@@ -343,7 +343,7 @@ def get_trend(qs, start_dt, end_dt, bucket_type="hour"):
             executions=Count("id"),
             successes=Count("id", filter=Q(status=Execution.Status.SUCCESS)),
             failures=Count("id", filter=Q(status=Execution.Status.FAILED)),
-            retries=Count("id", filter=Q(status=Execution.Status.RETRY)),
+            retries=Count("id", filter=Q(retry_count__gt=0)),
             average_duration_ms=Avg("duration_ms"),
             p95_duration_ms=PercentileCont("duration_ms", 0.95),
         )
