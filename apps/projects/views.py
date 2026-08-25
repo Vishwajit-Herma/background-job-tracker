@@ -25,6 +25,7 @@ class ProjectViewSet(CustomBaseViewSet):
     search_fields = ["name", "description"]
     ordering_fields = ["name", "created_at", "updated_at"]
     ordering = ["name"]
+    filterset_fields = ["team", "status"]
 
     def get_queryset(self):
         """

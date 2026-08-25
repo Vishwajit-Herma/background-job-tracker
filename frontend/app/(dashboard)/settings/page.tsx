@@ -1,0 +1,146 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { useAuth } from "@/hooks/use-auth";
+import { updateUser } from "@/lib/api/auth";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { UserCircle, CheckCircle2 } from "lucide-react";
+import { ApiError } from "@/lib/api/client";
+
+export default function SettingsPage() {
+  const { user } = useAuth();
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (user) {
+      setFirstName(user.first_name || "");
+      setLastName(user.last_name || "");
+      setEmail(user.email || "");
+    }
+  }, [user]);
+
+  const handleUpdateProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsUpdating(true);
+    setSuccessMsg(null);
+    setErrorMsg(null);
+
+    try {
+      await updateUser({
+        first_name: firstName,
+        last_name: lastName,
+        email: email,
+      });
+      setSuccessMsg("Profile updated successfully");
+      
+      // Clear success message after 3 seconds
+      setTimeout(() => setSuccessMsg(null), 3000);
+    } catch (e) {
+      const err = e as ApiError;
+      if (err.errors) {
+        // Just extract the first error message
+        const firstErrorKey = Object.keys(err.errors)[0];
+        const firstError = err.errors[firstErrorKey];
+        setErrorMsg(Array.isArray(firstError) ? firstError[0] : String(firstError));
+      } else {
+        setErrorMsg("Failed to update profile");
+      }
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  if (!user) {
+    return null;
+  }
+
+  return (
+    <div className="flex-1 space-y-4 p-8 pt-6">
+      <div className="flex items-center justify-between space-y-2">
+        <h2 className="text-3xl font-bold tracking-tight">Settings</h2>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <Card className="col-span-2">
+          <CardHeader>
+            <CardTitle>Profile</CardTitle>
+            <CardDescription>
+              Update your personal information.
+            </CardDescription>
+          </CardHeader>
+          <form onSubmit={handleUpdateProfile}>
+            <CardContent className="space-y-4">
+              <div className="flex items-center space-x-4 mb-6">
+                <div className="h-16 w-16 bg-muted rounded-full flex items-center justify-center">
+                  <UserCircle className="h-10 w-10 text-muted-foreground" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium leading-none mb-1">Avatar</p>
+                  <p className="text-sm text-muted-foreground">Gravatar is used for profile images.</p>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="firstName">First Name</Label>
+                  <Input 
+                    id="firstName" 
+                    value={firstName} 
+                    onChange={(e) => setFirstName(e.target.value)} 
+                    disabled={isUpdating}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="lastName">Last Name</Label>
+                  <Input 
+                    id="lastName" 
+                    value={lastName} 
+                    onChange={(e) => setLastName(e.target.value)} 
+                    disabled={isUpdating}
+                  />
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="email">Email Address</Label>
+                <Input 
+                  id="email" 
+                  type="email"
+                  value={email} 
+                  onChange={(e) => setEmail(e.target.value)} 
+                  disabled={isUpdating}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Changing your email address may require you to re-verify it.
+                </p>
+              </div>
+
+              {errorMsg && (
+                <div className="text-sm text-destructive font-medium">{errorMsg}</div>
+              )}
+              {successMsg && (
+                <div className="flex items-center gap-2 text-sm text-green-600 font-medium">
+                  <CheckCircle2 className="h-4 w-4" />
+                  {successMsg}
+                </div>
+              )}
+            </CardContent>
+            <CardFooter>
+              <Button type="submit" disabled={isUpdating}>
+                {isUpdating ? "Saving..." : "Save Changes"}
+              </Button>
+            </CardFooter>
+          </form>
+        </Card>
+      </div>
+    </div>
+  );
+}

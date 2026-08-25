@@ -20,11 +20,20 @@ class TeamSerializer(serializers.ModelSerializer):
     """Serializer for Team."""
     
     slug = serializers.SlugField(required=False)
+    my_role = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Team
-        fields = ["id", "name", "slug", "description", "owner", "created_at", "updated_at"]
-        read_only_fields = ["id", "owner", "created_at", "updated_at"]
+        fields = ["id", "name", "slug", "description", "owner", "my_role", "created_at", "updated_at"]
+        read_only_fields = ["id", "owner", "my_role", "created_at", "updated_at"]
+
+    def get_my_role(self, obj) -> str | None:
+        """Return the requesting user's role in this team, or None if staff with no membership."""
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return None
+        member = obj.members.filter(user=request.user, is_active=True).first()
+        return member.role if member else ("staff" if request.user.is_staff else None)
 
     def validate(self, attrs):
         if not attrs.get("slug") and attrs.get("name"):
