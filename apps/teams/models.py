@@ -50,12 +50,16 @@ class Team(models.Model):
 
     def add_user(self, user, role="member", added_by=None):
         """Add a user to the team."""
-        return TeamMember.objects.create(
+        member, created = TeamMember.objects.update_or_create(
             team=self,
             user=user,
-            role=role,
-            added_by=added_by,
+            defaults={
+                "role": role,
+                "added_by": added_by,
+                "is_active": True,
+            }
         )
+        return member
 
 
 class TeamMember(models.Model):
@@ -201,12 +205,15 @@ class TeamInvitation(models.Model):
         if not self.is_valid():
             return False
 
-        # Create team membership
-        TeamMember.objects.create(
+        # Create or reactivate team membership
+        TeamMember.objects.update_or_create(
             team=self.team,
             user=user,
-            role=self.role,
-            added_by=self.invited_by,
+            defaults={
+                "role": self.role,
+                "added_by": self.invited_by,
+                "is_active": True,
+            },
         )
 
         # Update invitation
