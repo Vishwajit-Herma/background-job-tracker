@@ -8,9 +8,7 @@ from django.urls import reverse
 
 def send_team_invitation_email(invitation):
     """Send team invitation email."""
-    accept_url = settings.SITE_URL + reverse(
-        "teams:invitation_accept", kwargs={"token": invitation.token}
-    )
+    accept_url = f"{settings.FRONTEND_URL}/team"
 
     subject = f"You've been invited to join {invitation.team.name}"
     context = {

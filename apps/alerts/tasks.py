@@ -123,4 +123,4 @@ def _evaluate_single_rule(rule):
         else:
             if active_incident:
                 # RECOVER / AUTO RESOLVE
-                auto_resolve_incident(active_incident.id)
+                auto_resolve_incident(active_incident.id, recovery_metadata=trigger_metadata)

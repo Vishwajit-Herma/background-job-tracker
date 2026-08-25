@@ -5,10 +5,16 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import URLPattern, URLResolver, include, path
 
+from django.shortcuts import redirect
+
+def password_reset_redirect(request, uidb64, token):
+    return redirect(f"{settings.FRONTEND_URL}/reset-password/{uidb64}/{token}")
+
 urlpatterns: list[URLPattern | URLResolver] = [
     path("admin/", admin.site.urls),
     # Health checks - django-alive provides standardized endpoints
     path("health/", include("django_alive.urls")),
+    path("password-reset/<uidb64>/<token>/", password_reset_redirect, name="password_reset_confirm"),
     path("", include("apps.core.urls")),
     path("api/", include("apps.api.urls")),
     path("accounts/", include("allauth.urls")),

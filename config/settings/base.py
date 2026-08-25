@@ -49,6 +49,8 @@ THIRD_PARTY_APPS = [
     "allauth",
     "allauth.account",
     "allauth.socialaccount",
+    "dj_rest_auth",
+    "dj_rest_auth.registration",
     "django_celery_beat",
     "django_celery_results",
     "django_prometheus",
@@ -188,6 +190,8 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # django-allauth
 SITE_ID = 1
 ACCOUNT_LOGIN_METHODS = {"email"}
+ACCOUNT_AUTHENTICATION_METHOD = "email"
+ACCOUNT_USERNAME_REQUIRED = False
 ACCOUNT_SIGNUP_FIELDS = ["email*", "password1*", "password2*"]
 ACCOUNT_EMAIL_VERIFICATION = "mandatory"
 ACCOUNT_USER_MODEL_USERNAME_FIELD = None
@@ -240,6 +244,10 @@ CORS_ALLOWED_ORIGINS = env.list(
     default=["http://localhost:3000", "http://127.0.0.1:3000"],
 )
 CORS_ALLOW_CREDENTIALS = True
+CSRF_TRUSTED_ORIGINS = env.list(
+    "CSRF_TRUSTED_ORIGINS",
+    default=["http://localhost:3000", "http://127.0.0.1:3000"],
+)
 
 
 # Celery
@@ -318,3 +326,18 @@ LOGGING = {
 SITE_NAME = env("SITE_NAME", default="Background Job Tracker")
 SITE_URL = env("SITE_URL", default="http://localhost:8000")
 SUPPORT_EMAIL = env("SUPPORT_EMAIL", default=DEFAULT_FROM_EMAIL)
+
+# dj-rest-auth Configuration
+REST_AUTH = {
+    "SESSION_LOGIN": True,
+    "USE_JWT": False,
+    "TOKEN_MODEL": None,
+    "TOKEN_SERIALIZER": "apps.api.serializers.DummyTokenSerializer",
+    "REGISTER_SERIALIZER": "apps.api.serializers.CustomRegisterSerializer",
+    "USER_DETAILS_SERIALIZER": "apps.api.serializers.CustomUserDetailsSerializer",
+}
+
+# Frontend URLs
+FRONTEND_URL = env("FRONTEND_URL", default="http://localhost:3000")
+
+ACCOUNT_ADAPTER = "apps.users.adapters.CustomAccountAdapter"
