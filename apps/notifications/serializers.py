@@ -62,6 +62,27 @@ class NotificationChannelSerializer(serializers.ModelSerializer):
             if "recipients" not in config or not isinstance(config["recipients"], list):
                 raise DRFValidationError({"config": "Email config must contain 'recipients' list."})
 
+        project = attrs.get("project") or (self.instance.project if self.instance else None)
+        name = attrs.get("name") or (self.instance.name if self.instance else None)
+
+        if project and type_ and name:
+            channel_qs = NotificationChannel.objects.filter(project=project, type=type_, name=name)
+            if self.instance:
+                channel_qs = channel_qs.exclude(pk=self.instance.pk)
+            if channel_qs.exists():
+                raise DRFValidationError(
+                    {"name": "A notification channel with this name and type already exists for this project."}
+                )
+
+        if project and type_ and config:
+            config_qs = NotificationChannel.objects.filter(project=project, type=type_, config=config)
+            if self.instance:
+                config_qs = config_qs.exclude(pk=self.instance.pk)
+            if config_qs.exists():
+                raise DRFValidationError(
+                    {"config": "A notification channel with this configuration already exists for this project."}
+                )
+
         return attrs
 
     def to_representation(self, instance):
@@ -99,6 +120,7 @@ class NotificationPolicySerializer(serializers.ModelSerializer):
 
         project = attrs.get("project") or (self.instance.project if self.instance else None)
         channel = attrs.get("channel") or (self.instance.channel if self.instance else None)
+        severity = attrs.get("severity") or (self.instance.severity if self.instance else None)
         event_types = attrs.get("event_types") or (
             self.instance.event_types if self.instance else []
         )
@@ -112,6 +134,19 @@ class NotificationPolicySerializer(serializers.ModelSerializer):
             raise DRFValidationError(
                 {"project": "Cannot create or update a policy for an inactive or deleted project."}
             )
+
+        if project and channel and severity:
+            policy_qs = NotificationPolicy.objects.filter(
+                project=project,
+                channel=channel,
+                severity=severity,
+            )
+            if self.instance:
+                policy_qs = policy_qs.exclude(pk=self.instance.pk)
+            if policy_qs.exists():
+                raise DRFValidationError(
+                    {"non_field_errors": ["A policy for this channel and severity already exists on this project."]}
+                )
 
         valid_events = {
             IncidentEvent.EventType.CREATED,

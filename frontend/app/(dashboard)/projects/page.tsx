@@ -17,6 +17,7 @@ import {
   APIKey,
   APIKeyCreated,
 } from "@/lib/api/projects";
+import { JobsPanel } from "@/components/bjt/jobs/jobs-panel";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -73,6 +74,14 @@ import { ApiError } from "@/lib/api/client";
 function canManageTeam(team: Team, isGlobalStaff: boolean): boolean {
   if (isGlobalStaff) return true;
   return team.my_role === "owner" || team.my_role === "admin";
+}
+
+// Members can only view — not edit/delete projects or see API keys
+function memberRoleForProject(team: Team | undefined, isGlobalStaff: boolean): "admin" | "member" {
+  if (!team) return "member";
+  if (isGlobalStaff) return "admin";
+  if (team.my_role === "owner" || team.my_role === "admin") return "admin";
+  return "member";
 }
 
 function extractFieldErrors(err: ApiError): Record<string, string> {
@@ -556,7 +565,7 @@ function RevokeKeyModal({
 
 // ─── API Keys Panel ───────────────────────────────────────────────────────────
 
-function APIKeysPanel({ project }: { project: Project }) {
+function APIKeysPanel({ project, canManage }: { project: Project; canManage: boolean }) {
   const [createOpen, setCreateOpen] = useState(false);
   const [revokeTarget, setRevokeTarget] = useState<APIKey | null>(null);
 
@@ -577,7 +586,7 @@ function APIKeysPanel({ project }: { project: Project }) {
             </span>
           )}
         </div>
-        {project.status === "active" && (
+        {project.status === "active" && canManage && (
           <Button
             size="sm"
             variant="outline"
@@ -589,7 +598,7 @@ function APIKeysPanel({ project }: { project: Project }) {
         )}
       </div>
 
-      {project.status === "inactive" && (
+      {project.status === "inactive" && canManage && (
         <p className="text-xs text-muted-foreground italic mb-2">
           Activate this project to generate API keys.
         </p>
@@ -648,7 +657,7 @@ function APIKeysPanel({ project }: { project: Project }) {
                     {new Date(key.created_at).toLocaleDateString()}
                   </TableCell>
                   <TableCell className="py-2 text-right">
-                    {!key.is_revoked && (
+                    {!key.is_revoked && canManage && (
                       <Button
                         variant="ghost"
                         size="sm"
@@ -701,8 +710,13 @@ function ProjectRow({
   defaultExpanded: boolean;
 }) {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const team = teamMap.get(project.team);
+  const isGlobalStaff = user?.is_staff ?? false;
+  const userRole = memberRoleForProject(team, isGlobalStaff);
+  const canManage = userRole === "admin";
   const [expanded, setExpanded] = useState(defaultExpanded);
+  const [activeTab, setActiveTab] = useState<"jobs" | "keys">("jobs");
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [toggling, setToggling] = useState(false);
@@ -764,9 +778,9 @@ function ProjectRow({
           {new Date(project.created_at).toLocaleDateString()}
         </span>
 
-        {/* Actions menu */}
-        <DropdownMenu>
-          {/* @ts-expect-error Radix asChild */}
+        {/* Actions menu — admins/owners only */}
+        {canManage && (
+          <DropdownMenu>
           <DropdownMenuTrigger
             render={
               <Button
@@ -805,12 +819,43 @@ function ProjectRow({
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        )}
       </div>
 
-      {/* Inline API Keys panel */}
+      {/* Expandable Panel */}
       {expanded && (
         <div className="px-5 pb-5">
-          <APIKeysPanel project={project} />
+          {canManage ? (
+            <div className="border-t mt-4 pt-4">
+              <div className="flex space-x-1 border-b mb-4">
+                <button
+                  onClick={() => setActiveTab("jobs")}
+                  className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
+                    activeTab === "jobs"
+                      ? "border-primary text-foreground"
+                      : "border-transparent text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Jobs
+                </button>
+                <button
+                  onClick={() => setActiveTab("keys")}
+                  className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
+                    activeTab === "keys"
+                      ? "border-primary text-foreground"
+                      : "border-transparent text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  API Keys
+                </button>
+              </div>
+              
+              {activeTab === "jobs" && <JobsPanel project={project} canManage={canManage} />}
+              {activeTab === "keys" && <APIKeysPanel project={project} canManage={canManage} />}
+            </div>
+          ) : (
+            <JobsPanel project={project} canManage={canManage} />
+          )}
         </div>
       )}
 
