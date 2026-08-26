@@ -4,7 +4,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("notifications", "0003_notificationdelivery_notificatio_status_95d863_idx"),
         ("projects", "0005_alter_apikey_options"),

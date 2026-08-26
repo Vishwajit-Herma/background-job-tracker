@@ -192,7 +192,7 @@ Job: {job_name}
 Severity: {incident.get_severity_display()}
 Status: {incident.get_status_display()}
 Action by: {actor_name}
-Timestamp: {event.event_time.strftime('%Y-%m-%d %H:%M:%S UTC')}
+Timestamp: {event.event_time.strftime("%Y-%m-%d %H:%M:%S UTC")}
 """
     if event.event_type == "ASSIGNED" and event.metadata.get("new_assignee_name"):
         message += f"Assigned to: {event.metadata.get('new_assignee_name')}\n"

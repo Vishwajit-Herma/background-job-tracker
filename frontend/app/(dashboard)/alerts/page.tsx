@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getAlertRules, deleteAlertRule, AlertRule } from "@/lib/api/alerts";
+import { getPaginatedAlertRules, deleteAlertRule, AlertRule } from "@/lib/api/alerts";
 import { getProjects, Project } from "@/lib/api/projects";
 import { getJobs, Job } from "@/lib/api/jobs";
 import { Button } from "@/components/ui/button";
@@ -11,15 +11,32 @@ import { Badge } from "@/components/ui/badge";
 import { BellRing, Loader2, Plus, MoreHorizontal, Edit, Trash, Activity } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertRuleModal } from "@/components/bjt/alerts/alert-rule-modal";
+import { PaginationControls } from "@/components/bjt/pagination";
 
 export default function AlertsPage() {
   const queryClient = useQueryClient();
   const [modalOpen, setModalOpen] = useState(false);
   const [ruleToEdit, setRuleToEdit] = useState<AlertRule | null>(null);
+  const [page, setPage] = useState(1);
 
   const { data: projects = [] } = useQuery<Project[]>({ queryKey: ["projects"], queryFn: () => getProjects() });
   const { data: jobs = [] } = useQuery({ queryKey: ["jobs"], queryFn: () => getJobs() });
-  const { data: rules = [], isLoading } = useQuery({ queryKey: ["alert-rules"], queryFn: () => getAlertRules() });
+
+  // Fetch alert rules with server-side pagination
+  const { data: paginatedRules, isLoading } = useQuery({
+    queryKey: ["alert-rules", page],
+    queryFn: () => getPaginatedAlertRules({ page }),
+  });
+
+  const rules = paginatedRules?.data || [];
+  const totalPages = paginatedRules?.totalPages || 1;
+
+  // Reset to first page if current page becomes out of range (e.g., after deleting items)
+  useEffect(() => {
+    if (!isLoading && rules.length === 0 && page > 1) {
+      setPage(1);
+    }
+  }, [rules.length, isLoading, page]);
 
   const projectMap = new Map<number, Project>(projects.map(p => [p.id, p]));
   const jobMap = new Map<number, Job>(jobs.map(j => [j.id, j]));
@@ -158,12 +175,18 @@ export default function AlertsPage() {
             )}
           </TableBody>
         </Table>
+
+        {totalPages > 1 && (
+          <div className="px-4 py-3 border-t bg-muted/10">
+            <PaginationControls page={page} totalPages={totalPages} setPage={setPage} />
+          </div>
+        )}
       </div>
 
-      <AlertRuleModal 
-        open={modalOpen} 
-        onOpenChange={setModalOpen} 
-        ruleToEdit={ruleToEdit} 
+      <AlertRuleModal
+        open={modalOpen}
+        onOpenChange={setModalOpen}
+        ruleToEdit={ruleToEdit}
       />
     </div>
   );

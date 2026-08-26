@@ -195,12 +195,12 @@ def auto_resolve_incident(incident_id, recovery_metadata=None):
         incident.resolved_by = None
         incident.resolved_at = timezone.now()
         incident.resolution_type = Incident.ResolutionType.AUTOMATIC
-        
+
         update_fields = ["status", "resolved_by", "resolved_at", "resolution_type", "updated_at"]
         if recovery_metadata:
             incident.trigger_metadata = recovery_metadata
             update_fields.append("trigger_metadata")
-            
+
         incident.save(update_fields=update_fields)
 
         _log_incident_event(
@@ -208,10 +208,10 @@ def auto_resolve_incident(incident_id, recovery_metadata=None):
             IncidentEvent.EventType.AUTO_RESOLVED,
             actor=None,
             metadata={
-                "resolution_type": "AUTOMATIC", 
+                "resolution_type": "AUTOMATIC",
                 "resolved_by_name": "System (Auto-recovery)",
                 "previous_status": previous_status,
-                "recovery_metadata": recovery_metadata
+                "recovery_metadata": recovery_metadata,
             },
         )
         return incident

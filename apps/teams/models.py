@@ -57,7 +57,7 @@ class Team(models.Model):
                 "role": role,
                 "added_by": added_by,
                 "is_active": True,
-            }
+            },
         )
         return member
 

@@ -47,8 +47,12 @@ class IncidentNoteSerializer(serializers.ModelSerializer):
 
 
 class IncidentSerializer(serializers.ModelSerializer):
-    assigned_to_user_id = serializers.IntegerField(source="assigned_to.user_id", read_only=True, allow_null=True)
-    assigned_to_name = serializers.CharField(source="assigned_to.user.get_full_name", read_only=True, allow_null=True)
+    assigned_to_user_id = serializers.IntegerField(
+        source="assigned_to.user_id", read_only=True, allow_null=True
+    )
+    assigned_to_name = serializers.CharField(
+        source="assigned_to.user.get_full_name", read_only=True, allow_null=True
+    )
 
     class Meta:
         model = Incident

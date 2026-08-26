@@ -90,8 +90,6 @@ def test_dispatch_inactive_policy_or_channel(mock_webhook, project, incident, te
     assert not NotificationDelivery.objects.filter(incident_event=event).exists()
 
 
-
-
 @patch("apps.notifications.services.dispatch_incident_event")
 def test_transaction_rollback_no_dispatch(mock_dispatch, project, incident, user):
     from apps.incidents.services import acknowledge_incident

@@ -76,13 +76,17 @@ def _format_incident_notification(incident_event):
         message = f"Incident #{incident.id} on '{incident.project.name}' was acknowledged by {actor_name}."
     elif event_type == IncidentEvent.EventType.MANUALLY_RESOLVED:
         title = f"[RESOLVED] Incident #{incident.id} Manually Resolved"
-        message = f"Incident #{incident.id} on '{incident.project.name}' was resolved by {actor_name}."
+        message = (
+            f"Incident #{incident.id} on '{incident.project.name}' was resolved by {actor_name}."
+        )
     elif event_type == IncidentEvent.EventType.AUTO_RESOLVED:
         title = f"[RESOLVED] Incident #{incident.id} Auto-Resolved"
         message = f"Incident #{incident.id} on '{incident.project.name}' was automatically resolved as metrics returned to normal."
     elif event_type == IncidentEvent.EventType.REOPENED:
         title = f"[{incident.get_severity_display()}] Incident #{incident.id} Reopened"
-        message = f"Incident #{incident.id} on '{incident.project.name}' was reopened by {actor_name}."
+        message = (
+            f"Incident #{incident.id} on '{incident.project.name}' was reopened by {actor_name}."
+        )
     elif event_type == IncidentEvent.EventType.NOTE_ADDED:
         title = f"[{incident.get_severity_display()}] Note Added on Incident #{incident.id}"
         message = f"{actor_name} added an investigation note to Incident #{incident.id} on '{incident.project.name}'."

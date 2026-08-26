@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { useWorkspace } from "@/hooks/use-workspace";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,7 +11,8 @@ import { Loader2, ListChecks, CheckCircle2, XCircle, Activity, Briefcase, Plus, 
 import { ExecutionsSheet } from "@/components/bjt/jobs/executions-sheet";
 import { JobFormModal, ConfirmDeleteJobModal } from "@/components/bjt/jobs/job-modals";
 import { useAuth } from "@/hooks/use-auth";
-import { updateJob } from "@/lib/api/jobs";
+import { updateJob, getJobsPaginated } from "@/lib/api/jobs";
+import { PaginationControls } from "@/components/bjt/pagination";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -28,8 +30,37 @@ export default function JobsPage() {
   const [editJob, setEditJob] = useState<any | null>(null);
   const [deleteJob, setDeleteJob] = useState<any | null>(null);
   const [toggling, setToggling] = useState<number | null>(null);
+  const [page, setPage] = useState(1);
 
-  const { projects, jobs, teamMap, projectMap, isLoading, isError } = useWorkspace();
+  const { projects, jobs, teamMap, projectMap, isLoading: isLoadingWorkspace, isError: isWorkspaceError } = useWorkspace();
+  const searchParams = useSearchParams();
+  const targetJobId = searchParams?.get("job_id");
+
+  // Fetch jobs with server-side pagination for the table
+  const { data: paginatedJobs, isLoading: isLoadingJobs, isError: isJobsError } = useQuery({
+    queryKey: ["jobs", page],
+    queryFn: () => getJobsPaginated({ page }),
+  });
+
+  const pagedJobs = paginatedJobs?.data || [];
+  const totalPages = paginatedJobs?.totalPages || 1;
+
+  // Reset to first page if current page becomes out of range (e.g., after deleting items)
+  useEffect(() => {
+    if (!isLoadingJobs && pagedJobs.length === 0 && page > 1) {
+      setPage(1);
+    }
+  }, [pagedJobs.length, isLoadingJobs, page]);
+
+  const isLoading = isLoadingWorkspace || isLoadingJobs;
+  const isError = isWorkspaceError || isJobsError;
+
+  useEffect(() => {
+    if (targetJobId && jobs.length > 0 && !selectedJob) {
+      const j = jobs.find(j => j.id === Number(targetJobId));
+      if (j) setSelectedJob({ id: j.id, name: j.name });
+    }
+  }, [targetJobId, jobs]);
 
   // Find which projects the user can manage (to pass to Create Job modal)
   const manageableProjects = projects.filter(p => {
@@ -66,7 +97,7 @@ export default function JobsPage() {
         <div className="rounded-md border border-destructive/30 bg-destructive/10 p-4 text-destructive">
           Failed to load jobs. <button onClick={() => handleRefetch()} className="underline font-medium">Retry</button>
         </div>
-      ) : jobs.length === 0 ? (
+      ) : pagedJobs.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-64 rounded-xl border border-dashed text-muted-foreground text-sm">
           <ListChecks className="h-10 w-10 mb-4 opacity-20" />
           <p>No jobs found.</p>
@@ -86,11 +117,11 @@ export default function JobsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {jobs.map((job) => {
+              {pagedJobs.map((job) => {
                 const project = projectMap.get(job.project as number);
                 const t = project ? teamMap.get(project.team) : null;
                 const canManage = isGlobalStaff || (t && (t.my_role === "admin" || t.my_role === "owner"));
-                
+
                 return (
                   <TableRow key={job.id} className={job.status === "inactive" ? "opacity-60" : ""}>
                     <TableCell className="py-3">
@@ -140,7 +171,7 @@ export default function JobsPage() {
                         >
                           <Activity className="h-3.5 w-3.5 mr-2" /> Executions
                         </Button>
-                        
+
                         {canManage && (
                           <DropdownMenu>
                             <DropdownMenuTrigger render={<Button variant="ghost" size="icon" className="h-8 w-8" />}>
@@ -183,6 +214,12 @@ export default function JobsPage() {
               })}
             </TableBody>
           </Table>
+
+          {totalPages > 1 && (
+            <div className="px-4 py-3 border-t bg-muted/10">
+              <PaginationControls page={page} totalPages={totalPages} setPage={setPage} />
+            </div>
+          )}
         </div>
       )}
 
@@ -193,7 +230,7 @@ export default function JobsPage() {
         open={!!selectedJob}
         onOpenChange={(open) => { if (!open) setSelectedJob(null); }}
       />
-      
+
       {/* Modals */}
       {createOpen && (
         <JobFormModal

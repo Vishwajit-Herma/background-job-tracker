@@ -150,8 +150,21 @@ export default function IncidentDetailsPage() {
           </div>
           
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
-            <span className="flex items-center gap-1.5"><Server className="h-4 w-4" /> {project?.name || "Unknown Project"}</span>
-            <span className="flex items-center gap-1.5"><Activity className="h-4 w-4" /> {job?.name || "Project-level"}</span>
+            {project ? (
+              <Link href={`/projects?project_id=${project.id}`} className="flex items-center gap-1.5 hover:text-foreground transition-colors">
+                <Server className="h-4 w-4" /> {project.name}
+              </Link>
+            ) : (
+              <span className="flex items-center gap-1.5"><Server className="h-4 w-4" /> Unknown Project</span>
+            )}
+            
+            {job ? (
+              <Link href={`/jobs?job_id=${job.id}`} className="flex items-center gap-1.5 hover:text-foreground transition-colors">
+                <Activity className="h-4 w-4" /> {job.name}
+              </Link>
+            ) : (
+              <span className="flex items-center gap-1.5"><Activity className="h-4 w-4" /> Project-level</span>
+            )}
             <span className="flex items-center gap-1.5"><Clock className="h-4 w-4" /> {new Date(incident.created_at).toLocaleString()}</span>
           </div>
         </div>

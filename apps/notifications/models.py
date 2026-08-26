@@ -80,7 +80,11 @@ class NotificationChannel(models.Model):
                 existing = existing.exclude(pk=self.pk)
             if existing.exists():
                 raise ValidationError(
-                    {"config": _("A channel with this type and configuration already exists for this project.")}
+                    {
+                        "config": _(
+                            "A channel with this type and configuration already exists for this project."
+                        )
+                    }
                 )
 
 

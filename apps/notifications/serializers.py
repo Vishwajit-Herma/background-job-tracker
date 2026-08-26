@@ -71,16 +71,22 @@ class NotificationChannelSerializer(serializers.ModelSerializer):
                 channel_qs = channel_qs.exclude(pk=self.instance.pk)
             if channel_qs.exists():
                 raise DRFValidationError(
-                    {"name": "A notification channel with this name and type already exists for this project."}
+                    {
+                        "name": "A notification channel with this name and type already exists for this project."
+                    }
                 )
 
         if project and type_ and config:
-            config_qs = NotificationChannel.objects.filter(project=project, type=type_, config=config)
+            config_qs = NotificationChannel.objects.filter(
+                project=project, type=type_, config=config
+            )
             if self.instance:
                 config_qs = config_qs.exclude(pk=self.instance.pk)
             if config_qs.exists():
                 raise DRFValidationError(
-                    {"config": "A notification channel with this configuration already exists for this project."}
+                    {
+                        "config": "A notification channel with this configuration already exists for this project."
+                    }
                 )
 
         return attrs
@@ -145,7 +151,11 @@ class NotificationPolicySerializer(serializers.ModelSerializer):
                 policy_qs = policy_qs.exclude(pk=self.instance.pk)
             if policy_qs.exists():
                 raise DRFValidationError(
-                    {"non_field_errors": ["A policy for this channel and severity already exists on this project."]}
+                    {
+                        "non_field_errors": [
+                            "A policy for this channel and severity already exists on this project."
+                        ]
+                    }
                 )
 
         valid_events = {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTeam } from "@/components/bjt/team-provider";
 import { useAuth } from "@/hooks/use-auth";
@@ -883,6 +884,8 @@ function ProjectRow({
 
 export default function ProjectsPage() {
   const { user } = useAuth();
+  const searchParams = useSearchParams();
+  const targetProjectId = searchParams?.get("project_id");
   const { teams, activeTeam, isLoading: isTeamLoading } = useTeam();
   const [createOpen, setCreateOpen] = useState(false);
   const [teamFilter, setTeamFilter] = useState<number | "all">("all");
@@ -1027,7 +1030,7 @@ export default function ProjectsPage() {
               project={project}
               teamMap={teamMap}
               manageableTeams={manageableTeams}
-              defaultExpanded={i === 0}
+              defaultExpanded={targetProjectId ? project.id === Number(targetProjectId) : i === 0}
             />
           ))}
         </div>
