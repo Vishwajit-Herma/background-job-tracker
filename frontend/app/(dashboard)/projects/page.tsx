@@ -64,11 +64,15 @@ import {
   Eye,
   EyeOff,
   Users,
+  Search,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { ApiError } from "@/lib/api/client";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useDebounce } from "@/hooks/use-debounce";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -898,6 +902,10 @@ export default function ProjectsPage() {
   // Build a fast lookup map: team.id → Team
   const teamMap = new Map(teams.map((t) => [t.id, t]));
 
+  const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search, 500);
+  const [ordering, setOrdering] = useState("-created_at");
+
   // Fetch ALL projects across all member teams (backend handles isolation)
   const { data: allProjects = [], isLoading, isError, refetch } = useQuery({
     queryKey: ["projects", "all"],
@@ -905,11 +913,20 @@ export default function ProjectsPage() {
     enabled: teams.length > 0,
   });
 
-  // Client-side filter by selected team
-  const projects =
-    teamFilter === "all"
-      ? allProjects
-      : allProjects.filter((p) => p.team === teamFilter);
+  // Client-side filter by selected team, search text, and then sort
+  const projects = allProjects
+    .filter((p) => teamFilter === "all" || p.team === teamFilter)
+    .filter((p) => {
+      if (!debouncedSearch) return true;
+      const s = debouncedSearch.toLowerCase();
+      return p.name.toLowerCase().includes(s) || (p.description && p.description.toLowerCase().includes(s));
+    })
+    .sort((a, b) => {
+      if (ordering === "name") return a.name.localeCompare(b.name);
+      if (ordering === "created_at") return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      if (ordering === "-created_at") return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      return 0;
+    });
 
   if (isTeamLoading) {
     return (
@@ -986,6 +1003,37 @@ export default function ProjectsPage() {
               )}
             </button>
           ))}
+        </div>
+      )}
+
+      {/* Search and Sort */}
+      {allProjects.length > 0 && (
+        <div className="flex flex-col sm:flex-row gap-3 items-center justify-between bg-card p-3 rounded-md border mt-4">
+          <div className="relative w-full sm:w-72">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search projects..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9 h-9"
+            />
+          </div>
+          <div className="w-full sm:w-48">
+            <Select value={ordering} onValueChange={setOrdering}>
+              <SelectTrigger className="h-9">
+                <SelectValue placeholder="Sort by">
+                  {ordering === "-created_at" && "Newest First"}
+                  {ordering === "created_at" && "Oldest First"}
+                  {ordering === "name" && "Name (A-Z)"}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="-created_at">Newest First</SelectItem>
+                <SelectItem value="created_at">Oldest First</SelectItem>
+                <SelectItem value="name">Name (A-Z)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       )}
 

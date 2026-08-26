@@ -33,6 +33,10 @@ import { Users, UserPlus, Check, X, ChevronDown, Loader2, ShieldAlert, Mail } fr
 import { InviteMemberModal } from "@/components/bjt/invite-member-modal";
 import { TeamSettingsTab } from "@/components/bjt/team-settings-tab";
 import { TeamInvitationsTab } from "@/components/bjt/team-invitations-tab";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Search } from "lucide-react";
+import { useDebounce } from "@/hooks/use-debounce";
 
 export default function TeamPage() {
   const { user } = useAuth();
@@ -46,11 +50,34 @@ export default function TeamPage() {
   const [decliningId, setDecliningId] = useState<number | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const { data: members = [], isLoading: isLoadingMembers } = useQuery({
+  const { data: rawMembers = [], isLoading: isLoadingMembers } = useQuery({
     queryKey: ["team-members", activeTeam?.id],
     queryFn: () => getTeamMembers(activeTeam!.id),
     enabled: !!activeTeam,
   });
+
+  const [search, setSearch] = useState("");
+  const [ordering, setOrdering] = useState("-joined_at");
+  const debouncedSearch = useDebounce(search, 500);
+
+  // Client-side filter and sort
+  const members = rawMembers
+    .filter((m) => {
+      if (!debouncedSearch) return true;
+      const s = debouncedSearch.toLowerCase();
+      return (
+        m.user.email.toLowerCase().includes(s) ||
+        (m.user.first_name && m.user.first_name.toLowerCase().includes(s)) ||
+        (m.user.last_name && m.user.last_name.toLowerCase().includes(s)) ||
+        m.role.toLowerCase().includes(s)
+      );
+    })
+    .sort((a, b) => {
+      if (ordering === "email") return a.user.email.localeCompare(b.user.email);
+      if (ordering === "joined_at") return new Date(a.joined_at).getTime() - new Date(b.joined_at).getTime();
+      if (ordering === "-joined_at") return new Date(b.joined_at).getTime() - new Date(a.joined_at).getTime();
+      return 0;
+    });
 
   const { data: myInvitations = [], isLoading: isLoadingInvites } = useQuery({
     queryKey: ["my-invitations"],
@@ -304,8 +331,37 @@ export default function TeamPage() {
 
             {/* Members tab */}
             {activeTab === "members" && (
-              <div className="rounded-md border">
-                <Table>
+              <div className="space-y-4">
+                <div className="flex flex-col sm:flex-row gap-3 items-center justify-between bg-card p-3 rounded-md border">
+                  <div className="relative w-full sm:w-72">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search members..."
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      className="pl-9 h-9"
+                    />
+                  </div>
+                  <div className="w-full sm:w-48">
+                    <Select value={ordering} onValueChange={setOrdering}>
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="Sort by">
+                          {ordering === "-joined_at" && "Newest Members"}
+                          {ordering === "joined_at" && "Oldest Members"}
+                          {ordering === "email" && "Email"}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="-joined_at">Newest Members</SelectItem>
+                        <SelectItem value="joined_at">Oldest Members</SelectItem>
+                        <SelectItem value="email">Email</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="rounded-md border bg-card">
+                  <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>User</TableHead>
@@ -431,6 +487,7 @@ export default function TeamPage() {
                   </TableBody>
                 </Table>
               </div>
+            </div>
             )}
 
             {activeTab === "invitations" && canManage && (

@@ -6,15 +6,27 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { Loader2, Bell, CheckCircle2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { PaginationControls } from "@/components/bjt/pagination";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Search } from "lucide-react";
+import { useDebounce } from "@/hooks/use-debounce";
+import { useState } from "react";
 
 export default function NotificationsPage() {
   const queryClient = useQueryClient();
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState("");
+  const [ordering, setOrdering] = useState("-created_at");
+  const debouncedSearch = useDebounce(search, 500);
+
   const { data: notificationsData, isLoading, isError } = useQuery({
-    queryKey: ["notifications"],
-    queryFn: () => getInAppNotifications(1),
+    queryKey: ["notifications", page, debouncedSearch, ordering],
+    queryFn: () => getInAppNotifications(page, { search: debouncedSearch, ordering }),
   });
 
   const notifications = notificationsData?.data || [];
+  const totalPages = notificationsData?.totalPages || 1;
 
   const handleMarkAllRead = async () => {
     try {
@@ -39,6 +51,34 @@ export default function NotificationsPage() {
           <CheckCircle2 className="mr-2 h-4 w-4" />
           Mark all as read
         </Button>
+      </div>
+
+      <div className="flex flex-col sm:flex-row gap-3 items-center justify-between bg-card p-3 rounded-md border">
+        <div className="relative w-full sm:w-72">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search notifications..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9 h-9"
+          />
+        </div>
+        <div className="w-full sm:w-48">
+          <Select value={ordering} onValueChange={setOrdering}>
+            <SelectTrigger className="h-9">
+              <SelectValue placeholder="Sort by">
+                {ordering === "-created_at" && "Newest First"}
+                {ordering === "created_at" && "Oldest First"}
+                {ordering === "title" && "Title (A-Z)"}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="-created_at">Newest First</SelectItem>
+              <SelectItem value="created_at">Oldest First</SelectItem>
+              <SelectItem value="title">Title (A-Z)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <div className="rounded-md border bg-card">
@@ -94,6 +134,12 @@ export default function NotificationsPage() {
             )}
           </TableBody>
         </Table>
+
+        {totalPages > 1 && (
+          <div className="px-4 py-3 border-t bg-muted/10">
+            <PaginationControls page={page} totalPages={totalPages} setPage={setPage} />
+          </div>
+        )}
       </div>
     </div>
   );

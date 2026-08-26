@@ -10,6 +10,10 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, AlertTriangle, ChevronRight, Activity, CalendarClock } from "lucide-react";
 import { PaginationControls } from "@/components/bjt/pagination";
 import Link from "next/link";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Search } from "lucide-react";
+import { useDebounce } from "@/hooks/use-debounce";
 
 export default function IncidentsPage() {
   const [page, setPage] = useState(1);
@@ -20,9 +24,14 @@ export default function IncidentsPage() {
   const projectMap = new Map<number, Project>(projects.map(p => [p.id, p]));
   const jobMap = new Map<number, Job>(jobs.map(j => [j.id, j]));
 
+  const [search, setSearch] = useState("");
+  const [ordering, setOrdering] = useState("-created_at");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const debouncedSearch = useDebounce(search, 500);
+
   const { data: paginatedIncidents, isLoading, isError } = useQuery({
-    queryKey: ["incidents", page],
-    queryFn: () => getIncidents({ page }),
+    queryKey: ["incidents", page, debouncedSearch, ordering, statusFilter],
+    queryFn: () => getIncidents({ page, search: debouncedSearch, ordering, status: statusFilter !== "all" ? statusFilter : undefined }),
   });
 
   const incidents = paginatedIncidents?.data || [];
@@ -45,6 +54,58 @@ export default function IncidentsPage() {
           <p className="text-muted-foreground mt-1">
             Track and investigate reliability issues triggered by your alert rules.
           </p>
+        </div>
+      </div>
+
+      <div className="flex flex-col sm:flex-row gap-3 items-center justify-between bg-card p-3 rounded-md border">
+        <div className="relative w-full sm:w-72">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search incidents by ID..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9 h-9"
+          />
+        </div>
+        <div className="flex w-full sm:w-auto gap-3">
+          <div className="w-full sm:w-40">
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="h-9">
+                <SelectValue placeholder="Status">
+                  {statusFilter === "all" && "All Statuses"}
+                  {statusFilter === "OPEN" && "Open"}
+                  {statusFilter === "ACKNOWLEDGED" && "Acknowledged"}
+                  {statusFilter === "RESOLVED" && "Resolved"}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Statuses</SelectItem>
+                <SelectItem value="OPEN">Open</SelectItem>
+                <SelectItem value="ACKNOWLEDGED">Acknowledged</SelectItem>
+                <SelectItem value="RESOLVED">Resolved</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="w-full sm:w-48">
+            <Select value={ordering} onValueChange={setOrdering}>
+              <SelectTrigger className="h-9">
+                <SelectValue placeholder="Sort by">
+                  {ordering === "-created_at" && "Newest First"}
+                  {ordering === "created_at" && "Oldest First"}
+                  {ordering === "-updated_at" && "Recently Updated"}
+                  {ordering === "severity" && "Severity (High to Low)"}
+                  {ordering === "-severity" && "Severity (Low to High)"}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="-created_at">Newest First</SelectItem>
+                <SelectItem value="created_at">Oldest First</SelectItem>
+                <SelectItem value="-updated_at">Recently Updated</SelectItem>
+                <SelectItem value="severity">Severity (High to Low)</SelectItem>
+                <SelectItem value="-severity">Severity (Low to High)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </div>
 

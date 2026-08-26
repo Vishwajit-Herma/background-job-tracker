@@ -11,8 +11,6 @@ class DummyTokenSerializer(serializers.Serializer):
     pass
 
 
-
-
 class CustomUserDetailsSerializer(UserDetailsSerializer):
     class Meta(UserDetailsSerializer.Meta):
         fields = UserDetailsSerializer.Meta.fields + ("is_staff",)

@@ -22,6 +22,9 @@ class NotificationChannelViewSet(CustomBaseViewSet):
 
     serializer_class = NotificationChannelSerializer
     permission_classes = [permissions.IsAuthenticated]
+    filterset_fields = ["project", "type", "is_active"]
+    search_fields = ["name", "project__name"]
+    ordering_fields = ["name", "created_at", "updated_at"]
 
     def get_queryset(self):
         return NotificationChannel.objects.filter(
@@ -67,6 +70,9 @@ class NotificationPolicyViewSet(CustomBaseViewSet):
 
     serializer_class = NotificationPolicySerializer
     permission_classes = [permissions.IsAuthenticated]
+    filterset_fields = ["project", "channel", "is_active"]
+    search_fields = ["name", "project__name", "channel__name"]
+    ordering_fields = ["name", "created_at", "updated_at"]
 
     def get_queryset(self):
         return NotificationPolicy.objects.filter(
@@ -104,6 +110,9 @@ class InAppNotificationViewSet(
 
     serializer_class = InAppNotificationSerializer
     permission_classes = [permissions.IsAuthenticated]
+    filterset_fields = ["is_read"]
+    search_fields = ["title", "message"]
+    ordering_fields = ["created_at", "read_at"]
 
     def get_queryset(self):
         return InAppNotification.objects.filter(recipient=self.request.user)

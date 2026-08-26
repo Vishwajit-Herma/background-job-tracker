@@ -7,11 +7,14 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Loader2, ListChecks, CheckCircle2, XCircle, Activity, Briefcase, Plus, MoreHorizontal, Pencil, Trash2, ToggleLeft, ToggleRight } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Loader2, ListChecks, CheckCircle2, XCircle, Activity, Briefcase, Plus, MoreHorizontal, Pencil, Trash2, ToggleLeft, ToggleRight, Search } from "lucide-react";
 import { ExecutionsSheet } from "@/components/bjt/jobs/executions-sheet";
 import { JobFormModal, ConfirmDeleteJobModal } from "@/components/bjt/jobs/job-modals";
 import { useAuth } from "@/hooks/use-auth";
 import { updateJob, getJobsPaginated } from "@/lib/api/jobs";
+import { useDebounce } from "@/hooks/use-debounce";
 import { PaginationControls } from "@/components/bjt/pagination";
 import {
   DropdownMenu,
@@ -31,15 +34,20 @@ export default function JobsPage() {
   const [deleteJob, setDeleteJob] = useState<any | null>(null);
   const [toggling, setToggling] = useState<number | null>(null);
   const [page, setPage] = useState(1);
+  const [search, setSearch] = useState("");
+  const [ordering, setOrdering] = useState("-created_at");
+  const [statusFilter, setStatusFilter] = useState("all");
 
   const { projects, jobs, teamMap, projectMap, isLoading: isLoadingWorkspace, isError: isWorkspaceError } = useWorkspace();
   const searchParams = useSearchParams();
   const targetJobId = searchParams?.get("job_id");
 
   // Fetch jobs with server-side pagination for the table
-  const { data: paginatedJobs, isLoading: isLoadingJobs, isError: isJobsError } = useQuery({
-    queryKey: ["jobs", page],
-    queryFn: () => getJobsPaginated({ page }),
+  const debouncedSearch = useDebounce(search, 500);
+
+  const { data: paginatedJobs, isLoading: isLoadingJobs, isError: isJobsError, refetch } = useQuery({
+    queryKey: ["jobs-paginated", page, debouncedSearch, ordering, statusFilter],
+    queryFn: () => getJobsPaginated({ page, search: debouncedSearch, ordering, status: statusFilter !== "all" ? statusFilter : undefined }),
   });
 
   const pagedJobs = paginatedJobs?.data || [];
@@ -86,6 +94,52 @@ export default function JobsPage() {
             <Plus className="mr-2 h-4 w-4" /> Create Job
           </Button>
         )}
+      </div>
+
+      <div className="flex flex-col sm:flex-row gap-3 items-center justify-between bg-card p-3 rounded-md border">
+        <div className="relative w-full sm:w-72">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search jobs..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9 h-9"
+          />
+        </div>
+        <div className="flex w-full sm:w-auto gap-3">
+          <div className="w-full sm:w-40">
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="h-9">
+                <SelectValue placeholder="Status">
+                  {statusFilter === "all" && "All Statuses"}
+                  {statusFilter === "active" && "Active"}
+                  {statusFilter === "inactive" && "Inactive"}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Statuses</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="inactive">Inactive</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="w-full sm:w-48">
+            <Select value={ordering} onValueChange={setOrdering}>
+              <SelectTrigger className="h-9">
+                <SelectValue placeholder="Sort by">
+                  {ordering === "-created_at" && "Newest First"}
+                  {ordering === "created_at" && "Oldest First"}
+                  {ordering === "name" && "Name (A-Z)"}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="-created_at">Newest First</SelectItem>
+                <SelectItem value="created_at">Oldest First</SelectItem>
+                <SelectItem value="name">Name (A-Z)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
       </div>
 
       {isLoading ? (

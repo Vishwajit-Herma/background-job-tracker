@@ -12,6 +12,10 @@ import { BellRing, Loader2, Plus, MoreHorizontal, Edit, Trash, Activity } from "
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertRuleModal } from "@/components/bjt/alerts/alert-rule-modal";
 import { PaginationControls } from "@/components/bjt/pagination";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Search } from "lucide-react";
+import { useDebounce } from "@/hooks/use-debounce";
 
 export default function AlertsPage() {
   const queryClient = useQueryClient();
@@ -22,10 +26,15 @@ export default function AlertsPage() {
   const { data: projects = [] } = useQuery<Project[]>({ queryKey: ["projects"], queryFn: () => getProjects() });
   const { data: jobs = [] } = useQuery({ queryKey: ["jobs"], queryFn: () => getJobs() });
 
+  const [search, setSearch] = useState("");
+  const [ordering, setOrdering] = useState("-created_at");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const debouncedSearch = useDebounce(search, 500);
+
   // Fetch alert rules with server-side pagination
   const { data: paginatedRules, isLoading } = useQuery({
-    queryKey: ["alert-rules", page],
-    queryFn: () => getPaginatedAlertRules({ page }),
+    queryKey: ["alert-rules", page, debouncedSearch, ordering, statusFilter],
+    queryFn: () => getPaginatedAlertRules({ page, search: debouncedSearch, ordering, is_active: statusFilter !== "all" ? statusFilter === "true" : undefined }),
   });
 
   const rules = paginatedRules?.data || [];
@@ -88,6 +97,56 @@ export default function AlertsPage() {
         <Button onClick={() => { setRuleToEdit(null); setModalOpen(true); }}>
           <Plus className="mr-2 h-4 w-4" /> Create Rule
         </Button>
+      </div>
+
+      <div className="flex flex-col sm:flex-row gap-3 items-center justify-between bg-card p-3 rounded-md border">
+        <div className="relative w-full sm:w-72">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search rules..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9 h-9"
+          />
+        </div>
+        <div className="flex w-full sm:w-auto gap-3">
+          <div className="w-full sm:w-40">
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="h-9">
+                <SelectValue placeholder="Status">
+                  {statusFilter === "all" && "All Statuses"}
+                  {statusFilter === "true" && "Active"}
+                  {statusFilter === "false" && "Inactive"}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Statuses</SelectItem>
+                <SelectItem value="true">Active</SelectItem>
+                <SelectItem value="false">Inactive</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="w-full sm:w-48">
+            <Select value={ordering} onValueChange={setOrdering}>
+              <SelectTrigger className="h-9">
+                <SelectValue placeholder="Sort by">
+                  {ordering === "-created_at" && "Newest First"}
+                  {ordering === "created_at" && "Oldest First"}
+                  {ordering === "name" && "Name (A-Z)"}
+                  {ordering === "severity" && "Severity (High to Low)"}
+                  {ordering === "-severity" && "Severity (Low to High)"}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="-created_at">Newest First</SelectItem>
+                <SelectItem value="created_at">Oldest First</SelectItem>
+                <SelectItem value="name">Name (A-Z)</SelectItem>
+                <SelectItem value="severity">Severity (High to Low)</SelectItem>
+                <SelectItem value="-severity">Severity (Low to High)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
       </div>
 
       <div className="rounded-md border bg-card">

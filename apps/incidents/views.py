@@ -29,6 +29,8 @@ class IncidentViewSet(BaseViewSetConfig, CustomResponseMixin, viewsets.ReadOnlyM
     serializer_class = IncidentSerializer
     permission_classes = [IsAuthenticated, IncidentPermission]
     filterset_fields = ["project", "job", "status", "severity", "assigned_to", "alert_rule"]
+    search_fields = ["id", "project__name", "job__name"]
+    ordering_fields = ["created_at", "updated_at", "severity"]
 
     def get_queryset(self):
         """

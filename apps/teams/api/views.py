@@ -25,6 +25,9 @@ class TeamViewSet(viewsets.ModelViewSet):
 
     serializer_class = TeamSerializer
     permission_classes = [permissions.IsAuthenticated]
+    filterset_fields = ["is_active"]
+    search_fields = ["name", "slug"]
+    ordering_fields = ["name", "created_at", "updated_at"]
 
     def get_queryset(self):
         """Return all active teams for staff, otherwise only teams the user is a member of."""
@@ -54,6 +57,9 @@ class TeamMemberViewSet(viewsets.ModelViewSet):
 
     permission_classes = [permissions.IsAuthenticated]
     http_method_names = ["get", "patch", "delete"]
+    filterset_fields = ["role", "is_active"]
+    search_fields = ["user__email", "user__first_name", "user__last_name"]
+    ordering_fields = ["joined_at", "role"]
 
     def get_serializer_class(self):
         if self.action in ["update", "partial_update"]:
@@ -125,6 +131,9 @@ class TeamInvitationViewSet(viewsets.ModelViewSet):
     serializer_class = TeamInvitationSerializer
     permission_classes = [permissions.IsAuthenticated]
     http_method_names = ["get", "post", "delete"]
+    filterset_fields = ["status", "role"]
+    search_fields = ["email"]
+    ordering_fields = ["created_at", "role"]
 
     def get_queryset(self):
         team_id = self.kwargs.get("team_pk")
