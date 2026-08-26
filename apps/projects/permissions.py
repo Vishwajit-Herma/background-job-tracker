@@ -35,7 +35,7 @@ class ProjectPermission(BasePermission):
                     is_active=True,
                     role__in=["admin", "owner"],
                 ).exists()
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 # If they pass team="abc" or an object instead of an integer ID,
                 # catch the error so DRF returns 403 instead of crashing with 500.
                 return False
@@ -96,7 +96,7 @@ class APIKeyPermission(BasePermission):
             # Attach the project to the view so we can use it in create/etc. without fetching again.
             request._project = project
             return True
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             return False
 
     def has_object_permission(self, request, view, obj):

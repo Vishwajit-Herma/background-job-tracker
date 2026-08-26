@@ -13,6 +13,9 @@ class AlertRuleViewSet(CustomBaseViewSet):
 
     serializer_class = AlertRuleSerializer
     permission_classes = [IsAuthenticated, AlertRulePermission]
+    filterset_fields = ["project", "job", "metric", "severity", "is_active"]
+    search_fields = ["project__name", "job__name"]
+    ordering_fields = ["created_at", "updated_at", "severity", "metric"]
 
     def get_queryset(self):
         """

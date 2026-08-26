@@ -18,13 +18,22 @@ class TeamMemberSerializer(serializers.ModelSerializer):
 
 class TeamSerializer(serializers.ModelSerializer):
     """Serializer for Team."""
-    
+
     slug = serializers.SlugField(required=False)
     my_role = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Team
-        fields = ["id", "name", "slug", "description", "owner", "my_role", "created_at", "updated_at"]
+        fields = [
+            "id",
+            "name",
+            "slug",
+            "description",
+            "owner",
+            "my_role",
+            "created_at",
+            "updated_at",
+        ]
         read_only_fields = ["id", "owner", "my_role", "created_at", "updated_at"]
 
     def get_my_role(self, obj) -> str | None:
@@ -57,5 +66,25 @@ class TeamInvitationSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = TeamInvitation
-        fields = ["id", "team", "team_name", "email", "role", "status", "invited_by", "invited_by_email", "created_at", "expires_at"]
-        read_only_fields = ["id", "team", "team_name", "status", "invited_by", "invited_by_email", "created_at", "expires_at"]
+        fields = [
+            "id",
+            "team",
+            "team_name",
+            "email",
+            "role",
+            "status",
+            "invited_by",
+            "invited_by_email",
+            "created_at",
+            "expires_at",
+        ]
+        read_only_fields = [
+            "id",
+            "team",
+            "team_name",
+            "status",
+            "invited_by",
+            "invited_by_email",
+            "created_at",
+            "expires_at",
+        ]

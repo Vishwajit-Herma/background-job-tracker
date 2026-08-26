@@ -31,8 +31,8 @@ class IncidentPermission(BasePermission):
             return member.is_admin()
 
         if action in ["acknowledge", "resolve"]:
-            # Assignee OR Admin/Owner
-            is_assignee = obj.assigned_to_id == member.id
+            # Only Assignee OR Team Admin/Owner
+            is_assignee = bool(obj.assigned_to_id and obj.assigned_to_id == member.id)
             return is_assignee or member.is_admin()
 
         if action == "notes":

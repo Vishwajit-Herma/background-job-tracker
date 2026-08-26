@@ -2,6 +2,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.teams.models import TeamMember
+from apps.notifications.services import dispatch_incident_event
 from .models import Incident, IncidentEvent, IncidentNote
 
 
@@ -29,8 +30,6 @@ def _log_incident_event(incident, event_type, actor=None, metadata=None):
     )
 
     if event_type in NOTIFIABLE_EVENTS:
-        from apps.notifications.services import dispatch_incident_event
-
         transaction.on_commit(lambda: dispatch_incident_event(event.id))
 
 
@@ -70,6 +69,7 @@ def assign_incident(incident_id, member_id, actor):
             metadata={
                 "previous_assignee_member_id": previous_assignee_id,
                 "new_assignee_member_id": member.id,
+                "new_assignee_name": member.user.get_full_name() or member.user.email,
             },
         )
         return incident
@@ -90,11 +90,15 @@ def acknowledge_incident(incident_id, actor):
         incident.acknowledged_at = timezone.now()
         incident.save(update_fields=["status", "acknowledged_by", "acknowledged_at", "updated_at"])
 
+        actor_name = (actor.get_full_name() or actor.email) if actor else "System"
         _log_incident_event(
             incident,
             IncidentEvent.EventType.ACKNOWLEDGED,
             actor=actor,
-            metadata={"acknowledged_by": actor.id if actor else None},
+            metadata={
+                "acknowledged_by": actor.id if actor else None,
+                "acknowledged_by_name": actor_name,
+            },
         )
         return incident
 
@@ -119,6 +123,7 @@ def resolve_incident(incident_id, actor):
             update_fields=["status", "resolved_by", "resolved_at", "resolution_type", "updated_at"]
         )
 
+        actor_name = (actor.get_full_name() or actor.email) if actor else "System"
         _log_incident_event(
             incident,
             IncidentEvent.EventType.MANUALLY_RESOLVED,
@@ -126,6 +131,7 @@ def resolve_incident(incident_id, actor):
             metadata={
                 "resolution_type": "MANUAL",
                 "resolved_by": actor.id if actor else None,
+                "resolved_by_name": actor_name,
                 "previous_status": previous_status,
             },
         )
@@ -160,7 +166,16 @@ def reopen_incident(incident_id, actor):
             ]
         )
 
-        _log_incident_event(incident, IncidentEvent.EventType.REOPENED, actor=actor, metadata={})
+        actor_name = (actor.get_full_name() or actor.email) if actor else "System"
+        _log_incident_event(
+            incident,
+            IncidentEvent.EventType.REOPENED,
+            actor=actor,
+            metadata={
+                "reopened_by": actor.id if actor else None,
+                "reopened_by_name": actor_name,
+            },
+        )
         return incident
 
 
@@ -180,12 +195,12 @@ def auto_resolve_incident(incident_id, recovery_metadata=None):
         incident.resolved_by = None
         incident.resolved_at = timezone.now()
         incident.resolution_type = Incident.ResolutionType.AUTOMATIC
-        
+
         update_fields = ["status", "resolved_by", "resolved_at", "resolution_type", "updated_at"]
         if recovery_metadata:
             incident.trigger_metadata = recovery_metadata
             update_fields.append("trigger_metadata")
-            
+
         incident.save(update_fields=update_fields)
 
         _log_incident_event(
@@ -193,9 +208,10 @@ def auto_resolve_incident(incident_id, recovery_metadata=None):
             IncidentEvent.EventType.AUTO_RESOLVED,
             actor=None,
             metadata={
-                "resolution_type": "AUTOMATIC", 
+                "resolution_type": "AUTOMATIC",
+                "resolved_by_name": "System (Auto-recovery)",
                 "previous_status": previous_status,
-                "recovery_metadata": recovery_metadata
+                "recovery_metadata": recovery_metadata,
             },
         )
         return incident

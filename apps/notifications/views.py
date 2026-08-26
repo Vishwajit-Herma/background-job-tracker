@@ -22,13 +22,20 @@ class NotificationChannelViewSet(CustomBaseViewSet):
 
     serializer_class = NotificationChannelSerializer
     permission_classes = [permissions.IsAuthenticated]
+    filterset_fields = ["project", "type", "is_active"]
+    search_fields = ["name", "project__name"]
+    ordering_fields = ["name", "created_at", "updated_at"]
 
     def get_queryset(self):
+        if self.request.user.is_staff:
+            return NotificationChannel.objects.all()
         return NotificationChannel.objects.filter(
             project__team__members__user=self.request.user, project__team__members__is_active=True
         ).distinct()
 
     def check_admin_or_owner(self, project):
+        if self.request.user.is_staff:
+            return
         member = TeamMember.objects.filter(
             team_id=project.team_id, user=self.request.user, is_active=True
         ).first()
@@ -67,13 +74,20 @@ class NotificationPolicyViewSet(CustomBaseViewSet):
 
     serializer_class = NotificationPolicySerializer
     permission_classes = [permissions.IsAuthenticated]
+    filterset_fields = ["project", "channel", "is_active"]
+    search_fields = ["name", "project__name", "channel__name"]
+    ordering_fields = ["name", "created_at", "updated_at"]
 
     def get_queryset(self):
+        if self.request.user.is_staff:
+            return NotificationPolicy.objects.all()
         return NotificationPolicy.objects.filter(
             project__team__members__user=self.request.user, project__team__members__is_active=True
         ).distinct()
 
     def check_admin_or_owner(self, project):
+        if self.request.user.is_staff:
+            return
         member = TeamMember.objects.filter(
             team_id=project.team_id, user=self.request.user, is_active=True
         ).first()
@@ -104,6 +118,9 @@ class InAppNotificationViewSet(
 
     serializer_class = InAppNotificationSerializer
     permission_classes = [permissions.IsAuthenticated]
+    filterset_fields = ["is_read"]
+    search_fields = ["title", "message"]
+    ordering_fields = ["created_at", "read_at"]
 
     def get_queryset(self):
         return InAppNotification.objects.filter(recipient=self.request.user)

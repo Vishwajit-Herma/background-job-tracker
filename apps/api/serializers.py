@@ -1,13 +1,16 @@
+from dj_rest_auth.serializers import UserDetailsSerializer
 from dj_rest_auth.registration.serializers import RegisterSerializer
 from rest_framework import serializers
+
 
 class CustomRegisterSerializer(RegisterSerializer):
     username = None
 
+
 class DummyTokenSerializer(serializers.Serializer):
     pass
 
-from dj_rest_auth.serializers import UserDetailsSerializer
+
 class CustomUserDetailsSerializer(UserDetailsSerializer):
     class Meta(UserDetailsSerializer.Meta):
-        fields = UserDetailsSerializer.Meta.fields + ('is_staff',)
+        fields = UserDetailsSerializer.Meta.fields + ("is_staff",)

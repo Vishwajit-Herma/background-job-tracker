@@ -33,10 +33,14 @@ import { Users, UserPlus, Check, X, ChevronDown, Loader2, ShieldAlert, Mail } fr
 import { InviteMemberModal } from "@/components/bjt/invite-member-modal";
 import { TeamSettingsTab } from "@/components/bjt/team-settings-tab";
 import { TeamInvitationsTab } from "@/components/bjt/team-invitations-tab";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Search } from "lucide-react";
+import { useDebounce } from "@/hooks/use-debounce";
 
 export default function TeamPage() {
   const { user } = useAuth();
-  const { activeTeam } = useTeam();
+  const { teams, activeTeam, setActiveTeam } = useTeam();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<"members" | "invitations" | "settings">("members");
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
@@ -46,11 +50,34 @@ export default function TeamPage() {
   const [decliningId, setDecliningId] = useState<number | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const { data: members = [], isLoading: isLoadingMembers } = useQuery({
+  const { data: rawMembers = [], isLoading: isLoadingMembers } = useQuery({
     queryKey: ["team-members", activeTeam?.id],
     queryFn: () => getTeamMembers(activeTeam!.id),
     enabled: !!activeTeam,
   });
+
+  const [search, setSearch] = useState("");
+  const [ordering, setOrdering] = useState("-joined_at");
+  const debouncedSearch = useDebounce(search, 500);
+
+  // Client-side filter and sort
+  const members = rawMembers
+    .filter((m) => {
+      if (!debouncedSearch) return true;
+      const s = debouncedSearch.toLowerCase();
+      return (
+        m.user.email.toLowerCase().includes(s) ||
+        (m.user.first_name && m.user.first_name.toLowerCase().includes(s)) ||
+        (m.user.last_name && m.user.last_name.toLowerCase().includes(s)) ||
+        m.role.toLowerCase().includes(s)
+      );
+    })
+    .sort((a, b) => {
+      if (ordering === "email") return a.user.email.localeCompare(b.user.email);
+      if (ordering === "joined_at") return new Date(a.joined_at).getTime() - new Date(b.joined_at).getTime();
+      if (ordering === "-joined_at") return new Date(b.joined_at).getTime() - new Date(a.joined_at).getTime();
+      return 0;
+    });
 
   const { data: myInvitations = [], isLoading: isLoadingInvites } = useQuery({
     queryKey: ["my-invitations"],
@@ -193,11 +220,11 @@ export default function TeamPage() {
     </div>
   );
 
-  if (!activeTeam) {
+  if (teams.length === 0) {
     return (
       <div className="flex-1 space-y-6 p-8 pt-6">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Your Teams</h2>
+          <h2 className="text-3xl font-bold tracking-tight">Teams</h2>
           <p className="text-muted-foreground mt-1">Manage your team memberships and invitations.</p>
         </div>
 
@@ -220,8 +247,8 @@ export default function TeamPage() {
   }
 
   return (
-    <div className="flex-1 space-y-6 p-8 pt-6">
-      {/* Pending invitations banner — only shown when there are pending ones */}
+    <div className="flex-1 p-8 pt-6 space-y-6">
+      {/* Pending invitations banner */}
       {!isLoadingInvites && pendingInvitationsBlock}
 
       {/* Action error banner */}
@@ -235,185 +262,257 @@ export default function TeamPage() {
         </div>
       )}
 
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">{activeTeam.name}</h2>
-          <p className="text-muted-foreground mt-1">Manage your team settings, members and invitations.</p>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[240px_1fr]">
+        {/* ── Team Switcher Sidebar ── */}
+        <div className="space-y-1">
+          <p className="text-xs uppercase tracking-wide font-semibold text-muted-foreground px-2 mb-2">
+            Your Teams
+          </p>
+          {teams.map((team) => (
+            <button
+              key={team.id}
+              onClick={() => setActiveTeam(team)}
+              className={`w-full text-left px-3 py-2.5 rounded-lg text-sm transition-colors flex items-center justify-between gap-2 ${
+                activeTeam?.id === team.id
+                  ? "bg-primary/10 text-primary font-medium"
+                  : "hover:bg-muted text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <div
+                  className={`h-2 w-2 rounded-full shrink-0 ${
+                    activeTeam?.id === team.id ? "bg-primary" : "bg-muted-foreground/40"
+                  }`}
+                />
+                <span className="truncate">{team.name}</span>
+              </div>
+              {team.my_role && (
+                <span className="text-xs opacity-50 shrink-0 capitalize">{team.my_role}</span>
+              )}
+            </button>
+          ))}
         </div>
-        {canManage && activeTab !== "settings" && (
-          <Button onClick={() => setIsInviteModalOpen(true)}>
-            <UserPlus className="mr-2 h-4 w-4" />
-            Invite Member
-          </Button>
+
+        {/* ── Team Detail Panel ── */}
+        {activeTeam ? (
+          <div className="space-y-6 min-w-0">
+            {/* Header */}
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-bold tracking-tight">{activeTeam.name}</h2>
+                <p className="text-muted-foreground mt-1 text-sm">
+                  Manage members, invitations and settings for this team.
+                </p>
+              </div>
+              {canManage && activeTab !== "settings" && (
+                <Button onClick={() => setIsInviteModalOpen(true)}>
+                  <UserPlus className="mr-2 h-4 w-4" />
+                  Invite Member
+                </Button>
+              )}
+            </div>
+
+            {/* Tab bar */}
+            <div className="flex space-x-1 border-b">
+              {(["members", ...(canManage ? ["invitations", "settings"] : [])] as const).map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab as any)}
+                  className={`px-4 py-2 text-sm font-medium capitalize transition-colors border-b-2 -mb-px ${
+                    activeTab === tab
+                      ? "border-primary text-foreground"
+                      : "border-transparent text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {tab}
+                </button>
+              ))}
+            </div>
+
+            {/* Members tab */}
+            {activeTab === "members" && (
+              <div className="space-y-4">
+                <div className="flex flex-col sm:flex-row gap-3 items-center justify-between bg-card p-3 rounded-md border">
+                  <div className="relative w-full sm:w-72">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search members..."
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      className="pl-9 h-9"
+                    />
+                  </div>
+                  <div className="w-full sm:w-48">
+                    <Select value={ordering} onValueChange={setOrdering}>
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="Sort by">
+                          {ordering === "-joined_at" && "Newest Members"}
+                          {ordering === "joined_at" && "Oldest Members"}
+                          {ordering === "email" && "Email"}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="-joined_at">Newest Members</SelectItem>
+                        <SelectItem value="joined_at">Oldest Members</SelectItem>
+                        <SelectItem value="email">Email</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="rounded-md border bg-card">
+                  <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>User</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Role</TableHead>
+                      <TableHead>Joined</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {isLoadingMembers ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="h-24 text-center">
+                          <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
+                        </TableCell>
+                      </TableRow>
+                    ) : members.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                          No members found.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      members.map((member) => {
+                        const isSelf = member.user.email === user?.email;
+                        const isChangingThisRole = changingRoleId === member.id;
+                        const isRemovingThis = removingId === member.id;
+                        return (
+                          <TableRow key={member.id}>
+                            <TableCell className="font-medium">
+                              <div className="flex items-center gap-2">
+                                <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-semibold text-primary">
+                                  {(member.user.first_name?.[0] || member.user.email[0]).toUpperCase()}
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-1">
+                                    {member.user.first_name || member.user.last_name
+                                      ? `${member.user.first_name} ${member.user.last_name}`.trim()
+                                      : <span className="text-muted-foreground italic">No name</span>}
+                                    {isSelf && <span className="text-xs text-muted-foreground">(You)</span>}
+                                  </div>
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-muted-foreground text-sm">{member.user.email}</TableCell>
+                            <TableCell>
+                              <Badge variant={roleBadgeVariant(member.role)}>
+                                {member.role.toUpperCase()}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {new Date(member.joined_at).toLocaleDateString()}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {canManage && !isSelf && (member.role !== "owner" || user?.is_staff) && (
+                                <div className="flex items-center justify-end gap-2">
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger 
+                                      render={
+                                        <Button 
+                                          variant="outline" 
+                                          size="sm" 
+                                          className="h-8" 
+                                          disabled={isChangingThisRole} 
+                                        />
+                                      }
+                                    >
+                                      {isChangingThisRole ? (
+                                        <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                                      ) : null}
+                                      Change Role <ChevronDown className="ml-2 h-4 w-4" />
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                      <DropdownMenuItem 
+                                        onClick={() => handleChangeRole(member.id, "member")}
+                                        disabled={member.role === "member"}
+                                      >
+                                        Member {member.role === "member" && <Check className="ml-auto h-4 w-4" />}
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem 
+                                        onClick={() => handleChangeRole(member.id, "admin")}
+                                        disabled={member.role === "admin"}
+                                      >
+                                        Admin {member.role === "admin" && <Check className="ml-auto h-4 w-4" />}
+                                      </DropdownMenuItem>
+                                      {(user?.is_staff || isOwner) && (
+                                        <DropdownMenuItem 
+                                          onClick={() => handleChangeRole(member.id, "owner")}
+                                          disabled={member.role === "owner"}
+                                        >
+                                          Owner {member.role === "owner" && <Check className="ml-auto h-4 w-4" />}
+                                        </DropdownMenuItem>
+                                      )}
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    className="text-destructive hover:text-destructive hover:bg-destructive/10 h-8"
+                                    onClick={() => handleRemoveMember(member.id)}
+                                    disabled={isRemovingThis}
+                                  >
+                                    {isRemovingThis ? <Loader2 className="h-4 w-4 animate-spin" /> : "Remove"}
+                                  </Button>
+                                </div>
+                              )}
+                              {isSelf && member.role !== "owner" && (
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm" 
+                                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                  onClick={() => handleRemoveMember(member.id)}
+                                  disabled={isRemovingThis}
+                                >
+                                  {isRemovingThis ? <Loader2 className="h-4 w-4 animate-spin" /> : "Leave Team"}
+                                </Button>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+            )}
+
+            {activeTab === "invitations" && canManage && (
+              <TeamInvitationsTab teamId={activeTeam.id} />
+            )}
+
+            {activeTab === "settings" && canManage && (
+              <TeamSettingsTab team={activeTeam} />
+            )}
+
+            {isInviteModalOpen && activeTeam && (
+              <InviteMemberModal
+                open={isInviteModalOpen}
+                onOpenChange={(open: boolean) => setIsInviteModalOpen(open)}
+                teamId={activeTeam.id}
+                canInviteOwner={user?.is_staff || isOwner}
+              />
+            )}
+          </div>
+        ) : (
+          <div className="flex items-center justify-center h-48 rounded-xl border border-dashed text-muted-foreground text-sm">
+            Select a team on the left to view its details.
+          </div>
         )}
       </div>
-
-      {/* Tab bar */}
-      <div className="flex space-x-1 border-b">
-        {(["members", ...(canManage ? ["invitations", "settings"] : [])] as const).map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab as any)}
-            className={`px-4 py-2 text-sm font-medium capitalize transition-colors border-b-2 -mb-px ${
-              activeTab === tab
-                ? "border-primary text-foreground"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {tab}
-          </button>
-        ))}
-      </div>
-
-      {/* Members tab */}
-      {activeTab === "members" && (
-        <div className="rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>User</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Joined</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoadingMembers ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="h-24 text-center">
-                    <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
-                  </TableCell>
-                </TableRow>
-              ) : members.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
-                    No members found.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                members.map((member) => {
-                  const isSelf = member.user.email === user?.email;
-                  const isChangingThisRole = changingRoleId === member.id;
-                  const isRemovingThis = removingId === member.id;
-                  return (
-                    <TableRow key={member.id}>
-                      <TableCell className="font-medium">
-                        <div className="flex items-center gap-2">
-                          <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-semibold text-primary">
-                            {(member.user.first_name?.[0] || member.user.email[0]).toUpperCase()}
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-1">
-                              {member.user.first_name || member.user.last_name
-                                ? `${member.user.first_name} ${member.user.last_name}`.trim()
-                                : <span className="text-muted-foreground italic">No name</span>}
-                              {isSelf && <span className="text-xs text-muted-foreground">(You)</span>}
-                            </div>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground text-sm">{member.user.email}</TableCell>
-                      <TableCell>
-                        <Badge variant={roleBadgeVariant(member.role)}>
-                          {member.role.toUpperCase()}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {new Date(member.joined_at).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {canManage && !isSelf && (member.role !== "owner" || user?.is_staff) && (
-                          <div className="flex items-center justify-end gap-2">
-                            <DropdownMenu>
-                              {/* @ts-expect-error type issue with Radix */}
-                              <DropdownMenuTrigger 
-                                render={
-                                  <Button 
-                                    variant="outline" 
-                                    size="sm" 
-                                    className="h-8" 
-                                    disabled={isChangingThisRole} 
-                                  />
-                                }
-                              >
-                                {isChangingThisRole ? (
-                                  <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                                ) : null}
-                                Change Role <ChevronDown className="ml-2 h-4 w-4" />
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem 
-                                  onClick={() => handleChangeRole(member.id, "member")}
-                                  disabled={member.role === "member"}
-                                >
-                                  Member {member.role === "member" && <Check className="ml-auto h-4 w-4" />}
-                                </DropdownMenuItem>
-                                <DropdownMenuItem 
-                                  onClick={() => handleChangeRole(member.id, "admin")}
-                                  disabled={member.role === "admin"}
-                                >
-                                  Admin {member.role === "admin" && <Check className="ml-auto h-4 w-4" />}
-                                </DropdownMenuItem>
-                                {(user?.is_staff || isOwner) && (
-                                  <DropdownMenuItem 
-                                    onClick={() => handleChangeRole(member.id, "owner")}
-                                    disabled={member.role === "owner"}
-                                  >
-                                    Owner {member.role === "owner" && <Check className="ml-auto h-4 w-4" />}
-                                  </DropdownMenuItem>
-                                )}
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              className="text-destructive hover:text-destructive hover:bg-destructive/10 h-8"
-                              onClick={() => handleRemoveMember(member.id)}
-                              disabled={isRemovingThis}
-                            >
-                              {isRemovingThis ? <Loader2 className="h-4 w-4 animate-spin" /> : "Remove"}
-                            </Button>
-                          </div>
-                        )}
-                        {isSelf && member.role !== "owner" && (
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                            onClick={() => handleRemoveMember(member.id)}
-                            disabled={isRemovingThis}
-                          >
-                            {isRemovingThis ? <Loader2 className="h-4 w-4 animate-spin" /> : "Leave Team"}
-                          </Button>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      )}
-
-      {activeTab === "invitations" && canManage && (
-        <TeamInvitationsTab teamId={activeTeam.id} />
-      )}
-
-      {activeTab === "settings" && canManage && (
-        <TeamSettingsTab team={activeTeam} />
-      )}
-
-      {isInviteModalOpen && activeTeam && (
-        <InviteMemberModal
-          open={isInviteModalOpen}
-          onOpenChange={(open: boolean) => setIsInviteModalOpen(open)}
-          teamId={activeTeam.id}
-          canInviteOwner={user?.is_staff || isOwner}
-        />
-      )}
     </div>
   );
 }

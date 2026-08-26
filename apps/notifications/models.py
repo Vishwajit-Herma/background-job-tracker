@@ -33,6 +33,12 @@ class NotificationChannel(models.Model):
         verbose_name = _("notification channel")
         verbose_name_plural = _("notification channels")
         ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["project", "type", "name"],
+                name="unique_project_channel_type_name",
+            )
+        ]
 
     def __str__(self):
         return f"{self.name} ({self.get_type_display()})"
@@ -63,6 +69,23 @@ class NotificationChannel(models.Model):
         elif self.type == self.ChannelType.EMAIL:
             if "recipients" not in self.config or not isinstance(self.config["recipients"], list):
                 raise ValidationError({"config": _("Email config must contain 'recipients' list.")})
+
+        if self.project_id:
+            existing = NotificationChannel.objects.filter(
+                project_id=self.project_id,
+                type=self.type,
+                config=self.config,
+            )
+            if self.pk:
+                existing = existing.exclude(pk=self.pk)
+            if existing.exists():
+                raise ValidationError(
+                    {
+                        "config": _(
+                            "A channel with this type and configuration already exists for this project."
+                        )
+                    }
+                )
 
 
 class NotificationPolicy(models.Model):
@@ -97,6 +120,12 @@ class NotificationPolicy(models.Model):
         verbose_name = _("notification policy")
         verbose_name_plural = _("notification policies")
         ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["project", "channel", "severity"],
+                name="unique_project_channel_severity_policy",
+            )
+        ]
 
     def __str__(self):
         return f"Policy for {self.channel.name} ({self.get_severity_display()})"

@@ -172,16 +172,30 @@ def deliver_email_task(self, delivery_id):
         delivery.save(update_fields=["status", "error"])
         return
 
-    subject = f"[{incident.get_severity_display()}] Incident #{incident.id} - {event.get_event_type_display()}"
-    message = f"""An incident event occurred.
+    actor_name = (
+        event.actor.get_full_name() or event.actor.email
+        if event.actor
+        else event.metadata.get("resolved_by_name")
+        or event.metadata.get("acknowledged_by_name")
+        or event.metadata.get("reopened_by_name")
+        or "System"
+    )
+    job_name = incident.job.name if incident.job else "Project-level"
 
+    subject = f"[{incident.get_severity_display()}] Incident #{incident.id} - {event.get_event_type_display()} ({incident.project.name})"
+    message = f"""Incident Notification
+
+Incident: #{incident.id}
 Event: {event.get_event_type_display()}
 Project: {incident.project.name}
-Job: {incident.job.name if incident.job else "N/A"}
-Status: {incident.get_status_display()}
+Job: {job_name}
 Severity: {incident.get_severity_display()}
-Time: {event.event_time.isoformat()}
+Status: {incident.get_status_display()}
+Action by: {actor_name}
+Timestamp: {event.event_time.strftime("%Y-%m-%d %H:%M:%S UTC")}
 """
+    if event.event_type == "ASSIGNED" and event.metadata.get("new_assignee_name"):
+        message += f"Assigned to: {event.metadata.get('new_assignee_name')}\n"
 
     try:
         sent = send_mail(

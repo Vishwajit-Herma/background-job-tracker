@@ -22,7 +22,7 @@ export function TeamProvider({ children }: { children: React.ReactNode }) {
   
   const { data: teams = [], isLoading } = useQuery({
     queryKey: ["teams"],
-    queryFn: getTeams,
+    queryFn: () => getTeams(),
     enabled: !!user,
   });
 
@@ -41,8 +41,8 @@ export function TeamProvider({ children }: { children: React.ReactNode }) {
 
   // Resolve active team: prefer stored ID, fallback to first team
   const resolvedActiveTeam =
-    (activeTeamId ? teams.find((t) => t.id === activeTeamId) : null) ||
-    (teams.length > 0 ? teams[0] : null);
+    (activeTeamId ? (teams as Team[]).find((t: Team) => t.id === activeTeamId) : null) ||
+    ((teams as Team[]).length > 0 ? (teams as Team[])[0] : null);
 
   const setActiveTeam = (team: Team | null) => {
     setActiveTeamId(team?.id ?? null);
