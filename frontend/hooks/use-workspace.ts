@@ -14,7 +14,7 @@ export function useWorkspace() {
     isError: isErrorTeams,
   } = useQuery<Team[]>({
     queryKey: ["teams"],
-    queryFn: getTeams,
+    queryFn: () => getTeams(),
     staleTime: STALE_TIME,
   });
 
@@ -49,7 +49,7 @@ export function useWorkspace() {
   });
 
   // Derived state maps for quick lookup
-  const teamMap = new Map(teams.map((t) => [t.id, t]));
+  const teamMap = new Map((teams as Team[]).map((t: Team) => [t.id, t]));
   const projectMap = new Map(projects.map((p) => [p.id, p]));
   const jobMap = new Map(jobs.map((j) => [j.id, j]));
   const alertRuleMap = new Map(alertRules.map((r) => [r.id, r]));

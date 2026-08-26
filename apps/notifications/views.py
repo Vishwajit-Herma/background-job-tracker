@@ -27,11 +27,15 @@ class NotificationChannelViewSet(CustomBaseViewSet):
     ordering_fields = ["name", "created_at", "updated_at"]
 
     def get_queryset(self):
+        if self.request.user.is_staff:
+            return NotificationChannel.objects.all()
         return NotificationChannel.objects.filter(
             project__team__members__user=self.request.user, project__team__members__is_active=True
         ).distinct()
 
     def check_admin_or_owner(self, project):
+        if self.request.user.is_staff:
+            return
         member = TeamMember.objects.filter(
             team_id=project.team_id, user=self.request.user, is_active=True
         ).first()
@@ -75,11 +79,15 @@ class NotificationPolicyViewSet(CustomBaseViewSet):
     ordering_fields = ["name", "created_at", "updated_at"]
 
     def get_queryset(self):
+        if self.request.user.is_staff:
+            return NotificationPolicy.objects.all()
         return NotificationPolicy.objects.filter(
             project__team__members__user=self.request.user, project__team__members__is_active=True
         ).distinct()
 
     def check_admin_or_owner(self, project):
+        if self.request.user.is_staff:
+            return
         member = TeamMember.objects.filter(
             team_id=project.team_id, user=self.request.user, is_active=True
         ).first()

@@ -37,11 +37,14 @@ class ProjectViewSet(CustomBaseViewSet):
             Project.all_objects if getattr(self, "action", None) == "restore" else Project.objects
         )
 
+        if self.request.user.is_staff:
+            return base_qs.all()
+
         qs = base_qs.filter(
             team__is_active=True,
             team__members__user=self.request.user,
             team__members__is_active=True,
-        )
+        ).distinct()
         return qs
 
     @action(detail=True, methods=["post"])

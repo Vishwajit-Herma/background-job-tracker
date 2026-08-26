@@ -13,10 +13,13 @@ import {
   Users,
   Settings,
   Key,
-  LogOut
+  LogOut,
+  Shield,
+  MessageSquare
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
+import { useTeam } from "./team-provider";
 
 const routes = [
   { href: "/projects", label: "Projects", icon: FolderGit2 },
@@ -32,7 +35,10 @@ const routes = [
 export function Sidebar({ className }: { className?: string }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
+  const { teams } = useTeam();
+
+  const hasAdminAccess = user?.is_staff || teams.some(t => t.my_role === "admin" || t.my_role === "owner");
 
   const handleLogout = async () => {
     try {
@@ -71,6 +77,35 @@ export function Sidebar({ className }: { className?: string }) {
               </Link>
             );
           })}
+
+          {hasAdminAccess && (
+            <>
+              <div className="mt-4 mb-2 px-4 text-xs font-semibold tracking-tight text-muted-foreground uppercase">
+                Admin
+              </div>
+              <Link
+                href="/admin/channels"
+                className={cn(
+                  "flex items-center gap-3 rounded-lg px-3 py-2 transition-all hover:text-primary",
+                  pathname.startsWith("/admin/channels") ? "bg-muted text-primary" : "text-muted-foreground"
+                )}
+              >
+                <MessageSquare className="h-4 w-4" />
+                Notification Channels
+              </Link>
+              <Link
+                href="/admin/policies"
+                className={cn(
+                  "flex items-center gap-3 rounded-lg px-3 py-2 transition-all hover:text-primary",
+                  pathname.startsWith("/admin/policies") ? "bg-muted text-primary" : "text-muted-foreground"
+                )}
+              >
+                <Shield className="h-4 w-4" />
+                Notification Policies
+              </Link>
+            </>
+          )}
+
           <button
             onClick={handleLogout}
             className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-destructive hover:bg-destructive/10 mt-2"
