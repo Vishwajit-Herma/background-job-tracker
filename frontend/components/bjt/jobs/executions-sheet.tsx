@@ -234,7 +234,9 @@ export function ExecutionsSheet({
                         <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
                           <span className="flex items-center gap-1">
                             <Clock className="h-3 w-3" />
-                            {new Date(execution.last_event_at).toLocaleString()}
+                            {execution.last_event_at || execution.started_at || execution.created_at
+                              ? new Date(execution.last_event_at || execution.started_at || execution.created_at).toLocaleString()
+                              : "-"}
                           </span>
                           {execution.duration_ms != null && (
                             <span className="flex items-center gap-1">

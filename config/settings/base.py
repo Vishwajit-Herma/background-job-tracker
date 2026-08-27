@@ -213,7 +213,7 @@ REST_FRAMEWORK: dict[str, Any] = {
         "rest_framework.filters.OrderingFilter",
     ],
     "DEFAULT_PAGINATION_CLASS": "apps.config_management.pagination.Pagination",
-    "PAGE_SIZE": 25,
+    "PAGE_SIZE": 15,
     "EXCEPTION_HANDLER": "apps.config_management.responses.custom_exception_handler",
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_RENDERER_CLASSES": [

@@ -6,6 +6,8 @@ from django.utils import timezone as django_timezone
 
 from apps.executions.models import Execution
 from apps.executions.serializers import AnalyticsQuerySerializer
+from apps.incidents.models import Incident
+from apps.alerts.models import AlertRule
 
 
 class PercentileCont(Aggregate):
@@ -56,6 +58,10 @@ def _base_metrics_aggregations():
     }
 
 
+def __round_dur(val):
+    return round(val, 2) if val is not None else None
+
+
 def _process_aggregated_metrics(agg):
     """
     Processes raw database aggregations into rate calculations and cleans up null values.
@@ -75,13 +81,11 @@ def _process_aggregated_metrics(agg):
         p95 = None
         p99 = None
     else:
-        p50 = round(agg["p50_duration_ms"]) if agg.get("p50_duration_ms") is not None else None
-        p95 = round(agg["p95_duration_ms"]) if agg.get("p95_duration_ms") is not None else None
-        p99 = round(agg["p99_duration_ms"]) if agg.get("p99_duration_ms") is not None else None
+        p50 = __round_dur(agg.get("p50_duration_ms"))
+        p95 = __round_dur(agg.get("p95_duration_ms"))
+        p99 = __round_dur(agg.get("p99_duration_ms"))
 
-    avg_duration = (
-        round(agg["average_duration_ms"]) if agg.get("average_duration_ms") is not None else None
-    )
+    avg_duration = __round_dur(agg.get("average_duration_ms"))
 
     return {
         "executions": total,
@@ -97,6 +101,36 @@ def _process_aggregated_metrics(agg):
         "p99_duration_ms": p99,
         "health": calculate_health_state(failure_rate, retry_rate),
     }
+
+
+def calculate_delta(current, previous):
+    current_val = current or 0.0
+    previous_val = previous or 0.0
+
+    if current_val == 0 and previous_val == 0:
+        return {
+            "current": current,
+            "previous": previous,
+            "delta_points": None,
+            "delta_percent": None,
+        }
+
+    delta_points = current_val - previous_val
+
+    delta_percent = None if previous_val == 0 else (delta_points / previous_val) * 100
+
+    return {
+        "current": current,
+        "previous": previous,
+        "delta_points": round(delta_points, 2),
+        "delta_percent": round(delta_percent, 2) if delta_percent is not None else None,
+    }
+
+
+def format_delta_metric(current, previous, comparison_period):
+    delta = calculate_delta(current, previous)
+    delta["comparison_period"] = comparison_period
+    return delta
 
 
 def parse_analytics_query(request):
@@ -115,14 +149,16 @@ def parse_analytics_query(request):
         end = django_timezone.now()
 
     if not start:
-        if time_range == "last_1_hour":
+        if time_range in ("1h", "last_1_hour"):
             start = end - timedelta(hours=1)
-        elif time_range == "last_7_days":
+        elif time_range in ("6h", "last_6_hours"):
+            start = end - timedelta(hours=6)
+        elif time_range in ("7d", "last_7_days"):
             start = end - timedelta(days=7)
-        elif time_range == "last_30_days":
+        elif time_range in ("30d", "last_30_days"):
             start = end - timedelta(days=30)
         else:
-            # Default to last_24_hours
+            # Default to last_24_hours / 24h
             start = end - timedelta(hours=24)
 
     # Determine bucket type intelligently based on the actual duration
@@ -141,10 +177,34 @@ def parse_analytics_query(request):
     return start, end, bucket_type, filters
 
 
+def _build_summary(qs, group_by_field):
+    aggs = list(
+        qs.exclude(**{group_by_field: ""})
+        .values(group_by_field)
+        .annotate(
+            count=Count("id"),
+            failures=Count("id", filter=Q(status=Execution.Status.FAILED)),
+            retries=Count("id", filter=Q(retry_count__gt=0)),
+            successes=Count("id", filter=Q(status=Execution.Status.SUCCESS)),
+        )
+        .order_by("-count")
+    )
+    for row in aggs:
+        total = row["count"]
+        row["success_rate"] = round((row["successes"] / total * 100), 2) if total > 0 else 0.0
+        row["failure_rate"] = round((row["failures"] / total * 100), 2) if total > 0 else 0.0
+        row["retry_rate"] = round((row["retries"] / total * 100), 2) if total > 0 else 0.0
+    return aggs
+
+
 def get_job_analytics(job_id, start_dt, end_dt, base_qs=None):
     """
     Computes Job-level analytics.
     """
+    duration = end_dt - start_dt
+    prev_end_dt = start_dt
+    prev_start_dt = start_dt - duration
+
     qs = base_qs if base_qs is not None else Execution.objects.all()
     qs = qs.filter(
         Q(job_id=job_id)
@@ -157,19 +217,8 @@ def get_job_analytics(job_id, start_dt, end_dt, base_qs=None):
     agg = qs.aggregate(**_base_metrics_aggregations())
 
     # Queue and worker summaries
-    queue_summary = list(
-        qs.exclude(queue="")
-        .values("queue")
-        .annotate(count=Count("id"), failures=Count("id", filter=Q(status=Execution.Status.FAILED)))
-        .order_by("-count")
-    )
-
-    worker_summary = list(
-        qs.exclude(worker="")
-        .values("worker")
-        .annotate(count=Count("id"), failures=Count("id", filter=Q(status=Execution.Status.FAILED)))
-        .order_by("-count")
-    )
+    queue_summary = _build_summary(qs, "queue")
+    worker_summary = _build_summary(qs, "worker")
 
     # Errors
     errors = list(
@@ -180,14 +229,72 @@ def get_job_analytics(job_id, start_dt, end_dt, base_qs=None):
     )
 
     metrics = _process_aggregated_metrics(agg)
+
+    # Previous period
+    prev_qs = base_qs if base_qs is not None else Execution.objects.all()
+    prev_qs = prev_qs.filter(
+        Q(job_id=job_id)
+        & (
+            Q(started_at__gte=prev_start_dt, started_at__lt=prev_end_dt)
+            | Q(started_at__isnull=True, created_at__gte=prev_start_dt, created_at__lt=prev_end_dt)
+        )
+    )
+    prev_agg = prev_qs.aggregate(**_base_metrics_aggregations())
+    prev_metrics = _process_aggregated_metrics(prev_agg)
+
+    comp_period = (
+        f"previous {duration.days} day{'s' if duration.days > 1 else ''}"
+        if duration.days >= 1
+        else f"previous {duration.seconds // 3600} hour{'s' if (duration.seconds // 3600) > 1 else ''}"
+    )
+
+    metrics["executions"] = format_delta_metric(
+        metrics["executions"], prev_metrics["executions"], comp_period
+    )
+    metrics["success_rate"] = format_delta_metric(
+        metrics["success_rate"], prev_metrics["success_rate"], comp_period
+    )
+    metrics["failure_rate"] = format_delta_metric(
+        metrics["failure_rate"], prev_metrics["failure_rate"], comp_period
+    )
+    metrics["retry_rate"] = format_delta_metric(
+        metrics["retry_rate"], prev_metrics["retry_rate"], comp_period
+    )
+    metrics["average_duration_ms"] = format_delta_metric(
+        metrics["average_duration_ms"], prev_metrics["average_duration_ms"], comp_period
+    )
+    metrics["p95_duration_ms"] = format_delta_metric(
+        metrics["p95_duration_ms"], prev_metrics["p95_duration_ms"], comp_period
+    )
+    open_incidents = Incident.objects.filter(
+        job_id=job_id, status__in=[Incident.Status.OPEN, Incident.Status.ACKNOWLEDGED]
+    ).count()
+    critical_incidents = Incident.objects.filter(
+        job_id=job_id,
+        status__in=[Incident.Status.OPEN, Incident.Status.ACKNOWLEDGED],
+        severity=Incident.Severity.CRITICAL,
+    ).count()
+
+    rules = AlertRule.objects.filter(job_id=job_id, is_active=True)
+    thresholds = {}
+    for r in rules:
+        if r.metric == AlertRule.MetricType.FAILURE_RATE:
+            thresholds["failure_rate"] = r.threshold
+        elif r.metric == AlertRule.MetricType.RETRY_RATE:
+            thresholds["retry_rate"] = r.threshold
+        elif r.metric == AlertRule.MetricType.P95_DURATION:
+            thresholds["p95_duration"] = r.threshold
+
     metrics.update(
         {
             "job_id": job_id,
             "period": {"start": start_dt.isoformat(), "end": end_dt.isoformat()},
-            "health": calculate_health_state(metrics["failure_rate"], metrics["retry_rate"]),
+            "open_incidents": open_incidents,
+            "critical_incidents": critical_incidents,
             "queue_summary": queue_summary,
             "worker_summary": worker_summary,
             "errors": errors,
+            "thresholds": thresholds,
         }
     )
     return metrics
@@ -197,6 +304,10 @@ def get_project_analytics(project_id, start_dt, end_dt, base_qs=None):
     """
     Computes Project-level analytics without N+1 queries.
     """
+    duration = end_dt - start_dt
+    prev_end_dt = start_dt
+    prev_start_dt = start_dt - duration
+
     qs = base_qs if base_qs is not None else Execution.objects.all()
     qs = qs.filter(
         Q(job__project_id=project_id)
@@ -209,6 +320,43 @@ def get_project_analytics(project_id, start_dt, end_dt, base_qs=None):
     # 1. Overall Aggregation
     agg = qs.aggregate(**_base_metrics_aggregations())
     metrics = _process_aggregated_metrics(agg)
+
+    # Previous period
+    prev_qs = base_qs if base_qs is not None else Execution.objects.all()
+    prev_qs = prev_qs.filter(
+        Q(job__project_id=project_id)
+        & (
+            Q(started_at__gte=prev_start_dt, started_at__lt=prev_end_dt)
+            | Q(started_at__isnull=True, created_at__gte=prev_start_dt, created_at__lt=prev_end_dt)
+        )
+    )
+    prev_agg = prev_qs.aggregate(**_base_metrics_aggregations())
+    prev_metrics = _process_aggregated_metrics(prev_agg)
+
+    comp_period = (
+        f"previous {duration.days} day{'s' if duration.days > 1 else ''}"
+        if duration.days >= 1
+        else f"previous {duration.seconds // 3600} hour{'s' if (duration.seconds // 3600) > 1 else ''}"
+    )
+
+    metrics["executions"] = format_delta_metric(
+        metrics["executions"], prev_metrics["executions"], comp_period
+    )
+    metrics["success_rate"] = format_delta_metric(
+        metrics["success_rate"], prev_metrics["success_rate"], comp_period
+    )
+    metrics["failure_rate"] = format_delta_metric(
+        metrics["failure_rate"], prev_metrics["failure_rate"], comp_period
+    )
+    metrics["retry_rate"] = format_delta_metric(
+        metrics["retry_rate"], prev_metrics["retry_rate"], comp_period
+    )
+    metrics["average_duration_ms"] = format_delta_metric(
+        metrics["average_duration_ms"], prev_metrics["average_duration_ms"], comp_period
+    )
+    metrics["p95_duration_ms"] = format_delta_metric(
+        metrics["p95_duration_ms"], prev_metrics["p95_duration_ms"], comp_period
+    )
 
     job_aggs = qs.values("job_id", "job__name", "job__task_identifier").annotate(
         executions=Count("id"),
@@ -261,8 +409,8 @@ def get_project_analytics(project_id, start_dt, end_dt, base_qs=None):
                     "job_id": j["job_id"],
                     "name": j["job__name"],
                     "task_identifier": j["job__task_identifier"],
-                    "average_duration_ms": round(avg_dur),
-                    "p95_duration_ms": round(p95_dur) if p95_dur is not None else None,
+                    "average_duration_ms": __round_dur(avg_dur),
+                    "p95_duration_ms": __round_dur(p95_dur),
                 }
             )
 
@@ -277,19 +425,8 @@ def get_project_analytics(project_id, start_dt, end_dt, base_qs=None):
     )[:10]
 
     # Queue and worker summaries across the project
-    queue_summary = list(
-        qs.exclude(queue="")
-        .values("queue")
-        .annotate(count=Count("id"), failures=Count("id", filter=Q(status=Execution.Status.FAILED)))
-        .order_by("-count")
-    )
-
-    worker_summary = list(
-        qs.exclude(worker="")
-        .values("worker")
-        .annotate(count=Count("id"), failures=Count("id", filter=Q(status=Execution.Status.FAILED)))
-        .order_by("-count")
-    )
+    queue_summary = _build_summary(qs, "queue")
+    worker_summary = _build_summary(qs, "worker")
 
     # Errors
     errors = list(
@@ -305,6 +442,25 @@ def get_project_analytics(project_id, start_dt, end_dt, base_qs=None):
     elif degraded_jobs > 0:
         overall_health = "DEGRADED"
 
+    open_incidents = Incident.objects.filter(
+        project_id=project_id, status__in=[Incident.Status.OPEN, Incident.Status.ACKNOWLEDGED]
+    ).count()
+    critical_incidents = Incident.objects.filter(
+        project_id=project_id,
+        status__in=[Incident.Status.OPEN, Incident.Status.ACKNOWLEDGED],
+        severity=Incident.Severity.CRITICAL,
+    ).count()
+
+    rules = AlertRule.objects.filter(project_id=project_id, is_active=True, job__isnull=True)
+    thresholds = {}
+    for r in rules:
+        if r.metric == AlertRule.MetricType.FAILURE_RATE:
+            thresholds["failure_rate"] = r.threshold
+        elif r.metric == AlertRule.MetricType.RETRY_RATE:
+            thresholds["retry_rate"] = r.threshold
+        elif r.metric == AlertRule.MetricType.P95_DURATION:
+            thresholds["p95_duration"] = r.threshold
+
     metrics.update(
         {
             "project_id": project_id,
@@ -318,6 +474,9 @@ def get_project_analytics(project_id, start_dt, end_dt, base_qs=None):
             "queue_summary": queue_summary,
             "worker_summary": worker_summary,
             "errors": errors,
+            "open_incidents": open_incidents,
+            "critical_incidents": critical_incidents,
+            "thresholds": thresholds,
         }
     )
     return metrics
@@ -367,8 +526,11 @@ def get_trend(qs, start_dt, end_dt, bucket_type="hour"):
             total = b["executions"] or 0
             successes = b["successes"] or 0
             failures = b["failures"] or 0
+            retries = b["retries"] or 0
 
             success_rate = (successes / total * 100) if total > 0 else 0.0
+            failure_rate = (failures / total * 100) if total > 0 else 0.0
+            retry_rate = (retries / total * 100) if total > 0 else 0.0
 
             p95_dur = b["p95_duration_ms"]
             avg_dur = b["average_duration_ms"]
@@ -379,11 +541,12 @@ def get_trend(qs, start_dt, end_dt, bucket_type="hour"):
                     "executions": total,
                     "successes": successes,
                     "failures": failures,
+                    "retries": retries,
                     "success_rate": round(success_rate, 2),
-                    "average_duration_ms": round(avg_dur) if avg_dur is not None else None,
-                    "p95_duration_ms": round(p95_dur)
-                    if p95_dur is not None and total >= 2
-                    else None,
+                    "failure_rate": round(failure_rate, 2),
+                    "retry_rate": round(retry_rate, 2),
+                    "average_duration_ms": __round_dur(avg_dur),
+                    "p95_duration_ms": __round_dur(p95_dur) if total >= 2 else None,
                 }
             )
         else:
@@ -393,7 +556,10 @@ def get_trend(qs, start_dt, end_dt, bucket_type="hour"):
                     "executions": 0,
                     "successes": 0,
                     "failures": 0,
+                    "retries": 0,
                     "success_rate": 0.0,
+                    "failure_rate": 0.0,
+                    "retry_rate": 0.0,
                     "average_duration_ms": None,
                     "p95_duration_ms": None,
                 }

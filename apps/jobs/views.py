@@ -122,6 +122,8 @@ class JobViewSet(CustomBaseViewSet):
         qs = Execution.objects.filter(**filters) if filters else None
 
         metrics = get_job_analytics(job.id, start, end, base_qs=qs)
+        metrics["job_name"] = job.name
+        metrics["task_identifier"] = job.task_identifier
 
         serializer = JobAnalyticsSerializer(metrics)
         return Response(serializer.data, status=status.HTTP_200_OK)

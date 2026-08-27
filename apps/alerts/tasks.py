@@ -50,7 +50,8 @@ def _evaluate_single_rule(rule):
     else:
         metrics = get_project_analytics(rule.project_id, start_dt, end_dt)
 
-    total_executions = metrics.get("executions", 0)
+    exec_val = metrics.get("executions", 0)
+    total_executions = exec_val.get("current", 0) if isinstance(exec_val, dict) else (exec_val or 0)
 
     # Unknown should not mean healthy. If there's no data, we don't trigger or recover.
     if total_executions == 0:
@@ -59,11 +60,14 @@ def _evaluate_single_rule(rule):
     # Extract the relevant metric value
     metric_val = None
     if rule.metric == AlertRule.MetricType.FAILURE_RATE:
-        metric_val = metrics.get("failure_rate", 0.0)
+        val = metrics.get("failure_rate", 0.0)
+        metric_val = val.get("current", 0.0) if isinstance(val, dict) else (val or 0.0)
     elif rule.metric == AlertRule.MetricType.RETRY_RATE:
-        metric_val = metrics.get("retry_rate", 0.0)
+        val = metrics.get("retry_rate", 0.0)
+        metric_val = val.get("current", 0.0) if isinstance(val, dict) else (val or 0.0)
     elif rule.metric == AlertRule.MetricType.P95_DURATION:
-        p95 = metrics.get("p95_duration_ms")
+        val = metrics.get("p95_duration_ms")
+        p95 = val.get("current") if isinstance(val, dict) else val
         if p95 is not None:
             metric_val = p95
 
