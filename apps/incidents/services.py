@@ -4,6 +4,7 @@ from django.utils import timezone
 from apps.teams.models import TeamMember
 from apps.notifications.services import dispatch_incident_event
 from .models import Incident, IncidentEvent, IncidentNote
+from .tasks import calculate_incident_intelligence_task
 
 
 NOTIFIABLE_EVENTS = {
@@ -35,7 +36,7 @@ def _log_incident_event(incident, event_type, actor=None, metadata=None):
 
 def create_incident(project, severity, alert_rule=None, job=None, trigger_metadata=None):
     """
-    Creates an incident and logs the CREATED IncidentEvent with on_commit notifications.
+    Creates an incident, logs the CREATED IncidentEvent, and queues intelligence calculation.
     """
     with transaction.atomic():
         incident = Incident.objects.create(
@@ -51,6 +52,7 @@ def create_incident(project, severity, alert_rule=None, job=None, trigger_metada
             actor=None,
             metadata={"trigger_metadata": trigger_metadata or {}},
         )
+        transaction.on_commit(lambda: calculate_incident_intelligence_task.delay(incident.id))
         return incident
 
 
@@ -156,6 +158,7 @@ def resolve_incident(incident_id, actor):
                 "previous_status": previous_status,
             },
         )
+        transaction.on_commit(lambda: calculate_incident_intelligence_task.delay(incident.id))
         return incident
 
 
@@ -197,6 +200,7 @@ def reopen_incident(incident_id, actor):
                 "reopened_by_name": actor_name,
             },
         )
+        transaction.on_commit(lambda: calculate_incident_intelligence_task.delay(incident.id))
         return incident
 
 
@@ -235,6 +239,7 @@ def auto_resolve_incident(incident_id, recovery_metadata=None):
                 "recovery_metadata": recovery_metadata,
             },
         )
+        transaction.on_commit(lambda: calculate_incident_intelligence_task.delay(incident.id))
         return incident
 
 

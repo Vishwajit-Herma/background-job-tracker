@@ -121,3 +121,76 @@ export async function addIncidentNote(id: number, content: string): Promise<Inci
   const res = await apiClient.post<any>(`/incidents/${id}/notes/`, { content });
   return res.data?.data ?? res.data;
 }
+
+export type ConfidenceLevel = "HIGH" | "MEDIUM" | "LOW" | "INSUFFICIENT_EVIDENCE";
+export type CandidateType = "WORKER" | "QUEUE" | "JOB" | "ANOMALY" | "INSUFFICIENT_EVIDENCE";
+
+export interface ProbableCauseCandidate {
+  candidate: CandidateType;
+  value: string;
+  confidence: ConfidenceLevel;
+  evidence: string[];
+}
+
+export interface IncidentImpact {
+  window_start: string;
+  window_end: string;
+  window_minutes: number;
+  incident_duration_seconds?: number;
+  affected_jobs_count: number;
+  affected_jobs: Array<{
+    id: number;
+    name: string;
+    task_identifier: string;
+    total: number;
+    failures: number;
+    retries: number;
+  }>;
+  affected_executions_count: number;
+  failures_count: number;
+  retries_count: number;
+  successes_count: number;
+  failure_rate: number;
+  retry_rate: number;
+  affected_workers_count: number;
+  affected_workers: string[];
+  affected_queues_count: number;
+  affected_queues: string[];
+  baseline_comparisons: {
+    baseline_failure_rate?: number;
+    current_failure_rate?: number;
+    failure_rate_multiplier?: number | null;
+    baseline_retry_rate?: number;
+    current_retry_rate?: number;
+    retry_rate_multiplier?: number | null;
+    baseline_p95_ms?: number | null;
+  };
+}
+
+export interface IncidentCorrelation {
+  target_type: "FINDING" | "WORKER" | "QUEUE" | "INCIDENT";
+  target_id: number | null;
+  target_name: string;
+  reasons: string[];
+  correlation_strength: "STRONG" | "MODERATE" | "WEAK";
+}
+
+export interface IncidentIntelligence {
+  id?: number;
+  incident?: number;
+  status: "READY" | "PENDING";
+  message?: string;
+  impact: IncidentImpact | null;
+  correlations: IncidentCorrelation[];
+  probable_causes: ProbableCauseCandidate[];
+  analysis_window_start: string | null;
+  analysis_window_end: string | null;
+  analysis_version: string;
+  calculated_at: string | null;
+}
+
+export async function getIncidentIntelligence(id: number): Promise<IncidentIntelligence> {
+  const res = await apiClient.get<any>(`/incidents/${id}/intelligence/`);
+  return res.data?.data ?? res.data;
+}
+

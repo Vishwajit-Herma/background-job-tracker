@@ -202,3 +202,60 @@ class IncidentNote(models.Model):
 
     def __str__(self):
         return f"Note by {self.author} on Incident #{self.incident_id}"
+
+
+class IncidentIntelligence(models.Model):
+    """
+    Derived intelligence for an incident: impact analysis, correlated signals,
+    and ranked probable root cause candidates.
+    Does NOT duplicate telemetry or incident entities; stores computed derivations.
+    """
+
+    incident = models.OneToOneField(
+        Incident,
+        on_delete=models.CASCADE,
+        related_name="intelligence",
+        verbose_name=_("incident"),
+    )
+    impact = models.JSONField(
+        _("impact analysis"),
+        default=dict,
+        blank=True,
+    )
+    correlations = models.JSONField(
+        _("correlated signals"),
+        default=list,
+        blank=True,
+    )
+    probable_causes = models.JSONField(
+        _("probable root causes"),
+        default=list,
+        blank=True,
+    )
+    analysis_window_start = models.DateTimeField(
+        _("analysis window start"),
+        null=True,
+        blank=True,
+    )
+    analysis_window_end = models.DateTimeField(
+        _("analysis window end"),
+        null=True,
+        blank=True,
+    )
+    analysis_version = models.CharField(
+        _("analysis version"),
+        max_length=20,
+        default="1.0",
+    )
+    calculated_at = models.DateTimeField(
+        _("calculated at"),
+        auto_now=True,
+    )
+
+    class Meta:
+        verbose_name = _("incident intelligence")
+        verbose_name_plural = _("incident intelligences")
+        ordering = ["-calculated_at"]
+
+    def __str__(self):
+        return f"Intelligence for Incident #{self.incident_id}"

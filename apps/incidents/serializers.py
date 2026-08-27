@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Incident, IncidentEvent, IncidentNote
+from .models import Incident, IncidentEvent, IncidentNote, IncidentIntelligence
 
 
 class IncidentEventSerializer(serializers.ModelSerializer):
@@ -89,3 +89,39 @@ class IncidentAssignSerializer(serializers.Serializer):
     def validate_member_id(self, value):
         # Validation happens in the view against the project's team
         return value
+
+
+class IncidentIntelligenceSerializer(serializers.ModelSerializer):
+    status = serializers.SerializerMethodField()
+
+    class Meta:
+        model = IncidentIntelligence
+        fields = [
+            "id",
+            "incident",
+            "status",
+            "impact",
+            "correlations",
+            "probable_causes",
+            "analysis_window_start",
+            "analysis_window_end",
+            "analysis_version",
+            "calculated_at",
+        ]
+        read_only_fields = fields
+
+    def get_status(self, obj):
+        return "READY"
+
+
+class IncidentIntelligencePendingSerializer(serializers.Serializer):
+    status = serializers.CharField(default="PENDING")
+    message = serializers.CharField(default="Incident intelligence calculation is in progress.")
+    incident_id = serializers.IntegerField()
+    impact = serializers.DictField(allow_null=True, default=None)
+    correlations = serializers.ListField(default=list)
+    probable_causes = serializers.ListField(default=list)
+    analysis_window_start = serializers.DateTimeField(allow_null=True, default=None)
+    analysis_window_end = serializers.DateTimeField(allow_null=True, default=None)
+    analysis_version = serializers.CharField(default="1.0")
+    calculated_at = serializers.DateTimeField(allow_null=True, default=None)
