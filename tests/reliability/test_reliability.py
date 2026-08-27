@@ -11,7 +11,7 @@ from apps.executions.models import Execution
 from apps.alerts.models import AlertRule
 from apps.incidents.models import Incident
 from apps.reliability.models import JobExpectation, ReliabilityFinding
-from apps.reliability.services import calculate_job_baseline
+from apps.reliability.services import calculate_job_baseline, get_job_reliability_overview
 from apps.reliability.evaluators import evaluate_all_jobs_reliability
 
 
@@ -563,6 +563,18 @@ def test_disabled_job_expectation_recovers_findings_and_resolves_incidents(test_
 
     incident.refresh_from_db()
     assert incident.status == Incident.Status.RESOLVED
+
+    # Check overview state is DISABLED rather than MISSED
+    overview = get_job_reliability_overview(job)
+    assert overview["current_state"] == "DISABLED"
+    assert overview["is_enabled"] is False
+
+    client = APIClient()
+    client.force_authenticate(user=test_setup["owner"])
+    project_res = client.get(f"/api/reliability/projects/{job.project.id}/")
+    assert project_res.status_code == 200
+    p_data = project_res.data.get("data", project_res.data)
+    assert p_data["jobs"][0]["current_state"] == "DISABLED"
 
 
 @pytest.mark.django_db

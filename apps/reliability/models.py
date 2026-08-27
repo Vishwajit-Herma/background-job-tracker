@@ -140,6 +140,10 @@ class JobBaseline(models.Model):
     p95_runtime_ms = models.FloatField(_("p95 runtime (ms)"), null=True, blank=True)
     p99_runtime_ms = models.FloatField(_("p99 runtime (ms)"), null=True, blank=True)
 
+    failure_rate = models.FloatField(_("failure rate (%)"), null=True, blank=True)
+    retry_rate = models.FloatField(_("retry rate (%)"), null=True, blank=True)
+    avg_hourly_volume = models.FloatField(_("average hourly volume"), null=True, blank=True)
+
     metrics_summary = models.JSONField(_("metrics summary"), default=dict, blank=True)
     calculated_at = models.DateTimeField(_("calculated at"), auto_now=True)
 
@@ -153,7 +157,7 @@ class JobBaseline(models.Model):
 
 class ReliabilityFinding(models.Model):
     """
-    Tracks active and historical reliability issues (Missed, Stalled, Overdue)
+    Tracks active and historical reliability issues (Missed, Stalled, Overdue, Anomalies)
     for a job, along with recovery lifecycle state.
     """
 
@@ -161,6 +165,10 @@ class ReliabilityFinding(models.Model):
         MISSED_EXECUTION = "MISSED_EXECUTION", _("Missed Execution")
         STALLED_EXECUTION = "STALLED_EXECUTION", _("Stalled Execution")
         OVERDUE_EXECUTION = "OVERDUE_EXECUTION", _("Overdue Execution")
+        FAILURE_RATE_ANOMALY = "FAILURE_RATE_ANOMALY", _("Failure Rate Anomaly")
+        RETRY_RATE_ANOMALY = "RETRY_RATE_ANOMALY", _("Retry Rate Anomaly")
+        DURATION_ANOMALY = "DURATION_ANOMALY", _("Duration Anomaly")
+        EXECUTION_VOLUME_ANOMALY = "EXECUTION_VOLUME_ANOMALY", _("Execution Volume Anomaly")
 
     class Status(models.TextChoices):
         ACTIVE = "ACTIVE", _("Active")

@@ -96,11 +96,30 @@ export default function AlertsPage() {
       case "FAILURE_RATE": return "Failure Rate";
       case "RETRY_RATE": return "Retry Rate";
       case "P95_DURATION": return "P95 Duration";
+      case "MISSED_EXECUTION": return "Missed Execution";
+      case "STALLED_EXECUTION": return "Stalled Execution";
+      case "OVERDUE_EXECUTION": return "Overdue Execution";
+      case "FAILURE_RATE_ANOMALY": return "Failure Rate Anomaly";
+      case "RETRY_RATE_ANOMALY": return "Retry Rate Anomaly";
+      case "DURATION_ANOMALY": return "Duration Anomaly";
+      case "EXECUTION_VOLUME_ANOMALY": return "Execution Volume Anomaly";
       default: return metric;
     }
   };
 
   const formatCondition = (rule: AlertRule) => {
+    if (rule.metric.includes("ANOMALY")) {
+      return "Statistical anomaly vs baseline";
+    }
+    if (
+      rule.metric === "MISSED_EXECUTION" ||
+      rule.metric === "STALLED_EXECUTION" ||
+      rule.metric === "OVERDUE_EXECUTION"
+    ) {
+      return rule.threshold > 0
+        ? `Overdue by >= ${rule.threshold}s`
+        : "On reliability finding violation";
+    }
     const isRate = rule.metric.includes("RATE");
     return `>= ${rule.threshold}${isRate ? "%" : "ms"} over ${rule.window_minutes}m`;
   };

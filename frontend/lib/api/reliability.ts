@@ -1,8 +1,15 @@
 import { apiClient } from "./client";
 
-export type ReliabilityState = "HEALTHY" | "MISSED" | "STALLED" | "OVERDUE";
+export type ReliabilityState = "HEALTHY" | "MISSED" | "STALLED" | "OVERDUE" | "ANOMALOUS" | "DISABLED";
 export type ExpectationSource = "CONFIGURED" | "BASELINE" | "NONE";
-export type ReliabilityConditionType = "MISSED_EXECUTION" | "STALLED_EXECUTION" | "OVERDUE_EXECUTION";
+export type ReliabilityConditionType =
+  | "MISSED_EXECUTION"
+  | "STALLED_EXECUTION"
+  | "OVERDUE_EXECUTION"
+  | "FAILURE_RATE_ANOMALY"
+  | "RETRY_RATE_ANOMALY"
+  | "DURATION_ANOMALY"
+  | "EXECUTION_VOLUME_ANOMALY";
 export type ReliabilityFindingStatus = "ACTIVE" | "RECOVERED";
 export type ReliabilityFindingSeverity = "DEGRADED" | "CRITICAL";
 
@@ -32,6 +39,9 @@ export interface JobBaseline {
   p50_runtime_ms: number | null;
   p95_runtime_ms: number | null;
   p99_runtime_ms: number | null;
+  failure_rate: number | null;
+  retry_rate: number | null;
+  avg_hourly_volume: number | null;
   metrics_summary: Record<string, unknown>;
   calculated_at: string;
 }
@@ -61,6 +71,30 @@ export interface LatestReliabilityExecution {
   last_event_at: string;
 }
 
+export interface AdaptiveThresholds {
+  failure_rate: number | null;
+  retry_rate: number | null;
+  p95_duration_ms: number | null;
+  is_available: boolean;
+  source: string;
+}
+
+export interface BehaviorMetricComparison {
+  current: number | null;
+  baseline: number | null;
+  adaptive_threshold?: number | null;
+  deviation_ratio: number | null;
+}
+
+export interface BehaviorComparison {
+  observation_window_minutes: number;
+  sample_count: number;
+  failure_rate: BehaviorMetricComparison;
+  retry_rate: BehaviorMetricComparison;
+  p95_duration_ms: BehaviorMetricComparison;
+  hourly_volume: BehaviorMetricComparison;
+}
+
 export interface JobReliabilityOverview {
   job_id: number;
   job_name: string;
@@ -77,9 +111,12 @@ export interface JobReliabilityOverview {
   overdue_by_seconds: number;
   latest_execution: LatestReliabilityExecution | null;
   active_findings: ReliabilityFinding[];
+  active_anomalies: ReliabilityFinding[];
   recent_findings: ReliabilityFinding[];
   baseline: JobBaseline | null;
   expectation: JobExpectation | null;
+  adaptive_thresholds: AdaptiveThresholds;
+  behavior_comparison: BehaviorComparison;
 }
 
 export interface ProjectReliabilityJobSummary {
@@ -105,6 +142,7 @@ export interface ProjectReliabilityOverview {
   missed_jobs_count: number;
   stalled_jobs_count: number;
   overdue_jobs_count: number;
+  anomalous_jobs_count: number;
   active_findings_count: number;
   jobs: ProjectReliabilityJobSummary[];
 }

@@ -164,6 +164,7 @@ function JobsPageContent() {
                 <SelectValue placeholder="Reliability">
                   {reliabilityFilter === "all" && "All Reliability"}
                   {reliabilityFilter === "HEALTHY" && "Healthy"}
+                  {reliabilityFilter === "ANOMALOUS" && "Anomalous"}
                   {reliabilityFilter === "MISSED" && "Missed"}
                   {reliabilityFilter === "STALLED" && "Stalled"}
                   {reliabilityFilter === "OVERDUE" && "Overdue"}
@@ -172,6 +173,7 @@ function JobsPageContent() {
               <SelectContent>
                 <SelectItem value="all">All Reliability</SelectItem>
                 <SelectItem value="HEALTHY">Healthy</SelectItem>
+                <SelectItem value="ANOMALOUS">Anomalous</SelectItem>
                 <SelectItem value="MISSED">Missed</SelectItem>
                 <SelectItem value="STALLED">Stalled</SelectItem>
                 <SelectItem value="OVERDUE">Overdue</SelectItem>

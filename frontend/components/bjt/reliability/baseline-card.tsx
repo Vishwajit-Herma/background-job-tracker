@@ -184,7 +184,7 @@ export function BaselineCard({ jobId, baseline, canManage = true }: BaselineCard
               </button>
 
               {showSecondary && (
-                <div className="grid grid-cols-3 gap-3 mt-3 pt-2 border-t border-dashed animate-fadeIn text-xs">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 mt-3 pt-2 border-t border-dashed animate-fadeIn text-xs">
                   <div className="p-2.5 rounded border bg-muted/20">
                     <span className="text-muted-foreground block mb-0.5">Average Interval</span>
                     <span className="font-semibold text-foreground">
@@ -201,6 +201,24 @@ export function BaselineCard({ jobId, baseline, canManage = true }: BaselineCard
                     <span className="text-muted-foreground block mb-0.5">Max Interval</span>
                     <span className="font-semibold text-foreground">
                       {formatDurationSeconds(baseline?.max_interval_seconds ? Math.round(baseline.max_interval_seconds) : null)}
+                    </span>
+                  </div>
+                  <div className="p-2.5 rounded border bg-muted/20">
+                    <span className="text-muted-foreground block mb-0.5">Baseline Failure Rate</span>
+                    <span className="font-semibold text-foreground">
+                      {baseline?.failure_rate !== null && baseline?.failure_rate !== undefined ? `${baseline.failure_rate}%` : "0%"}
+                    </span>
+                  </div>
+                  <div className="p-2.5 rounded border bg-muted/20">
+                    <span className="text-muted-foreground block mb-0.5">Baseline Retry Rate</span>
+                    <span className="font-semibold text-foreground">
+                      {baseline?.retry_rate !== null && baseline?.retry_rate !== undefined ? `${baseline.retry_rate}%` : "0%"}
+                    </span>
+                  </div>
+                  <div className="p-2.5 rounded border bg-muted/20">
+                    <span className="text-muted-foreground block mb-0.5">Avg Hourly Volume</span>
+                    <span className="font-semibold text-foreground">
+                      {baseline?.avg_hourly_volume !== null && baseline?.avg_hourly_volume !== undefined ? `${baseline.avg_hourly_volume}/hr` : "0/hr"}
                     </span>
                   </div>
                 </div>

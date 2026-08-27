@@ -36,6 +36,7 @@ def recalculate_single_job_baseline(job_id, sample_window_days=7):
     try:
         job = Job.objects.get(id=job_id, is_deleted=False)
         calculate_job_baseline(job, sample_window_days=sample_window_days)
+        evaluate_job_reliability(job.id)
     except Job.DoesNotExist:
         pass
 

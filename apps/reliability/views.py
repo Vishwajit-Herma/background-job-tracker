@@ -38,48 +38,67 @@ class ReliabilityFindingViewSet(
 
     serializer_class = ReliabilityFindingSerializer
     permission_classes = [permissions.IsAuthenticated, ReliabilityPermission]
-    filterset_fields = ["job", "condition_type", "status", "severity"]
-    search_fields = ["job__name", "job__task_identifier"]
-    ordering_fields = ["detected_at", "recovered_at", "last_evaluated_at"]
 
     def get_queryset(self):
-        if self.request.user.is_staff:
-            return ReliabilityFinding.objects.all().select_related("job", "job__project")
-        return (
-            ReliabilityFinding.objects.filter(
-                job__project__team__members__user=self.request.user,
-                job__project__team__members__is_active=True,
-                job__project__is_deleted=False,
-                job__is_deleted=False,
+        user = self.request.user
+        qs = (
+            ReliabilityFinding.objects.select_related(
+                "job", "job__project", "execution", "incident"
             )
-            .select_related("job", "job__project")
-            .distinct()
+            .filter(
+                job__is_deleted=False,
+                job__project__is_deleted=False,
+                job__project__team__members__user=user,
+                job__project__team__members__is_active=True,
+            )
+            .order_by("-detected_at")
         )
+
+        job_id = self.request.query_params.get("job_id")
+        if job_id:
+            qs = qs.filter(job_id=job_id)
+
+        project_id = self.request.query_params.get("project_id")
+        if project_id:
+            qs = qs.filter(job__project_id=project_id)
+
+        status_param = self.request.query_params.get("status")
+        if status_param:
+            qs = qs.filter(status=status_param)
+
+        condition_type = self.request.query_params.get("condition_type")
+        if condition_type:
+            qs = qs.filter(condition_type=condition_type)
+
+        return qs.distinct()
 
 
 class JobReliabilityViewSet(CustomBaseGenericViewSet):
-    """s
-    API endpoints for managing a Job's reliability expectations, baselines, and overview.
+    """
+    API endpoint for viewing and configuring job reliability monitoring.
+    Provides single-job overview and expectation updates.
     """
 
     permission_classes = [permissions.IsAuthenticated, ReliabilityPermission]
 
-    @extend_schema(responses={200: JobReliabilityOverviewSerializer})
+    @extend_schema(
+        responses={200: JobReliabilityOverviewSerializer},
+    )
     def retrieve(self, request, pk=None):
         """
-        Get complete reliability overview for a job (current state, expectation, baseline, findings).
+        Returns full reliability metrics and findings for a single job.
         """
         job = get_object_or_404(
-            Job.objects.select_related("project", "project__team"),
+            Job.objects.select_related("project", "project__team", "expectation", "baseline"),
             id=pk,
             is_deleted=False,
             project__is_deleted=False,
         )
         self.check_object_permissions(request, job)
 
-        overview = get_job_reliability_overview(job)
-        serializer = JobReliabilityOverviewSerializer(overview)
-        return Response(serializer.data)
+        data = get_job_reliability_overview(job)
+        serializer = JobReliabilityOverviewSerializer(data)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     @extend_schema(responses={200: JobExpectationSerializer})
     @action(detail=True, methods=["get", "put", "patch"], url_path="expectation")
@@ -104,12 +123,12 @@ class JobReliabilityViewSet(CustomBaseGenericViewSet):
             )
             serializer.is_valid(raise_exception=True)
             serializer.save()
-            return Response(serializer.data)
+            return Response(serializer.data, status=status.HTTP_200_OK)
 
         expectation = getattr(job, "expectation", None)
         if expectation:
             serializer = JobExpectationSerializer(expectation)
-            return Response(serializer.data)
+            return Response(serializer.data, status=status.HTTP_200_OK)
 
         # Return default expectation shape without creating a database row
         return Response(
@@ -123,7 +142,8 @@ class JobReliabilityViewSet(CustomBaseGenericViewSet):
                 "is_enabled": True,
                 "created_at": None,
                 "updated_at": None,
-            }
+            },
+            status=status.HTTP_200_OK,
         )
 
     @extend_schema(
@@ -133,7 +153,7 @@ class JobReliabilityViewSet(CustomBaseGenericViewSet):
     @action(detail=True, methods=["post"], url_path="recalculate-baseline")
     def recalculate_baseline(self, request, pk=None):
         """
-        Triggers an asynchronous baseline recalculation for a job.
+        Queues an asynchronous baseline recalculation for a job.
         """
         job = get_object_or_404(
             Job.objects.select_related("project", "project__team"),
@@ -168,8 +188,13 @@ class ProjectReliabilityViewSet(CustomBaseGenericViewSet):
 
     permission_classes = [permissions.IsAuthenticated, ReliabilityPermission]
 
-    @extend_schema(responses={200: ProjectReliabilityOverviewSerializer})
+    @extend_schema(
+        responses={200: ProjectReliabilityOverviewSerializer},
+    )
     def retrieve(self, request, pk=None):
+        """
+        Returns a rollup of reliability states across all jobs for a project.
+        """
         project = get_object_or_404(
             Project.objects.select_related("team"),
             id=pk,
@@ -211,7 +236,15 @@ class ProjectReliabilityViewSet(CustomBaseGenericViewSet):
         missed_count = 0
         stalled_count = 0
         overdue_count = 0
+        anomalous_count = 0
         total_active_findings = 0
+
+        anomaly_condition_types = {
+            ReliabilityFinding.ConditionType.FAILURE_RATE_ANOMALY,
+            ReliabilityFinding.ConditionType.RETRY_RATE_ANOMALY,
+            ReliabilityFinding.ConditionType.DURATION_ANOMALY,
+            ReliabilityFinding.ConditionType.EXECUTION_VOLUME_ANOMALY,
+        }
 
         for job in jobs:
             expectation = getattr(job, "expectation", None)
@@ -248,9 +281,12 @@ class ProjectReliabilityViewSet(CustomBaseGenericViewSet):
                     next_expected_at = next_expected.isoformat()
                     missed_after_at = missed_after.isoformat()
 
-            # Determine state from active findings
+            # Determine state with strict precedence:
+            # DISABLED > STALLED > OVERDUE > MISSED > ANOMALOUS > HEALTHY
             finding_types = {f.condition_type for f in findings}
-            if ReliabilityFinding.ConditionType.STALLED_EXECUTION in finding_types:
+            if expectation and not expectation.is_enabled:
+                state = "DISABLED"
+            elif ReliabilityFinding.ConditionType.STALLED_EXECUTION in finding_types:
                 state = "STALLED"
                 stalled_count += 1
             elif ReliabilityFinding.ConditionType.OVERDUE_EXECUTION in finding_types:
@@ -259,6 +295,9 @@ class ProjectReliabilityViewSet(CustomBaseGenericViewSet):
             elif ReliabilityFinding.ConditionType.MISSED_EXECUTION in finding_types:
                 state = "MISSED"
                 missed_count += 1
+            elif finding_types & anomaly_condition_types:
+                state = "ANOMALOUS"
+                anomalous_count += 1
             else:
                 state = "HEALTHY"
                 healthy_count += 1
@@ -296,6 +335,7 @@ class ProjectReliabilityViewSet(CustomBaseGenericViewSet):
             "missed_jobs_count": missed_count,
             "stalled_jobs_count": stalled_count,
             "overdue_jobs_count": overdue_count,
+            "anomalous_jobs_count": anomalous_count,
             "active_findings_count": total_active_findings,
             "jobs": job_summaries,
         }
