@@ -28,7 +28,15 @@ class IncidentViewSet(BaseViewSetConfig, CustomResponseMixin, viewsets.ReadOnlyM
 
     serializer_class = IncidentSerializer
     permission_classes = [IsAuthenticated, IncidentPermission]
-    filterset_fields = ["project", "job", "status", "severity", "assigned_to", "alert_rule"]
+    filterset_fields = [
+        "project",
+        "job",
+        "status",
+        "severity",
+        "assigned_to",
+        "assigned_to__user",
+        "alert_rule",
+    ]
     search_fields = ["id", "project__name", "job__name"]
     ordering_fields = ["created_at", "updated_at", "severity"]
 
@@ -95,11 +103,7 @@ class IncidentViewSet(BaseViewSetConfig, CustomResponseMixin, viewsets.ReadOnlyM
         incident = self.get_object()
 
         if request.method == "GET":
-            notes = incident.notes.all()
-            page = self.paginate_queryset(notes)
-            if page is not None:
-                serializer = IncidentNoteSerializer(page, many=True)
-                return self.get_paginated_response(serializer.data)
+            notes = incident.notes.all().order_by("created_at")
             serializer = IncidentNoteSerializer(notes, many=True)
             return Response(serializer.data)
 
@@ -119,9 +123,5 @@ class IncidentViewSet(BaseViewSetConfig, CustomResponseMixin, viewsets.ReadOnlyM
     def events(self, request, pk=None):
         incident = self.get_object()
         events = incident.events.order_by("event_time", "id")
-        page = self.paginate_queryset(events)
-        if page is not None:
-            serializer = IncidentEventSerializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
         serializer = IncidentEventSerializer(events, many=True)
         return Response(serializer.data)

@@ -10,8 +10,13 @@ export interface Project {
   status: "active" | "inactive" | "deleted";
   created_at: string;
   updated_at: string;
-  created_by: number | null;
-  modified_by: number | null;
+  created_by?: number;
+  modified_by?: number;
+  jobs_count?: number;
+  executions_count?: number;
+  success_rate?: number | null;
+  active_incidents_count?: number;
+  operational_status?: "CRITICAL" | "DEGRADED" | "HEALTHY";
 }
 
 export interface APIKey {

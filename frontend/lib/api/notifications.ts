@@ -26,6 +26,11 @@ export interface InAppNotification {
   id: number;
   recipient: number;
   incident_event: number;
+  incident_id?: number | null;
+  event_type?: string | null;
+  incident_severity?: "DEGRADED" | "CRITICAL" | null;
+  project_name?: string | null;
+  job_name?: string | null;
   title: string;
   message: string;
   is_read: boolean;
@@ -42,19 +47,22 @@ export interface PaginatedInAppNotifications {
 
 export async function getInAppNotifications(
   page = 1,
-  filters: { search?: string; ordering?: string } = {}
+  filters: { search?: string; ordering?: string; is_read?: boolean } = {}
 ): Promise<PaginatedInAppNotifications> {
   const params = new URLSearchParams({ page: page.toString() });
   if (filters.search) params.append("search", filters.search);
   if (filters.ordering) params.append("ordering", filters.ordering);
+  if (filters.is_read !== undefined) params.append("is_read", filters.is_read.toString());
 
   const res = await apiClient.get<any>(`/notifications/in-app/?${params.toString()}`);
   const payload = res.data;
+  const results = Array.isArray(payload?.results) ? payload.results : Array.isArray(payload?.data?.results) ? payload.data.results : Array.isArray(payload?.data) ? payload.data : Array.isArray(payload) ? payload : [];
+  const count = payload?.count ?? payload?.data?.count ?? 0;
   return {
-    data: Array.isArray(payload.data) ? payload.data : Array.isArray(payload) ? payload : [],
+    data: results,
     page: payload.page ?? 1,
-    totalPages: payload.totalPages ?? 1,
-    totalItems: payload.totalItems ?? 0,
+    totalPages: (payload.totalPages ?? Math.ceil(count / 10)) || 1,
+    totalItems: payload.totalItems ?? count,
   };
 }
 
@@ -86,7 +94,8 @@ export async function getNotificationChannels(
   if (filters.ordering) params.append("ordering", filters.ordering);
   
   const res = await apiClient.get<any>(`/notifications/channels/?${params.toString()}`);
-  return Array.isArray(res.data?.data) ? res.data.data : Array.isArray(res.data) ? res.data : [];
+  const payload = res.data;
+  return Array.isArray(payload?.results) ? payload.results : Array.isArray(payload?.data?.results) ? payload.data.results : Array.isArray(payload?.data) ? payload.data : Array.isArray(payload) ? payload : [];
 }
 
 export async function createNotificationChannel(payload: Partial<NotificationChannel>): Promise<NotificationChannel> {
@@ -113,7 +122,8 @@ export async function getNotificationPolicies(
   if (filters.ordering) params.append("ordering", filters.ordering);
   
   const res = await apiClient.get<any>(`/notifications/policies/?${params.toString()}`);
-  return res.data?.data ?? res.data ?? [];
+  const payload = res.data;
+  return Array.isArray(payload?.results) ? payload.results : Array.isArray(payload?.data?.results) ? payload.data.results : Array.isArray(payload?.data) ? payload.data : Array.isArray(payload) ? payload : [];
 }
 
 export interface PaginatedChannels {
@@ -133,11 +143,13 @@ export async function getPaginatedNotificationChannels(
   
   const res = await apiClient.get<any>(`/notifications/channels/?${params.toString()}`);
   const payload = res.data;
+  const results = Array.isArray(payload?.results) ? payload.results : Array.isArray(payload?.data?.results) ? payload.data.results : Array.isArray(payload?.data) ? payload.data : Array.isArray(payload) ? payload : [];
+  const count = payload?.count ?? payload?.data?.count ?? 0;
   return {
-    data: Array.isArray(payload.data) ? payload.data : Array.isArray(payload) ? payload : [],
+    data: results,
     page: payload.page ?? 1,
-    totalPages: payload.totalPages ?? 1,
-    totalItems: payload.totalItems ?? 0,
+    totalPages: (payload.totalPages ?? Math.ceil(count / 10)) || 1,
+    totalItems: payload.totalItems ?? count,
   };
 }
 
@@ -158,11 +170,13 @@ export async function getPaginatedNotificationPolicies(
   
   const res = await apiClient.get<any>(`/notifications/policies/?${params.toString()}`);
   const payload = res.data;
+  const results = Array.isArray(payload?.results) ? payload.results : Array.isArray(payload?.data?.results) ? payload.data.results : Array.isArray(payload?.data) ? payload.data : Array.isArray(payload) ? payload : [];
+  const count = payload?.count ?? payload?.data?.count ?? 0;
   return {
-    data: Array.isArray(payload.data) ? payload.data : Array.isArray(payload) ? payload : [],
+    data: results,
     page: payload.page ?? 1,
-    totalPages: payload.totalPages ?? 1,
-    totalItems: payload.totalItems ?? 0,
+    totalPages: (payload.totalPages ?? Math.ceil(count / 10)) || 1,
+    totalItems: payload.totalItems ?? count,
   };
 }
 

@@ -8,8 +8,8 @@ from django.db.models import Q
 
 from .models import AlertRule
 from apps.executions.analytics import get_job_analytics, get_project_analytics
-from apps.incidents.models import Incident, IncidentEvent
-from apps.incidents.services import auto_resolve_incident
+from apps.incidents.models import Incident
+from apps.incidents.services import auto_resolve_incident, create_incident
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +50,8 @@ def _evaluate_single_rule(rule):
     else:
         metrics = get_project_analytics(rule.project_id, start_dt, end_dt)
 
-    total_executions = metrics.get("executions", 0)
+    exec_val = metrics.get("executions", 0)
+    total_executions = exec_val.get("current", 0) if isinstance(exec_val, dict) else (exec_val or 0)
 
     # Unknown should not mean healthy. If there's no data, we don't trigger or recover.
     if total_executions == 0:
@@ -59,11 +60,14 @@ def _evaluate_single_rule(rule):
     # Extract the relevant metric value
     metric_val = None
     if rule.metric == AlertRule.MetricType.FAILURE_RATE:
-        metric_val = metrics.get("failure_rate", 0.0)
+        val = metrics.get("failure_rate", 0.0)
+        metric_val = val.get("current", 0.0) if isinstance(val, dict) else (val or 0.0)
     elif rule.metric == AlertRule.MetricType.RETRY_RATE:
-        metric_val = metrics.get("retry_rate", 0.0)
+        val = metrics.get("retry_rate", 0.0)
+        metric_val = val.get("current", 0.0) if isinstance(val, dict) else (val or 0.0)
     elif rule.metric == AlertRule.MetricType.P95_DURATION:
-        p95 = metrics.get("p95_duration_ms")
+        val = metrics.get("p95_duration_ms")
+        p95 = val.get("current") if isinstance(val, dict) else val
         if p95 is not None:
             metric_val = p95
 
@@ -99,17 +103,12 @@ def _evaluate_single_rule(rule):
                 try:
                     # CREATE new incident
                     with transaction.atomic():
-                        incident = Incident.objects.create(
-                            alert_rule=locked_rule,
+                        create_incident(
                             project=locked_rule.project,
                             job=locked_rule.job,
+                            alert_rule=locked_rule,
                             severity=locked_rule.severity,
                             trigger_metadata=trigger_metadata,
-                        )
-                        IncidentEvent.objects.create(
-                            incident=incident,
-                            event_type=IncidentEvent.EventType.CREATED,
-                            metadata={"trigger_metadata": trigger_metadata},
                         )
                 except IntegrityError:
                     # Another process created the incident right after we checked. That's fine.

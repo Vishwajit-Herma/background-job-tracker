@@ -6,14 +6,32 @@ import {
   getInAppNotifications, 
   getUnreadNotificationCount, 
   markNotificationAsRead, 
-  markAllNotificationsAsRead 
+  markAllNotificationsAsRead,
+  InAppNotification
 } from "@/lib/api/notifications";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
-import { Bell, Check, Loader2, AlertTriangle, Info } from "lucide-react";
-import Link from "next/link";
+import { Badge } from "@/components/ui/badge";
+import { 
+  Bell, Check, Loader2, AlertTriangle, 
+  UserPlus, CheckCircle, CheckCircle2, Sparkles, 
+  RotateCcw, MessageSquare, Info, ArrowRight 
+} from "lucide-react";
 import { useRouter } from "next/navigation";
-import { cn } from "@/lib/utils";
+import { cn, formatRelativeTime } from "@/lib/utils";
+
+function getNotificationIcon(eventType?: string | null, severity?: string | null) {
+  const type = eventType?.toUpperCase() || "";
+  if (type === "CREATED") return <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />;
+  if (type === "ASSIGNED") return <UserPlus className="h-4 w-4 text-blue-500 shrink-0" />;
+  if (type === "ACKNOWLEDGED") return <CheckCircle className="h-4 w-4 text-amber-500 shrink-0" />;
+  if (type === "MANUALLY_RESOLVED" || type === "RESOLVED") return <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />;
+  if (type === "AUTO_RESOLVED") return <Sparkles className="h-4 w-4 text-green-500 shrink-0" />;
+  if (type === "REOPENED") return <RotateCcw className="h-4 w-4 text-purple-500 shrink-0" />;
+  if (type === "NOTE_ADDED") return <MessageSquare className="h-4 w-4 text-sky-500 shrink-0" />;
+  if (severity === "CRITICAL") return <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />;
+  return <Info className="h-4 w-4 text-primary shrink-0" />;
+}
 
 export function NotificationsPopover() {
   const router = useRouter();
@@ -23,13 +41,13 @@ export function NotificationsPopover() {
   const { data: unreadCount = 0 } = useQuery({
     queryKey: ["notifications-unread-count"],
     queryFn: getUnreadNotificationCount,
-    refetchInterval: 60000, // Check every minute
+    refetchInterval: 30000,
   });
 
   const { data: paginated, isLoading } = useQuery({
-    queryKey: ["notifications", 1],
-    queryFn: () => getInAppNotifications(1),
-    enabled: open, // Only fetch when popover opens
+    queryKey: ["notifications-preview"],
+    queryFn: () => getInAppNotifications(1, { ordering: "-created_at" }),
+    enabled: open,
   });
 
   const notifications = paginated?.data || [];
@@ -38,6 +56,7 @@ export function NotificationsPopover() {
     mutationFn: markNotificationAsRead,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["notifications-preview"] });
       queryClient.invalidateQueries({ queryKey: ["notifications-unread-count"] });
     }
   });
@@ -46,16 +65,21 @@ export function NotificationsPopover() {
     mutationFn: markAllNotificationsAsRead,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["notifications-preview"] });
       queryClient.invalidateQueries({ queryKey: ["notifications-unread-count"] });
     }
   });
 
-  const handleNotificationClick = (id: number, incidentEventId: number) => {
-    readMutation.mutate(id);
+  const handleNotificationClick = (notif: InAppNotification) => {
+    if (!notif.is_read) {
+      readMutation.mutate(notif.id);
+    }
     setOpen(false);
-    // In a real app we might fetch the incident ID related to the event, 
-    // but for now we route to the global incidents page, or if we had the incident ID, directly there.
-    router.push(`/incidents`);
+    if (notif.incident_id) {
+      router.push(`/incidents/${notif.incident_id}`);
+    } else {
+      router.push(`/incidents`);
+    }
   };
 
   return (
@@ -64,16 +88,23 @@ export function NotificationsPopover() {
         <Button variant="outline" size="icon" className="ml-auto h-8 w-8 relative">
           <Bell className="h-4 w-4" />
           {unreadCount > 0 && (
-            <span className="absolute -top-1 -right-1 h-3.5 w-3.5 rounded-full bg-destructive text-[9px] font-medium text-destructive-foreground flex items-center justify-center border-2 border-background">
-              {unreadCount > 9 ? "9+" : unreadCount}
+            <span className="absolute -top-1 -right-1 h-4 min-w-4 px-1 rounded-full bg-destructive text-[9px] font-bold text-destructive-foreground flex items-center justify-center border-2 border-background">
+              {unreadCount > 99 ? "99+" : unreadCount}
             </span>
           )}
           <span className="sr-only">Notifications</span>
         </Button>
       } />
-      <PopoverContent align="end" className="w-[380px] p-0" sideOffset={8}>
-        <div className="flex items-center justify-between px-4 py-3 border-b">
-          <h4 className="font-semibold text-sm">Notifications</h4>
+      <PopoverContent align="end" className="w-[380px] p-0 shadow-lg" sideOffset={8}>
+        <div className="flex items-center justify-between px-4 py-3 border-b bg-card">
+          <div className="flex items-center gap-2">
+            <h4 className="font-semibold text-sm">Notifications</h4>
+            {unreadCount > 0 && (
+              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-primary/10 text-primary">
+                {unreadCount} unread
+              </Badge>
+            )}
+          </div>
           {unreadCount > 0 && (
             <Button 
               variant="ghost" 
@@ -86,64 +117,67 @@ export function NotificationsPopover() {
             </Button>
           )}
         </div>
-        <div className="max-h-[400px] overflow-y-auto">
+        <div className="max-h-[380px] overflow-y-auto divide-y">
           {isLoading ? (
-            <div className="p-4 flex justify-center text-muted-foreground">
+            <div className="p-6 flex justify-center text-muted-foreground">
               <Loader2 className="h-5 w-5 animate-spin" />
             </div>
           ) : notifications.length === 0 ? (
-            <div className="p-8 text-center text-sm text-muted-foreground">
-              You have no notifications.
+            <div className="p-8 text-center text-sm text-muted-foreground flex flex-col items-center">
+              <Bell className="h-8 w-8 mb-2 opacity-20" />
+              <p>No notifications yet.</p>
             </div>
           ) : (
-            <div className="divide-y">
-              {notifications.map((notif) => (
-                <div 
-                  key={notif.id} 
-                  className={cn(
-                    "p-4 flex gap-3 hover:bg-muted/50 transition-colors cursor-pointer",
-                    !notif.is_read ? "bg-primary/5" : "opacity-75"
-                  )}
-                  onClick={() => handleNotificationClick(notif.id, notif.incident_event)}
-                >
-                  <div className="mt-0.5 shrink-0">
-                    {notif.title.toLowerCase().includes("critical") ? (
-                      <AlertTriangle className="h-4 w-4 text-destructive" />
-                    ) : (
-                      <Info className="h-4 w-4 text-primary" />
-                    )}
-                  </div>
-                  <div className="flex-1 space-y-1 min-w-0">
-                    <p className={cn("text-sm font-medium leading-none", !notif.is_read && "text-foreground")}>
+            notifications.map((notif) => (
+              <div 
+                key={notif.id} 
+                className={cn(
+                  "p-3.5 flex gap-3 hover:bg-muted/50 transition-colors cursor-pointer relative",
+                  !notif.is_read ? "bg-primary/5 font-medium" : "opacity-80"
+                )}
+                onClick={() => handleNotificationClick(notif)}
+              >
+                <div className="mt-0.5 shrink-0">
+                  {getNotificationIcon(notif.event_type, notif.incident_severity)}
+                </div>
+                <div className="flex-1 space-y-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className={cn("text-xs font-semibold truncate", !notif.is_read ? "text-foreground" : "text-muted-foreground")}>
                       {notif.title}
                     </p>
-                    <p className="text-xs text-muted-foreground line-clamp-2">
-                      {notif.message}
-                    </p>
-                    <p className="text-[10px] text-muted-foreground">
-                      {new Date(notif.created_at).toLocaleString()}
-                    </p>
+                    <span className="text-[10px] text-muted-foreground shrink-0" title={new Date(notif.created_at).toLocaleString()}>
+                      {formatRelativeTime(notif.created_at)}
+                    </span>
                   </div>
-                  {!notif.is_read && (
-                    <div className="shrink-0 flex items-center justify-center">
-                      <div className="h-2 w-2 bg-primary rounded-full" />
-                    </div>
+                  <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
+                    {notif.message}
+                  </p>
+                  {(notif.project_name || notif.job_name) && (
+                    <p className="text-[10px] text-muted-foreground font-mono truncate pt-0.5">
+                      {notif.project_name}{notif.job_name ? ` · ${notif.job_name}` : ""}
+                    </p>
                   )}
                 </div>
-              ))}
-            </div>
+                {!notif.is_read && (
+                  <div className="shrink-0 self-center">
+                    <div className="h-2 w-2 bg-primary rounded-full" />
+                  </div>
+                )}
+              </div>
+            ))
           )}
         </div>
-        <div className="p-2 border-t">
+        <div className="p-2 border-t bg-card">
           <Button
             variant="ghost"
-            className="w-full text-xs"
+            className="w-full text-xs justify-between"
             onClick={() => {
               setOpen(false);
               router.push("/notifications");
             }}
           >
-            View all notifications
+            <span>View all notifications</span>
+            <ArrowRight className="h-3.5 w-3.5 ml-1 opacity-70" />
           </Button>
         </div>
       </PopoverContent>

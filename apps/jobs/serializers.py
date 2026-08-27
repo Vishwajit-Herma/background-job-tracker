@@ -12,6 +12,10 @@ class JobSerializer(serializers.ModelSerializer):
 
     # Expose is_deleted explicitly as requested by the story for deleted state
     is_deleted = serializers.BooleanField(read_only=True)
+    executions_count = serializers.IntegerField(read_only=True, required=False)
+    success_rate = serializers.SerializerMethodField()
+    active_incidents_count = serializers.IntegerField(read_only=True, required=False)
+    operational_status = serializers.SerializerMethodField()
 
     class Meta:
         model = Job
@@ -29,6 +33,10 @@ class JobSerializer(serializers.ModelSerializer):
             "updated_at",
             "created_by",
             "modified_by",
+            "executions_count",
+            "success_rate",
+            "active_incidents_count",
+            "operational_status",
         ]
         read_only_fields = [
             "id",
@@ -39,7 +47,23 @@ class JobSerializer(serializers.ModelSerializer):
             "created_by",
             "modified_by",
             "is_deleted",
+            "executions_count",
+            "active_incidents_count",
         ]
+
+    def get_success_rate(self, obj):
+        executions = getattr(obj, "executions_count", 0)
+        if not executions:
+            return None
+        successes = getattr(obj, "success_count", 0)
+        return round((successes / executions) * 100, 2)
+
+    def get_operational_status(self, obj):
+        if getattr(obj, "has_critical_incident", False):
+            return "CRITICAL"
+        if getattr(obj, "active_incidents_count", 0) > 0:
+            return "DEGRADED"
+        return "HEALTHY"
 
 
 class JobCreateSerializer(serializers.ModelSerializer):

@@ -86,6 +86,7 @@ export function JobFormModal({
         });
       }
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["jobs-paginated"] });
       reset();
       onOpenChange(false);
     } catch (e: any) {
@@ -222,6 +223,7 @@ export function ConfirmDeleteJobModal({
     try {
       await deleteJob(job.id);
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["jobs-paginated"] });
       onOpenChange(false);
     } catch (e: any) {
       setError((e as ApiError).message || "Failed to delete job.");

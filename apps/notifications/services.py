@@ -65,8 +65,28 @@ def _format_incident_notification(incident_event):
     event_type = incident_event.event_type
 
     if event_type == IncidentEvent.EventType.CREATED:
-        title = f"[{incident.get_severity_display()}] New Incident #{incident.id} - {incident.project.name}"
-        message = f"New {incident.get_severity_display().lower()} incident #{incident.id} triggered on '{incident.project.name}'{job_str}."
+        cond_type = incident.trigger_metadata.get("condition_type") or incident_event.metadata.get(
+            "condition_type"
+        )
+        if cond_type == "MISSED_EXECUTION":
+            overdue = incident.trigger_metadata.get("overdue_by_seconds", 0)
+            title = (
+                f"[{incident.get_severity_display()}] Incident #{incident.id} - Missed Execution"
+            )
+            message = f"Job '{incident.job.name}' on '{incident.project.name}' missed its expected schedule (overdue by {overdue}s)."
+        elif cond_type == "STALLED_EXECUTION":
+            runtime = incident.trigger_metadata.get("runtime_seconds", 0)
+            title = (
+                f"[{incident.get_severity_display()}] Incident #{incident.id} - Stalled Execution"
+            )
+            message = f"An execution for '{incident.job.name}' on '{incident.project.name}' is stalled (running for {runtime}s)."
+        elif cond_type == "OVERDUE_EXECUTION":
+            queued = incident.trigger_metadata.get("queued_seconds", 0)
+            title = f"[{incident.get_severity_display()}] Incident #{incident.id} - Overdue Queued Execution"
+            message = f"An execution for '{incident.job.name}' on '{incident.project.name}' is stuck pending in queue ({queued}s)."
+        else:
+            title = f"[{incident.get_severity_display()}] New Incident #{incident.id} - {incident.project.name}"
+            message = f"New {incident.get_severity_display().lower()} incident #{incident.id} triggered on '{incident.project.name}'{job_str}."
     elif event_type == IncidentEvent.EventType.ASSIGNED:
         assignee_name = incident_event.metadata.get("new_assignee_name", "a team member")
         title = f"[{incident.get_severity_display()}] Incident #{incident.id} Assigned to {assignee_name}"

@@ -65,7 +65,7 @@ export default function AdminChannelsPage() {
   });
 
   const { register, handleSubmit, reset, watch, setValue, formState: { errors, isSubmitting } } = useForm<ChannelFormValues>({
-    resolver: zodResolver(channelSchema),
+    resolver: zodResolver(channelSchema) as any,
     defaultValues: { type: "WEBHOOK", is_active: true }
   });
 
@@ -195,7 +195,7 @@ export default function AdminChannelsPage() {
               <label className="text-sm font-medium">Project</label>
               <Select 
                 value={selectedProject ? selectedProject.toString() : undefined} 
-                onValueChange={(val) => setValue("project", parseInt(val))}
+                onValueChange={(val) => { if (val) setValue("project", parseInt(val)); }}
               >
                 <SelectTrigger>
                   <span data-slot="select-value" className="flex flex-1 text-left line-clamp-1">

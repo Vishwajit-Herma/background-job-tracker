@@ -6,7 +6,21 @@ import { Select as SelectPrimitive } from "@base-ui/react/select"
 import { cn } from "@/lib/utils"
 import { ChevronDownIcon, CheckIcon, ChevronUpIcon } from "lucide-react"
 
-const Select = SelectPrimitive.Root
+function Select<T = string>({
+  onValueChange,
+  ...props
+}: Omit<React.ComponentProps<typeof SelectPrimitive.Root>, "onValueChange"> & {
+  onValueChange?: (value: T) => void;
+}) {
+  return (
+    <SelectPrimitive.Root
+      onValueChange={(val: any) => {
+        if (onValueChange) onValueChange(val);
+      }}
+      {...props}
+    />
+  );
+}
 
 function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
   return (

@@ -82,8 +82,8 @@ export default function AdminPoliciesPage() {
   });
 
   const { register, handleSubmit, reset, watch, setValue, formState: { errors, isSubmitting } } = useForm<PolicyFormValues>({
-    resolver: zodResolver(policySchema),
-    defaultValues: { severity: "CRITICAL", event_types: EVENT_TYPES, is_active: true }
+    resolver: zodResolver(policySchema) as any,
+    defaultValues: { severity: "CRITICAL", is_active: true, event_types: ["INCIDENT_CREATED"] }
   });
 
   const selectedProject = watch("project");
@@ -226,11 +226,11 @@ export default function AdminPoliciesPage() {
               <label className="text-sm font-medium">Project</label>
               <Select 
                 value={selectedProject ? selectedProject.toString() : undefined} 
-                onValueChange={(val) => setValue("project", parseInt(val))}
+                onValueChange={(val) => { if (val) setValue("project", parseInt(val)); }}
               >
                 <SelectTrigger>
                   <span data-slot="select-value" className="flex flex-1 text-left line-clamp-1">
-                    {selectedProject ? projects.find((proj: any) => proj.id === selectedProject)?.name : "Select a project"}
+                    {selectedProject ? projects.find((p: any) => p.id === selectedProject)?.name : "Select a project"}
                   </span>
                 </SelectTrigger>
                 <SelectContent>
@@ -245,7 +245,7 @@ export default function AdminPoliciesPage() {
               <label className="text-sm font-medium">Channel</label>
               <Select 
                 value={selectedChannel ? selectedChannel.toString() : undefined} 
-                onValueChange={(val) => setValue("channel", parseInt(val))}
+                onValueChange={(val) => { if (val) setValue("channel", parseInt(val)); }}
               >
                 <SelectTrigger>
                   <span data-slot="select-value" className="flex flex-1 text-left line-clamp-1">

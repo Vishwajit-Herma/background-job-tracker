@@ -11,6 +11,9 @@ class AlertRule(models.Model):
         FAILURE_RATE = "FAILURE_RATE", _("Failure Rate")
         RETRY_RATE = "RETRY_RATE", _("Retry Rate")
         P95_DURATION = "P95_DURATION", _("P95 Duration")
+        MISSED_EXECUTION = "MISSED_EXECUTION", _("Missed Execution")
+        STALLED_EXECUTION = "STALLED_EXECUTION", _("Stalled Execution")
+        OVERDUE_EXECUTION = "OVERDUE_EXECUTION", _("Overdue Execution")
 
     class Severity(models.TextChoices):
         DEGRADED = "DEGRADED", _("Degraded")
@@ -96,4 +99,16 @@ class AlertRule(models.Model):
         elif self.metric == self.MetricType.P95_DURATION and self.threshold <= 0:
             raise ValidationError(
                 {"threshold": _("Threshold for duration must be greater than 0 milliseconds.")}
+            )
+        elif (
+            self.metric
+            in [
+                self.MetricType.MISSED_EXECUTION,
+                self.MetricType.STALLED_EXECUTION,
+                self.MetricType.OVERDUE_EXECUTION,
+            ]
+            and self.threshold < 0
+        ):
+            raise ValidationError(
+                {"threshold": _("Threshold for reliability metrics must be non-negative.")}
             )

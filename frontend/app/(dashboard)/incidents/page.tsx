@@ -12,8 +12,9 @@ import { PaginationControls } from "@/components/bjt/pagination";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search } from "lucide-react";
+import { Search, User } from "lucide-react";
 import { useDebounce } from "@/hooks/use-debounce";
+import { useAuth } from "@/hooks/use-auth";
 
 export default function IncidentsPage() {
   const [page, setPage] = useState(1);
@@ -27,11 +28,21 @@ export default function IncidentsPage() {
   const [search, setSearch] = useState("");
   const [ordering, setOrdering] = useState("-created_at");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [severityFilter, setSeverityFilter] = useState("all");
+  const [assigneeFilter, setAssigneeFilter] = useState("all");
   const debouncedSearch = useDebounce(search, 500);
+  const { user } = useAuth();
 
   const { data: paginatedIncidents, isLoading, isError } = useQuery({
-    queryKey: ["incidents", page, debouncedSearch, ordering, statusFilter],
-    queryFn: () => getIncidents({ page, search: debouncedSearch, ordering, status: statusFilter !== "all" ? statusFilter : undefined }),
+    queryKey: ["incidents", page, debouncedSearch, ordering, statusFilter, severityFilter, assigneeFilter],
+    queryFn: () => getIncidents({ 
+      page, 
+      search: debouncedSearch, 
+      ordering, 
+      status: statusFilter !== "all" ? statusFilter : undefined,
+      severity: severityFilter !== "all" ? severityFilter : undefined,
+      assigned_to__user: assigneeFilter === "me" ? user?.id || (user as any)?.pk : undefined
+    }),
   });
 
   const incidents = paginatedIncidents?.data || [];
@@ -86,6 +97,36 @@ export default function IncidentsPage() {
               </SelectContent>
             </Select>
           </div>
+          <div className="w-full sm:w-36">
+            <Select value={severityFilter} onValueChange={setSeverityFilter}>
+              <SelectTrigger className="h-9">
+                <SelectValue placeholder="Severity">
+                  {severityFilter === "all" && "All Severities"}
+                  {severityFilter === "CRITICAL" && "Critical"}
+                  {severityFilter === "DEGRADED" && "Degraded"}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Severities</SelectItem>
+                <SelectItem value="CRITICAL">Critical</SelectItem>
+                <SelectItem value="DEGRADED">Degraded</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="w-full sm:w-36">
+            <Select value={assigneeFilter} onValueChange={setAssigneeFilter}>
+              <SelectTrigger className="h-9">
+                <SelectValue placeholder="Assignee">
+                  {assigneeFilter === "all" && "All Assignees"}
+                  {assigneeFilter === "me" && "Assigned to me"}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Assignees</SelectItem>
+                <SelectItem value="me">Assigned to me</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <div className="w-full sm:w-48">
             <Select value={ordering} onValueChange={setOrdering}>
               <SelectTrigger className="h-9">
@@ -116,6 +157,7 @@ export default function IncidentsPage() {
               <TableHead>Incident</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Severity</TableHead>
+              <TableHead>Assignee</TableHead>
               <TableHead>Context (Project / Job)</TableHead>
               <TableHead>Trigger Reason</TableHead>
               <TableHead>Created</TableHead>
@@ -125,7 +167,7 @@ export default function IncidentsPage() {
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
                   <div className="flex justify-center items-center gap-2">
                     <Loader2 className="h-4 w-4 animate-spin" /> Loading incidents...
                   </div>
@@ -133,13 +175,13 @@ export default function IncidentsPage() {
               </TableRow>
             ) : isError ? (
               <TableRow>
-                <TableCell colSpan={7} className="h-24 text-center text-destructive">
+                <TableCell colSpan={8} className="h-24 text-center text-destructive">
                   Failed to load incidents.
                 </TableCell>
               </TableRow>
             ) : incidents.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="h-32 text-center">
+                <TableCell colSpan={8} className="h-32 text-center">
                   <div className="flex flex-col items-center text-muted-foreground">
                     <AlertTriangle className="h-8 w-8 mb-2 opacity-20" />
                     <p>No incidents found.</p>
@@ -169,6 +211,18 @@ export default function IncidentsPage() {
                         <Badge variant="outline" className={incident.severity === "CRITICAL" ? "text-destructive border-destructive/30 bg-destructive/5" : ""}>
                           {incident.severity}
                         </Badge>
+                      </Link>
+                    </TableCell>
+                    <TableCell>
+                      <Link href={`/incidents/${incident.id}`} className="block">
+                        {incident.assigned_to_name || incident.assigned_to ? (
+                          <div className="flex items-center gap-1.5 text-sm font-medium">
+                            <User className="h-3.5 w-3.5 text-muted-foreground" />
+                            {incident.assigned_to_name || `Member #${incident.assigned_to}`}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground italic">Unassigned</span>
+                        )}
                       </Link>
                     </TableCell>
                     <TableCell>

@@ -49,10 +49,10 @@ def test_pagination_default(client, user):
     assert response.data["status"] == "success"
     assert "page" in response.data
     assert "limit" in response.data
-    assert response.data["limit"] == 25  # from settings
+    assert response.data["limit"] == 15  # from settings
     assert response.data["totalItems"] == 100
-    assert response.data["totalPages"] == 4
-    assert len(response.data["data"]) == 25
+    assert response.data["totalPages"] == 7
+    assert len(response.data["data"]) == 15
 
 
 @pytest.mark.urls(__name__)

@@ -87,15 +87,15 @@ def test_job_analytics_aggregation(api_client, setup_data):
     assert response.status_code == status.HTTP_200_OK
 
     data = response.json().get("data", response.json())
-    assert data["executions"] == 4
+    assert data["executions"]["current"] == 4
     assert data["successes"] == 3
     assert data["failures"] == 1
-    assert data["success_rate"] == 75.0
-    assert data["failure_rate"] == 25.0
+    assert data["success_rate"]["current"] == 75.0
+    assert data["failure_rate"]["current"] == 25.0
     assert data["health"] == "CRITICAL"  # > 10%
-    assert data["average_duration_ms"] == 1500
+    assert data["average_duration_ms"]["current"] == 1500
     assert data["p50_duration_ms"] is not None
-    assert data["p95_duration_ms"] is not None
+    assert data["p95_duration_ms"]["current"] is not None
 
 
 @pytest.mark.django_db
@@ -107,7 +107,7 @@ def test_project_analytics_aggregation(api_client, setup_data):
     assert response.status_code == status.HTTP_200_OK
 
     data = response.json().get("data", response.json())
-    assert data["executions"] == 5
+    assert data["executions"]["current"] == 5
     assert data["successes"] == 4
     assert data["failures"] == 1
 
@@ -115,6 +115,13 @@ def test_project_analytics_aggregation(api_client, setup_data):
     assert data["critical_jobs"] == 1
     assert data["degraded_jobs"] == 0
     assert data["health"] == "CRITICAL"
+
+    assert data["executions"]["current"] == 5
+    assert data["executions"]["previous"] is not None
+    assert "delta_percent" in data["executions"]
+
+    assert "current" in data["success_rate"]
+    assert "delta_points" in data["success_rate"]
 
     # Top failing
     assert len(data["top_failing_jobs"]) == 1
@@ -130,11 +137,32 @@ def test_analytics_time_windows(api_client, setup_data):
     user, _, project, job1, _ = setup_data
     api_client.force_authenticate(user=user)
 
-    # Test last_1_hour (should only catch j1_3 and j1_4)
+    # Test last_1_hour and 1h shorthand (should only catch j1_3 and j1_4)
     response = api_client.get(f"/api/jobs/{job1.id}/analytics/?range=last_1_hour")
     assert response.status_code == status.HTTP_200_OK
     data = response.json().get("data", response.json())
-    assert data["executions"] == 2
+    assert data["executions"]["current"] == 2
+
+    response = api_client.get(f"/api/jobs/{job1.id}/analytics/?range=1h")
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json().get("data", response.json())
+    assert data["executions"]["current"] == 2
+
+    # Test 6h shorthand
+    response = api_client.get(f"/api/projects/{project.id}/analytics/?range=6h")
+    assert response.status_code == status.HTTP_200_OK
+
+    # Test 24h shorthand
+    response = api_client.get(f"/api/projects/{project.id}/analytics/?range=24h")
+    assert response.status_code == status.HTTP_200_OK
+
+    # Test 7d shorthand
+    response = api_client.get(f"/api/projects/{project.id}/analytics/?range=7d")
+    assert response.status_code == status.HTTP_200_OK
+
+    # Test 30d shorthand
+    response = api_client.get(f"/api/projects/{project.id}/analytics/?range=30d")
+    assert response.status_code == status.HTTP_200_OK
 
     # Test custom range catching only first execution
     now = timezone.now()
@@ -145,7 +173,7 @@ def test_analytics_time_windows(api_client, setup_data):
     response = api_client.get(f"/api/jobs/{job1.id}/analytics/?start={start}&end={end}")
     assert response.status_code == status.HTTP_200_OK
     data = response.json().get("data", response.json())
-    assert data["executions"] == 1
+    assert data["executions"]["current"] == 1
 
 
 @pytest.mark.django_db
@@ -201,5 +229,36 @@ def test_analytics_query_efficiency(api_client, django_assert_max_num_queries):
         assert response.status_code == status.HTTP_200_OK
 
         data = response.json().get("data", response.json())
-        assert data["executions"] == 250
+        assert data["executions"]["current"] == 250
         assert data["healthy_jobs"] == 50
+
+
+def test_calculate_delta():
+    from apps.executions.analytics import calculate_delta
+
+    # 0 -> X
+    d1 = calculate_delta(100, 0)
+    assert d1["delta_percent"] is None
+    assert d1["delta_points"] == 100.0
+
+    # X -> X
+    d2 = calculate_delta(100, 100)
+    assert d2["delta_percent"] == 0.0
+
+    # 0 -> 0
+    d0 = calculate_delta(0, 0)
+    assert d0["delta_percent"] is None
+    assert d0["delta_points"] is None
+
+    # 100 -> 150
+    d3 = calculate_delta(150, 100)
+    assert d3["delta_percent"] == 50.0
+    assert d3["delta_points"] == 50.0
+
+    # 100 -> 50
+    d4 = calculate_delta(50, 100)
+    assert d4["delta_percent"] == -50.0
+
+    # None -> None
+    d5 = calculate_delta(None, None)
+    assert d5["delta_percent"] is None

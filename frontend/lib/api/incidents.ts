@@ -60,13 +60,15 @@ interface IncidentFilters {
 }
 
 export async function getIncidents(
-  filters: { page?: number; search?: string; ordering?: string; status?: string } = {}
+  filters: { page?: number; search?: string; ordering?: string; status?: string; severity?: string; assigned_to__user?: number | string } = {}
 ): Promise<PaginatedIncidents> {
   const params = new URLSearchParams();
   if (filters.page) params.append("page", filters.page.toString());
   if (filters.search) params.append("search", filters.search);
   if (filters.ordering) params.append("ordering", filters.ordering);
   if (filters.status && filters.status !== "all") params.append("status", filters.status);
+  if (filters.severity && filters.severity !== "all") params.append("severity", filters.severity);
+  if (filters.assigned_to__user) params.append("assigned_to__user", filters.assigned_to__user.toString());
 
   const res = await apiClient.get<any>(`/incidents/?${params.toString()}`);
   const payload = res.data;

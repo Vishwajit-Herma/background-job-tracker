@@ -19,6 +19,7 @@ class ExecutionSerializer(serializers.ModelSerializer):
             "job",
             "external_id",
             "status",
+            "last_event_at",
             "started_at",
             "finished_at",
             "duration_ms",
@@ -155,7 +156,18 @@ class AnalyticsQuerySerializer(serializers.Serializer):
     start = serializers.DateTimeField(required=False)
     end = serializers.DateTimeField(required=False)
     range = serializers.ChoiceField(
-        choices=["last_1_hour", "last_24_hours", "last_7_days", "last_30_days"],
+        choices=[
+            "1h",
+            "last_1_hour",
+            "6h",
+            "last_6_hours",
+            "24h",
+            "last_24_hours",
+            "7d",
+            "last_7_days",
+            "30d",
+            "last_30_days",
+        ],
         required=False,
     )
     jobs = serializers.CharField(required=False, help_text="Comma-separated list of Job IDs")
@@ -197,9 +209,12 @@ class TrendPointSerializer(serializers.Serializer):
     executions = serializers.IntegerField()
     successes = serializers.IntegerField()
     failures = serializers.IntegerField()
+    retries = serializers.IntegerField()
     success_rate = serializers.FloatField()
-    average_duration_ms = serializers.IntegerField(allow_null=True)
-    p95_duration_ms = serializers.IntegerField(allow_null=True)
+    failure_rate = serializers.FloatField(required=False)
+    retry_rate = serializers.FloatField(required=False)
+    average_duration_ms = serializers.FloatField(allow_null=True)
+    p95_duration_ms = serializers.FloatField(allow_null=True)
 
 
 class TrendResponseSerializer(serializers.Serializer):
@@ -210,12 +225,22 @@ class AnalyticsQueueSummarySerializer(serializers.Serializer):
     queue = serializers.CharField()
     count = serializers.IntegerField()
     failures = serializers.IntegerField()
+    retries = serializers.IntegerField()
+    successes = serializers.IntegerField()
+    success_rate = serializers.FloatField()
+    failure_rate = serializers.FloatField()
+    retry_rate = serializers.FloatField()
 
 
 class AnalyticsWorkerSummarySerializer(serializers.Serializer):
     worker = serializers.CharField()
     count = serializers.IntegerField()
     failures = serializers.IntegerField()
+    retries = serializers.IntegerField()
+    successes = serializers.IntegerField()
+    success_rate = serializers.FloatField()
+    failure_rate = serializers.FloatField()
+    retry_rate = serializers.FloatField()
 
 
 class AnalyticsErrorSerializer(serializers.Serializer):
@@ -229,24 +254,43 @@ class PeriodSerializer(serializers.Serializer):
     end = serializers.DateTimeField()
 
 
+class DeltaSerializer(serializers.Serializer):
+    current = serializers.FloatField(allow_null=True)
+    previous = serializers.FloatField(allow_null=True)
+    delta_points = serializers.FloatField(allow_null=True)
+    delta_percent = serializers.FloatField(allow_null=True)
+    comparison_period = serializers.CharField(allow_null=True)
+
+
+class ThresholdsSerializer(serializers.Serializer):
+    failure_rate = serializers.FloatField(allow_null=True, required=False)
+    retry_rate = serializers.FloatField(allow_null=True, required=False)
+    p95_duration = serializers.FloatField(allow_null=True, required=False)
+
+
 class JobAnalyticsSerializer(serializers.Serializer):
     job_id = serializers.IntegerField()
+    job_name = serializers.CharField()
+    task_identifier = serializers.CharField()
     period = PeriodSerializer()
-    executions = serializers.IntegerField()
+    executions = DeltaSerializer()
     successes = serializers.IntegerField()
     failures = serializers.IntegerField()
     retries = serializers.IntegerField()
-    success_rate = serializers.FloatField()
-    failure_rate = serializers.FloatField()
-    retry_rate = serializers.FloatField()
-    average_duration_ms = serializers.IntegerField(allow_null=True)
-    p50_duration_ms = serializers.IntegerField(allow_null=True)
-    p95_duration_ms = serializers.IntegerField(allow_null=True)
-    p99_duration_ms = serializers.IntegerField(allow_null=True)
+    success_rate = DeltaSerializer()
+    failure_rate = DeltaSerializer()
+    retry_rate = DeltaSerializer()
+    average_duration_ms = DeltaSerializer()
+    p50_duration_ms = serializers.FloatField(allow_null=True)
+    p95_duration_ms = DeltaSerializer()
+    p99_duration_ms = serializers.FloatField(allow_null=True)
     health = serializers.CharField()
+    open_incidents = serializers.IntegerField()
+    critical_incidents = serializers.IntegerField()
     queue_summary = AnalyticsQueueSummarySerializer(many=True)
     worker_summary = AnalyticsWorkerSummarySerializer(many=True)
     errors = AnalyticsErrorSerializer(many=True)
+    thresholds = ThresholdsSerializer(required=False)
 
 
 class FailingJobSerializer(serializers.Serializer):
@@ -262,30 +306,33 @@ class SlowJobSerializer(serializers.Serializer):
     job_id = serializers.IntegerField()
     name = serializers.CharField()
     task_identifier = serializers.CharField()
-    average_duration_ms = serializers.IntegerField()
-    p95_duration_ms = serializers.IntegerField(allow_null=True)
+    average_duration_ms = serializers.FloatField()
+    p95_duration_ms = serializers.FloatField(allow_null=True)
 
 
 class ProjectAnalyticsSerializer(serializers.Serializer):
     project_id = serializers.IntegerField()
     period = PeriodSerializer()
-    executions = serializers.IntegerField()
+    executions = DeltaSerializer()
     successes = serializers.IntegerField()
     failures = serializers.IntegerField()
     retries = serializers.IntegerField()
-    success_rate = serializers.FloatField()
-    failure_rate = serializers.FloatField()
-    retry_rate = serializers.FloatField()
-    average_duration_ms = serializers.IntegerField(allow_null=True)
-    p50_duration_ms = serializers.IntegerField(allow_null=True)
-    p95_duration_ms = serializers.IntegerField(allow_null=True)
-    p99_duration_ms = serializers.IntegerField(allow_null=True)
+    success_rate = DeltaSerializer()
+    failure_rate = DeltaSerializer()
+    retry_rate = DeltaSerializer()
+    average_duration_ms = DeltaSerializer()
+    p50_duration_ms = serializers.FloatField(allow_null=True)
+    p95_duration_ms = DeltaSerializer()
+    p99_duration_ms = serializers.FloatField(allow_null=True)
     healthy_jobs = serializers.IntegerField()
     degraded_jobs = serializers.IntegerField()
     critical_jobs = serializers.IntegerField()
     health = serializers.CharField()
+    open_incidents = serializers.IntegerField()
+    critical_incidents = serializers.IntegerField()
     top_failing_jobs = FailingJobSerializer(many=True)
     slowest_jobs = SlowJobSerializer(many=True)
     queue_summary = AnalyticsQueueSummarySerializer(many=True)
     worker_summary = AnalyticsWorkerSummarySerializer(many=True)
     errors = AnalyticsErrorSerializer(many=True)
+    thresholds = ThresholdsSerializer(required=False)

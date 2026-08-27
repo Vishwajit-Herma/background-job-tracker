@@ -7,7 +7,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Loader2, Activity, Clock, Server, AlertCircle, ChevronRight, AlertTriangle, CheckCircle2, RotateCw, XCircle } from "lucide-react";
+import { Loader2, Activity, Clock, Server, AlertCircle, ChevronRight, AlertTriangle, CheckCircle2, RotateCw, XCircle, Copy } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PaginationControls } from "@/components/bjt/pagination";
 
@@ -61,7 +61,19 @@ function ExecutionDetails({ execution }: { execution: Execution }) {
       <div className="grid grid-cols-2 gap-4 text-sm">
         <div className="space-y-1 min-w-0">
           <p className="text-muted-foreground">External ID</p>
-          <code className="px-1.5 py-0.5 rounded bg-muted text-xs break-all inline-block max-w-full">{execution.external_id}</code>
+          <div className="flex items-center gap-1.5 group">
+            <code className="px-1.5 py-0.5 rounded bg-muted text-xs break-all inline-block max-w-full">{execution.external_id}</code>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                navigator.clipboard.writeText(execution.external_id);
+              }}
+              className="opacity-0 group-hover:opacity-100 p-1 hover:bg-muted rounded text-muted-foreground transition-opacity"
+              title="Copy full ID"
+            >
+              <Copy className="h-3 w-3" />
+            </button>
+          </div>
         </div>
         <div className="space-y-1 min-w-0">
           <p className="text-muted-foreground">Worker / Queue</p>
@@ -227,14 +239,26 @@ export function ExecutionsSheet({
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="font-medium capitalize text-sm">{execution.status}</span>
-                          <span className="text-xs text-muted-foreground hidden sm:inline-block truncate max-w-[200px]">
+                          <span className="text-xs text-muted-foreground hidden sm:flex items-center gap-1.5 truncate max-w-[250px] group">
                             {execution.external_id}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigator.clipboard.writeText(execution.external_id);
+                              }}
+                              className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-muted rounded text-muted-foreground transition-opacity"
+                              title="Copy full ID"
+                            >
+                              <Copy className="h-3 w-3" />
+                            </button>
                           </span>
                         </div>
                         <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
                           <span className="flex items-center gap-1">
                             <Clock className="h-3 w-3" />
-                            {new Date(execution.last_event_at).toLocaleString()}
+                            {execution.last_event_at || execution.started_at || execution.created_at
+                              ? new Date(execution.last_event_at || execution.started_at || execution.created_at).toLocaleString()
+                              : "-"}
                           </span>
                           {execution.duration_ms != null && (
                             <span className="flex items-center gap-1">

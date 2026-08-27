@@ -3,6 +3,12 @@ from .models import Project, APIKey
 
 
 class ProjectSerializer(serializers.ModelSerializer):
+    jobs_count = serializers.IntegerField(read_only=True, required=False)
+    executions_count = serializers.IntegerField(read_only=True, required=False)
+    success_rate = serializers.SerializerMethodField()
+    active_incidents_count = serializers.IntegerField(read_only=True, required=False)
+    operational_status = serializers.SerializerMethodField()
+
     class Meta:
         model = Project
         fields = [
@@ -15,6 +21,11 @@ class ProjectSerializer(serializers.ModelSerializer):
             "updated_at",
             "created_by",
             "modified_by",
+            "jobs_count",
+            "executions_count",
+            "success_rate",
+            "active_incidents_count",
+            "operational_status",
         ]
         read_only_fields = [
             "id",
@@ -22,6 +33,9 @@ class ProjectSerializer(serializers.ModelSerializer):
             "updated_at",
             "created_by",
             "modified_by",
+            "jobs_count",
+            "executions_count",
+            "active_incidents_count",
         ]
 
     def get_fields(self):
@@ -30,6 +44,20 @@ class ProjectSerializer(serializers.ModelSerializer):
         if self.instance:
             fields["team"].read_only = True
         return fields
+
+    def get_success_rate(self, obj):
+        executions = getattr(obj, "executions_count", 0)
+        if not executions:
+            return None
+        successes = getattr(obj, "success_count", 0)
+        return round((successes / executions) * 100, 2)
+
+    def get_operational_status(self, obj):
+        if getattr(obj, "has_critical_incident", False):
+            return "CRITICAL"
+        if getattr(obj, "active_incidents_count", 0) > 0:
+            return "DEGRADED"
+        return "HEALTHY"
 
     def validate(self, attrs):
         """Ensure unique active project names per team."""

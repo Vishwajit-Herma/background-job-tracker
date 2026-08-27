@@ -4,15 +4,20 @@ import { User } from "./auth";
 
 export interface Job {
   id: number;
-  project: number | Project;
+  project: number;
   name: string;
   task_identifier: string;
   description: string;
-  status: "active" | "inactive";
+  status: "active" | "inactive" | "disabled";
   verification_status: "verified" | "unverified";
   last_verified_at: string | null;
+  is_deleted: boolean;
   created_at: string;
   updated_at: string;
+  executions_count?: number;
+  success_rate?: number | null;
+  active_incidents_count?: number;
+  operational_status?: "CRITICAL" | "DEGRADED" | "HEALTHY";
 }
 
 export interface PaginatedJobs {

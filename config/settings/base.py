@@ -71,6 +71,7 @@ LOCAL_APPS = [
     "apps.alerts",
     "apps.incidents",
     "apps.notifications",
+    "apps.reliability",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -213,7 +214,7 @@ REST_FRAMEWORK: dict[str, Any] = {
         "rest_framework.filters.OrderingFilter",
     ],
     "DEFAULT_PAGINATION_CLASS": "apps.config_management.pagination.Pagination",
-    "PAGE_SIZE": 25,
+    "PAGE_SIZE": 15,
     "EXCEPTION_HANDLER": "apps.config_management.responses.custom_exception_handler",
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_RENDERER_CLASSES": [
@@ -275,6 +276,14 @@ CELERY_BEAT_SCHEDULE = {
     "recover-orphaned-deliveries": {
         "task": "notifications.recover_orphaned_deliveries",
         "schedule": crontab(minute="*/15"),  # Runs every 15 minutes
+    },
+    "evaluate-job-reliability": {
+        "task": "reliability.evaluate_reliability",
+        "schedule": crontab(minute="*"),  # Runs every minute
+    },
+    "recalculate-job-baselines": {
+        "task": "reliability.recalculate_baselines",
+        "schedule": crontab(hour="*/6", minute=0),  # Runs every 6 hours
     },
 }
 

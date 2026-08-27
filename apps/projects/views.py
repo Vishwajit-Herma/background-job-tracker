@@ -10,9 +10,11 @@ from apps.executions.serializers import (
     ProjectAnalyticsSerializer,
     TrendResponseSerializer,
 )
+from apps.incidents.models import Incident
 from .models import APIKey, Project
 from .permissions import APIKeyPermission, ProjectPermission
 from .serializers import APIKeyCreateSerializer, APIKeySerializer, ProjectSerializer
+from django.db.models import Count, Q, Exists, OuterRef
 
 
 class ProjectViewSet(CustomBaseViewSet):
@@ -35,6 +37,31 @@ class ProjectViewSet(CustomBaseViewSet):
         # Use all_objects if the action is 'restore' to allow finding deleted records
         base_qs = (
             Project.all_objects if getattr(self, "action", None) == "restore" else Project.objects
+        )
+
+        critical_incidents = Incident.objects.filter(
+            project=OuterRef("pk"),
+            status__in=["OPEN", "ACKNOWLEDGED"],
+            severity="CRITICAL",
+        ).filter(Q(job__isnull=True) | Q(job__is_deleted=False))
+
+        base_qs = base_qs.annotate(
+            jobs_count=Count("jobs", filter=Q(jobs__is_deleted=False), distinct=True),
+            executions_count=Count(
+                "jobs__executions", filter=Q(jobs__is_deleted=False), distinct=True
+            ),
+            success_count=Count(
+                "jobs__executions",
+                filter=Q(jobs__executions__status="success", jobs__is_deleted=False),
+                distinct=True,
+            ),
+            active_incidents_count=Count(
+                "incidents",
+                filter=Q(incidents__status__in=["OPEN", "ACKNOWLEDGED"])
+                & (Q(incidents__job__isnull=True) | Q(incidents__job__is_deleted=False)),
+                distinct=True,
+            ),
+            has_critical_incident=Exists(critical_incidents),
         )
 
         if self.request.user.is_staff:

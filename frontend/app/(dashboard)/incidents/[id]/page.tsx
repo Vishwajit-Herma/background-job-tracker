@@ -18,7 +18,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { 
   Loader2, ArrowLeft, AlertTriangle, CheckCircle2, 
-  Clock, Server, Activity, User, MessageSquare, ListTree
+  Clock, Server, Activity, User, MessageSquare, ListTree, ShieldCheck
 } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@/hooks/use-auth";
@@ -144,6 +144,11 @@ export default function IncidentDetailsPage() {
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold tracking-tight">INC-{incident.id}</h1>
             {getStatusBadge(incident.status)}
+            {incident.status === "RESOLVED" && (
+              <Badge variant="outline" className="bg-muted/50 text-muted-foreground font-medium text-xs">
+                {incident.resolution_type === "AUTOMATIC" ? "Auto-resolved" : "Manually resolved"}
+              </Badge>
+            )}
             <Badge variant="outline" className={incident.severity === "CRITICAL" ? "text-destructive border-destructive" : ""}>
               {incident.severity}
             </Badge>
@@ -181,7 +186,7 @@ export default function IncidentDetailsPage() {
             </Button>
           )}
           {hasManagePermission && incident.status === "RESOLVED" && (
-            <Button onClick={() => reopenMutation.mutate()} disabled={reopenMutation.isPending} variant="outline">
+            <Button onClick={() => { if(window.confirm("Are you sure you want to reopen this incident?")) reopenMutation.mutate(); }} disabled={reopenMutation.isPending} variant="outline">
               Reopen Incident
             </Button>
           )}
@@ -211,7 +216,8 @@ export default function IncidentDetailsPage() {
               <div>
                 <p className="text-xs text-muted-foreground font-medium uppercase mb-1">Alert Rule</p>
                 {alertRule ? (
-                  <Link href="/alerts" className="text-sm font-medium text-primary hover:underline flex items-center gap-1">
+                  <Link href="/alerts" className="text-sm font-medium text-primary hover:underline flex items-center gap-1.5 bg-primary/5 w-fit px-2 py-1 rounded-md border border-primary/20">
+                    <Activity className="h-3.5 w-3.5" />
                     {alertRule.metric.replace("_", " ")} &gt; {alertRule.threshold}
                   </Link>
                 ) : (
@@ -220,11 +226,51 @@ export default function IncidentDetailsPage() {
               </div>
             </div>
           </div>
+
+          {/* Reliability Finding Context Card if applicable */}
+          {(tm.reliability_finding_id || ["MISSED_EXECUTION", "STALLED_EXECUTION", "OVERDUE_EXECUTION"].includes(tm.metric_type || alertRule?.metric || "")) && (
+            <div className="rounded-xl border border-primary/20 bg-primary/5 p-5 shadow-sm space-y-3">
+              <h3 className="font-semibold flex items-center gap-2 text-primary">
+                <ShieldCheck className="h-4 w-4" /> Reliability Finding
+              </h3>
+              <div className="space-y-2 text-xs">
+                <div>
+                  <p className="text-muted-foreground uppercase font-medium text-[10px]">Condition</p>
+                  <p className="font-semibold text-foreground text-sm mt-0.5">
+                    {(tm.condition_type || tm.metric_type || alertRule?.metric || "Reliability Violation").replace("_", " ")}
+                  </p>
+                </div>
+                {job && (
+                  <div>
+                    <p className="text-muted-foreground uppercase font-medium text-[10px]">Job</p>
+                    <p className="font-semibold text-foreground text-sm mt-0.5">{job.name}</p>
+                  </div>
+                )}
+                {incident.job && (
+                  <div className="pt-2">
+                    <Link href={`/jobs/${incident.job}/reliability`}>
+                      <Button size="sm" variant="default" className="w-full h-8 text-xs gap-1.5">
+                        <ShieldCheck className="h-3.5 w-3.5" /> View Job Reliability
+                      </Button>
+                    </Link>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
           {hasManagePermission && (
             <div className="rounded-xl border bg-card p-5 shadow-sm">
               <h3 className="font-semibold mb-4 flex items-center gap-2"><User className="h-4 w-4 text-primary" /> Assignment</h3>
               <div className="space-y-3">
                 <p className="text-sm text-muted-foreground">Assign this incident to a team member to investigate.</p>
+                {incident.assigned_to_name && (
+                  <div className="flex items-center gap-2 p-2.5 bg-muted/30 border rounded-md">
+                    <User className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm font-medium text-foreground">
+                      Assigned to: {isAssignee ? "You" : incident.assigned_to_name}
+                    </span>
+                  </div>
+                )}
                 <div className="flex gap-2">
                   <select 
                     className="flex h-9 w-full items-center justify-between whitespace-nowrap rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
@@ -345,14 +391,20 @@ export default function IncidentDetailsPage() {
                   className="mb-3 resize-none"
                   rows={3}
                 />
-                <Button 
-                  onClick={() => noteMutation.mutate(newNote)}
-                  disabled={!newNote.trim() || noteMutation.isPending}
-                  className="w-full sm:w-auto"
-                >
-                  {noteMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : null}
-                  Post Note
-                </Button>
+                <div className="flex items-center justify-between mt-3">
+                  <span className="text-xs text-muted-foreground flex items-center gap-1.5 bg-muted/50 px-2 py-1 rounded">
+                    <AlertTriangle className="h-3.5 w-3.5" /> 
+                    Notes are immutable once saved
+                  </span>
+                  <Button 
+                    onClick={() => noteMutation.mutate(newNote)}
+                    disabled={!newNote.trim() || noteMutation.isPending}
+                    className="w-full sm:w-auto"
+                  >
+                    {noteMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : null}
+                    Post Note
+                  </Button>
+                </div>
               </div>
             </TabsContent>
           </Tabs>
