@@ -38,6 +38,8 @@ def calculate_job_baseline(job, sample_window_days=7):
     2. Runtime Baseline: Specifically represents the runtime distribution of
        successfully completed executions (Execution.Status.SUCCESS). Failed execution
        runtimes are monitored via error rate and execution failure alerts.
+    3. Rate & Volume Baseline: Derives baseline failure rate, retry rate, and average
+       hourly execution volume across the exact same sample window population.
     """
     now = timezone.now()
     start_dt = now - timedelta(days=sample_window_days)
@@ -48,7 +50,7 @@ def calculate_job_baseline(job, sample_window_days=7):
             created_at__gte=start_dt,
         )
         .order_by("created_at")
-        .values("id", "started_at", "created_at", "duration_ms", "status")
+        .values("id", "started_at", "created_at", "duration_ms", "status", "retry_count")
     )
 
     total_count = executions.count()
@@ -67,6 +69,9 @@ def calculate_job_baseline(job, sample_window_days=7):
                 "p50_runtime_ms": None,
                 "p95_runtime_ms": None,
                 "p99_runtime_ms": None,
+                "failure_rate": None,
+                "retry_rate": None,
+                "avg_hourly_volume": None,
                 "metrics_summary": {"reason": "Insufficient executions in sample window (< 3)."},
             },
         )
@@ -94,6 +99,15 @@ def calculate_job_baseline(job, sample_window_days=7):
     ]
     durations.sort()
 
+    failed_count = sum(1 for e in executions if e["status"] == Execution.Status.FAILED)
+    retried_count = sum(1 for e in executions if (e.get("retry_count") or 0) > 0)
+
+    failure_rate = round((failed_count / total_count * 100), 2) if total_count > 0 else 0.0
+    retry_rate = round((retried_count / total_count * 100), 2) if total_count > 0 else 0.0
+
+    hours_in_window = sample_window_days * 24.0
+    avg_hourly_volume = round(total_count / hours_in_window, 2) if hours_in_window > 0 else 0.0
+
     is_sufficient = len(intervals) >= 2 and total_count >= 3
 
     avg_interval = round(statistics.mean(intervals), 2) if intervals else None
@@ -112,6 +126,8 @@ def calculate_job_baseline(job, sample_window_days=7):
         "total_executions": total_count,
         "intervals_count": len(intervals),
         "durations_count": len(durations),
+        "failed_count": failed_count,
+        "retried_count": retried_count,
     }
 
     baseline, _ = JobBaseline.objects.update_or_create(
@@ -128,10 +144,92 @@ def calculate_job_baseline(job, sample_window_days=7):
             "p50_runtime_ms": p50_runtime,
             "p95_runtime_ms": p95_runtime,
             "p99_runtime_ms": p99_runtime,
+            "failure_rate": failure_rate,
+            "retry_rate": retry_rate,
+            "avg_hourly_volume": avg_hourly_volume,
             "metrics_summary": metrics_summary,
         },
     )
     return baseline
+
+
+def compute_adaptive_thresholds(baseline):
+    """
+    Computes baseline-derived adaptive thresholds with safety bounds (clamping).
+    """
+    if not baseline or not baseline.is_sufficient:
+        return {
+            "failure_rate": None,
+            "retry_rate": None,
+            "p95_duration_ms": None,
+            "is_available": False,
+            "source": "UNAVAILABLE",
+        }
+
+    base_fr = baseline.failure_rate if baseline.failure_rate is not None else 0.0
+    adaptive_fr = round(min(max(max(base_fr, 1.0) * 3.0, 5.0), 50.0), 2)
+
+    base_rr = baseline.retry_rate if baseline.retry_rate is not None else 0.0
+    adaptive_rr = round(min(max(max(base_rr, 1.0) * 3.0, 5.0), 50.0), 2)
+
+    base_p95 = baseline.p95_runtime_ms
+    if base_p95 is not None and base_p95 > 0:
+        min_bound = base_p95 + 1000.0
+        max_bound = max(base_p95 * 10.0, min_bound)
+        calculated = base_p95 * 2.0
+        adaptive_p95 = round(min(max(calculated, min_bound), max_bound), 2)
+    else:
+        adaptive_p95 = None
+
+    return {
+        "failure_rate": adaptive_fr,
+        "retry_rate": adaptive_rr,
+        "p95_duration_ms": adaptive_p95,
+        "is_available": True,
+        "source": "BASELINE",
+    }
+
+
+def calculate_window_observation_metrics(job, window_minutes=60, now=None):
+    """
+    Calculates observed execution behavior metrics (failure rate, retry rate,
+    P95 duration, volume/sample count) over a rolling observation window.
+    Shared between anomaly evaluation and reliability overview to guarantee identical semantics.
+    """
+    if now is None:
+        now = timezone.now()
+    window_start = now - timedelta(minutes=window_minutes)
+    executions = list(
+        Execution.objects.filter(
+            job=job,
+            created_at__gte=window_start,
+        ).values("id", "status", "retry_count", "duration_ms")
+    )
+    total = len(executions)
+    failed_count = sum(1 for e in executions if e["status"] == Execution.Status.FAILED)
+    retried_count = sum(1 for e in executions if (e.get("retry_count") or 0) > 0)
+    durations = [
+        float(e["duration_ms"])
+        for e in executions
+        if e["duration_ms"] is not None and e["status"] == Execution.Status.SUCCESS
+    ]
+    durations.sort()
+    p95 = _calculate_percentile(durations, 0.95) if durations else None
+
+    failure_rate = round(failed_count / total * 100, 2) if total > 0 else 0.0
+    retry_rate = round(retried_count / total * 100, 2) if total > 0 else 0.0
+
+    return {
+        "window_minutes": window_minutes,
+        "window_start": window_start,
+        "total": total,
+        "failed_count": failed_count,
+        "retried_count": retried_count,
+        "durations": durations,
+        "p95": p95,
+        "failure_rate": failure_rate,
+        "retry_rate": retry_rate,
+    }
 
 
 def get_job_reliability_overview(job):
@@ -184,25 +282,47 @@ def get_job_reliability_overview(job):
         ReliabilityFinding.objects.filter(
             job=job,
             status=ReliabilityFinding.Status.ACTIVE,
-        ).order_by("-detected_at")
+        )
     )
 
-    # Current reliability state
-    if any(
+    active_stalled = any(
         f.condition_type == ReliabilityFinding.ConditionType.STALLED_EXECUTION
         for f in active_findings
-    ):
-        current_state = "STALLED"
-    elif any(
+    )
+    active_overdue = any(
         f.condition_type == ReliabilityFinding.ConditionType.OVERDUE_EXECUTION
         for f in active_findings
-    ):
-        current_state = "OVERDUE"
-    elif any(
+    )
+    active_missed = any(
         f.condition_type == ReliabilityFinding.ConditionType.MISSED_EXECUTION
         for f in active_findings
-    ):
+    )
+
+    # Anomaly findings
+    active_anomalies = [
+        f
+        for f in active_findings
+        if f.condition_type
+        in [
+            ReliabilityFinding.ConditionType.FAILURE_RATE_ANOMALY,
+            ReliabilityFinding.ConditionType.RETRY_RATE_ANOMALY,
+            ReliabilityFinding.ConditionType.DURATION_ANOMALY,
+            ReliabilityFinding.ConditionType.EXECUTION_VOLUME_ANOMALY,
+        ]
+    ]
+
+    # Current reliability state with strict precedence:
+    # DISABLED > STALLED > OVERDUE > MISSED > ANOMALOUS > HEALTHY
+    if expectation and not expectation.is_enabled:
+        current_state = "DISABLED"
+    elif active_stalled:
+        current_state = "STALLED"
+    elif active_overdue:
+        current_state = "OVERDUE"
+    elif active_missed or (missed_after_at and now > missed_after_at):
         current_state = "MISSED"
+    elif active_anomalies:
+        current_state = "ANOMALOUS"
     else:
         current_state = "HEALTHY"
 
@@ -212,6 +332,61 @@ def get_job_reliability_overview(job):
         overdue_by_seconds = int((now - missed_after_at).total_seconds())
 
     recent_findings = list(ReliabilityFinding.objects.filter(job=job).order_by("-detected_at")[:10])
+
+    # Behavior metrics in observation window (last 60m) using shared helper
+    metrics = calculate_window_observation_metrics(job, window_minutes=60, now=now)
+    cur_total = metrics["total"]
+    cur_fr = metrics["failure_rate"]
+    cur_rr = metrics["retry_rate"]
+    cur_p95 = metrics["p95"]
+
+    adaptive_thresholds = compute_adaptive_thresholds(baseline)
+
+    behavior_comparison = {
+        "observation_window_minutes": 60,
+        "sample_count": cur_total,
+        "failure_rate": {
+            "current": cur_fr if cur_total > 0 else None,
+            "baseline": baseline.failure_rate if (baseline and baseline.is_sufficient) else None,
+            "adaptive_threshold": adaptive_thresholds["failure_rate"],
+            "deviation_ratio": (
+                round(cur_fr / max(baseline.failure_rate or 1.0, 1.0), 2)
+                if (baseline and baseline.is_sufficient and cur_total > 0)
+                else None
+            ),
+        },
+        "retry_rate": {
+            "current": cur_rr if cur_total > 0 else None,
+            "baseline": baseline.retry_rate if (baseline and baseline.is_sufficient) else None,
+            "adaptive_threshold": adaptive_thresholds["retry_rate"],
+            "deviation_ratio": (
+                round(cur_rr / max(baseline.retry_rate or 1.0, 1.0), 2)
+                if (baseline and baseline.is_sufficient and cur_total > 0)
+                else None
+            ),
+        },
+        "p95_duration_ms": {
+            "current": cur_p95,
+            "baseline": baseline.p95_runtime_ms if (baseline and baseline.is_sufficient) else None,
+            "adaptive_threshold": adaptive_thresholds["p95_duration_ms"],
+            "deviation_ratio": (
+                round(cur_p95 / baseline.p95_runtime_ms, 2)
+                if (baseline and baseline.is_sufficient and cur_p95 and baseline.p95_runtime_ms)
+                else None
+            ),
+        },
+        "hourly_volume": {
+            "current": cur_total,
+            "baseline": baseline.avg_hourly_volume
+            if (baseline and baseline.is_sufficient)
+            else None,
+            "deviation_ratio": (
+                round(cur_total / max(baseline.avg_hourly_volume or 1.0, 1.0), 2)
+                if (baseline and baseline.is_sufficient and baseline.avg_hourly_volume)
+                else None
+            ),
+        },
+    }
 
     return {
         "job_id": job.id,
@@ -236,7 +411,10 @@ def get_job_reliability_overview(job):
         if latest_exec
         else None,
         "active_findings": active_findings,
+        "active_anomalies": active_anomalies,
         "recent_findings": recent_findings,
         "baseline": baseline,
         "expectation": expectation,
+        "adaptive_thresholds": adaptive_thresholds,
+        "behavior_comparison": behavior_comparison,
     }

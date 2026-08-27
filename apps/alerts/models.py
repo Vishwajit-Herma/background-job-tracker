@@ -14,6 +14,10 @@ class AlertRule(models.Model):
         MISSED_EXECUTION = "MISSED_EXECUTION", _("Missed Execution")
         STALLED_EXECUTION = "STALLED_EXECUTION", _("Stalled Execution")
         OVERDUE_EXECUTION = "OVERDUE_EXECUTION", _("Overdue Execution")
+        FAILURE_RATE_ANOMALY = "FAILURE_RATE_ANOMALY", _("Failure Rate Anomaly")
+        RETRY_RATE_ANOMALY = "RETRY_RATE_ANOMALY", _("Retry Rate Anomaly")
+        DURATION_ANOMALY = "DURATION_ANOMALY", _("Duration Anomaly")
+        EXECUTION_VOLUME_ANOMALY = "EXECUTION_VOLUME_ANOMALY", _("Execution Volume Anomaly")
 
     class Severity(models.TextChoices):
         DEGRADED = "DEGRADED", _("Degraded")
@@ -35,12 +39,15 @@ class AlertRule(models.Model):
     )
     metric = models.CharField(
         _("metric"),
-        max_length=20,
+        max_length=30,
         choices=MetricType.choices,
     )
     threshold = models.FloatField(
         _("threshold"),
-        help_text=_("Percentage (0-100) for rates, milliseconds for duration."),
+        default=0.0,
+        help_text=_(
+            "Percentage (0-100) for rates, milliseconds for duration. Ignored for anomaly alerts."
+        ),
     )
     window_minutes = models.PositiveIntegerField(
         _("window in minutes"),
@@ -90,6 +97,9 @@ class AlertRule(models.Model):
                     {"job": _("Cannot create an alert rule for an inactive or deleted job.")}
                 )
 
+        if self.threshold is None:
+            self.threshold = 0.0
+
         # Validate threshold based on metric type
         if self.metric in [self.MetricType.FAILURE_RATE, self.MetricType.RETRY_RATE]:
             if not (0 <= self.threshold <= 100):
@@ -106,9 +116,13 @@ class AlertRule(models.Model):
                 self.MetricType.MISSED_EXECUTION,
                 self.MetricType.STALLED_EXECUTION,
                 self.MetricType.OVERDUE_EXECUTION,
+                self.MetricType.FAILURE_RATE_ANOMALY,
+                self.MetricType.RETRY_RATE_ANOMALY,
+                self.MetricType.DURATION_ANOMALY,
+                self.MetricType.EXECUTION_VOLUME_ANOMALY,
             ]
             and self.threshold < 0
         ):
             raise ValidationError(
-                {"threshold": _("Threshold for reliability metrics must be non-negative.")}
+                {"threshold": _("Threshold for reliability/anomaly metrics must be non-negative.")}
             )

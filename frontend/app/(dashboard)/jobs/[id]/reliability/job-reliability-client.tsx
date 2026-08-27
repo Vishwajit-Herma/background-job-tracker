@@ -7,6 +7,7 @@ import { JobHeader } from "@/components/bjt/jobs/job-header";
 import { CurrentStatusCard } from "@/components/bjt/reliability/current-status-card";
 import { ExpectationCard } from "@/components/bjt/reliability/expectation-card";
 import { BaselineCard } from "@/components/bjt/reliability/baseline-card";
+import { BehaviorAnomalyCard } from "@/components/bjt/reliability/behavior-anomaly-card";
 import { ReliabilityActivity } from "@/components/bjt/reliability/reliability-activity";
 import { ReliabilityPageSkeleton } from "@/components/bjt/reliability/reliability-skeletons";
 import { ErrorState } from "@/components/bjt/states";
@@ -71,6 +72,9 @@ export function JobReliabilityClient({ jobId }: JobReliabilityClientProps) {
         <CurrentStatusCard reliability={reliability} />
         <ExpectationCard reliability={reliability} canManage={canManage} />
       </div>
+
+      {/* Intelligent Anomaly & Behavior Section */}
+      <BehaviorAnomalyCard reliability={reliability} />
 
       {/* Baseline Section */}
       <BaselineCard jobId={jobId} baseline={reliability.baseline} canManage={canManage} />

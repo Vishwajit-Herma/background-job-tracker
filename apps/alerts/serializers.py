@@ -3,6 +3,8 @@ from .models import AlertRule
 
 
 class AlertRuleSerializer(serializers.ModelSerializer):
+    threshold = serializers.FloatField(required=False, default=0.0)
+
     class Meta:
         model = AlertRule
         fields = [
@@ -50,14 +52,34 @@ class AlertRuleSerializer(serializers.ModelSerializer):
             threshold = self.instance.threshold
 
         if metric in [AlertRule.MetricType.FAILURE_RATE, AlertRule.MetricType.RETRY_RATE]:
+            if threshold is None:
+                raise serializers.ValidationError(
+                    {"threshold": "Threshold is required for rate alerts."}
+                )
             if not (0 <= threshold <= 100):
                 raise serializers.ValidationError(
                     {"threshold": "Threshold for rates must be a percentage between 0 and 100."}
                 )
-        elif metric == AlertRule.MetricType.P95_DURATION and threshold <= 0:
-            raise serializers.ValidationError(
-                {"threshold": "Threshold for duration must be greater than 0 milliseconds."}
-            )
+        elif metric == AlertRule.MetricType.P95_DURATION:
+            if threshold is None or threshold <= 0:
+                raise serializers.ValidationError(
+                    {"threshold": "Threshold for duration must be greater than 0 milliseconds."}
+                )
+        elif metric in [
+            AlertRule.MetricType.MISSED_EXECUTION,
+            AlertRule.MetricType.STALLED_EXECUTION,
+            AlertRule.MetricType.OVERDUE_EXECUTION,
+            AlertRule.MetricType.FAILURE_RATE_ANOMALY,
+            AlertRule.MetricType.RETRY_RATE_ANOMALY,
+            AlertRule.MetricType.DURATION_ANOMALY,
+            AlertRule.MetricType.EXECUTION_VOLUME_ANOMALY,
+        ]:
+            if threshold is None:
+                data["threshold"] = 0.0
+            elif threshold < 0:
+                raise serializers.ValidationError(
+                    {"threshold": "Threshold for reliability/anomaly alerts must be non-negative."}
+                )
 
         return data
 

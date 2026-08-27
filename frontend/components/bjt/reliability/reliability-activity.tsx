@@ -22,8 +22,16 @@ function formatConditionType(type: string): string {
       return "Stalled Execution";
     case "OVERDUE_EXECUTION":
       return "Queue Overdue";
+    case "FAILURE_RATE_ANOMALY":
+      return "Failure Rate Anomaly";
+    case "RETRY_RATE_ANOMALY":
+      return "Retry Rate Anomaly";
+    case "DURATION_ANOMALY":
+      return "Duration Anomaly";
+    case "EXECUTION_VOLUME_ANOMALY":
+      return "Execution Volume Anomaly";
     default:
-      return type.replace("_", " ");
+      return type.replace(/_/g, " ");
   }
 }
 

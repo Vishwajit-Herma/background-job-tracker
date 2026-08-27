@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { ReliabilityState } from "@/lib/api/reliability";
 import { cn } from "@/lib/utils";
-import { CheckCircle2, AlertTriangle, Clock, AlertCircle, ShieldOff } from "lucide-react";
+import { CheckCircle2, AlertTriangle, Clock, AlertCircle, ShieldOff, Zap } from "lucide-react";
 
 interface ReliabilityBadgeProps {
   state: ReliabilityState | "DISABLED";
@@ -30,6 +30,13 @@ const STATE_CONFIG: Record<
     variantClass: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20",
     dotClass: "bg-emerald-500",
     icon: CheckCircle2,
+  },
+  ANOMALOUS: {
+    label: "Anomalous",
+    description: "Statistical behavior anomaly detected (failure rate, retry rate, duration, or volume deviation from baseline).",
+    variantClass: "bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/20 hover:bg-purple-500/20",
+    dotClass: "bg-purple-500 animate-pulse",
+    icon: Zap,
   },
   MISSED: {
     label: "Missed",

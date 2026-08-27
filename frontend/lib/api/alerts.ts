@@ -1,10 +1,22 @@
 import { apiClient } from "./client";
 
+export type AlertMetricType =
+  | "FAILURE_RATE"
+  | "RETRY_RATE"
+  | "P95_DURATION"
+  | "MISSED_EXECUTION"
+  | "STALLED_EXECUTION"
+  | "OVERDUE_EXECUTION"
+  | "FAILURE_RATE_ANOMALY"
+  | "RETRY_RATE_ANOMALY"
+  | "DURATION_ANOMALY"
+  | "EXECUTION_VOLUME_ANOMALY";
+
 export interface AlertRule {
   id: number;
   project: number;
   job: number | null;
-  metric: "FAILURE_RATE" | "RETRY_RATE" | "P95_DURATION";
+  metric: AlertMetricType;
   threshold: number;
   window_minutes: number;
   severity: "DEGRADED" | "CRITICAL";
@@ -16,9 +28,9 @@ export interface AlertRule {
 export interface CreateAlertRulePayload {
   project: number;
   job?: number | null;
-  metric: "FAILURE_RATE" | "RETRY_RATE" | "P95_DURATION";
-  threshold: number;
-  window_minutes: number;
+  metric: AlertMetricType;
+  threshold?: number;
+  window_minutes?: number;
   severity: "DEGRADED" | "CRITICAL";
   is_active?: boolean;
 }

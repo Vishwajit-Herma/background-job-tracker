@@ -73,6 +73,9 @@ class JobBaselineSerializer(serializers.ModelSerializer):
             "p50_runtime_ms",
             "p95_runtime_ms",
             "p99_runtime_ms",
+            "failure_rate",
+            "retry_rate",
+            "avg_hourly_volume",
             "metrics_summary",
             "calculated_at",
         ]
@@ -127,6 +130,30 @@ class LatestExecutionSerializer(serializers.Serializer):
     last_event_at = serializers.CharField()
 
 
+class AdaptiveThresholdsSerializer(serializers.Serializer):
+    failure_rate = serializers.FloatField(allow_null=True)
+    retry_rate = serializers.FloatField(allow_null=True)
+    p95_duration_ms = serializers.FloatField(allow_null=True)
+    is_available = serializers.BooleanField()
+    source = serializers.CharField()
+
+
+class BehaviorMetricComparisonSerializer(serializers.Serializer):
+    current = serializers.FloatField(allow_null=True)
+    baseline = serializers.FloatField(allow_null=True)
+    adaptive_threshold = serializers.FloatField(allow_null=True, required=False)
+    deviation_ratio = serializers.FloatField(allow_null=True)
+
+
+class BehaviorComparisonSerializer(serializers.Serializer):
+    observation_window_minutes = serializers.IntegerField()
+    sample_count = serializers.IntegerField()
+    failure_rate = BehaviorMetricComparisonSerializer()
+    retry_rate = BehaviorMetricComparisonSerializer()
+    p95_duration_ms = BehaviorMetricComparisonSerializer()
+    hourly_volume = BehaviorMetricComparisonSerializer()
+
+
 class JobReliabilityOverviewSerializer(serializers.Serializer):
     job_id = serializers.IntegerField()
     job_name = serializers.CharField()
@@ -143,9 +170,12 @@ class JobReliabilityOverviewSerializer(serializers.Serializer):
     overdue_by_seconds = serializers.IntegerField()
     latest_execution = LatestExecutionSerializer(allow_null=True)
     active_findings = ReliabilityFindingSerializer(many=True)
+    active_anomalies = ReliabilityFindingSerializer(many=True)
     recent_findings = ReliabilityFindingSerializer(many=True)
     baseline = JobBaselineSerializer(allow_null=True)
     expectation = JobExpectationSerializer(allow_null=True)
+    adaptive_thresholds = AdaptiveThresholdsSerializer()
+    behavior_comparison = BehaviorComparisonSerializer()
 
 
 class JobReliabilitySummarySerializer(serializers.Serializer):
@@ -171,6 +201,7 @@ class ProjectReliabilityOverviewSerializer(serializers.Serializer):
     missed_jobs_count = serializers.IntegerField()
     stalled_jobs_count = serializers.IntegerField()
     overdue_jobs_count = serializers.IntegerField()
+    anomalous_jobs_count = serializers.IntegerField()
     active_findings_count = serializers.IntegerField()
     jobs = JobReliabilitySummarySerializer(many=True)
 

@@ -218,7 +218,7 @@ export default function IncidentDetailsPage() {
                 {alertRule ? (
                   <Link href="/alerts" className="text-sm font-medium text-primary hover:underline flex items-center gap-1.5 bg-primary/5 w-fit px-2 py-1 rounded-md border border-primary/20">
                     <Activity className="h-3.5 w-3.5" />
-                    {alertRule.metric.replace("_", " ")} &gt; {alertRule.threshold}
+                    {alertRule.metric.replace(/_/g, " ")} {alertRule.metric.includes("ANOMALY") ? "(Anomaly)" : `> ${alertRule.threshold}`}
                   </Link>
                 ) : (
                   <p className="text-sm font-mono bg-muted px-2 py-1 rounded inline-block">{incident.alert_rule || "-"}</p>
@@ -228,7 +228,15 @@ export default function IncidentDetailsPage() {
           </div>
 
           {/* Reliability Finding Context Card if applicable */}
-          {(tm.reliability_finding_id || ["MISSED_EXECUTION", "STALLED_EXECUTION", "OVERDUE_EXECUTION"].includes(tm.metric_type || alertRule?.metric || "")) && (
+          {(tm.reliability_finding_id || [
+            "MISSED_EXECUTION",
+            "STALLED_EXECUTION",
+            "OVERDUE_EXECUTION",
+            "FAILURE_RATE_ANOMALY",
+            "RETRY_RATE_ANOMALY",
+            "DURATION_ANOMALY",
+            "EXECUTION_VOLUME_ANOMALY",
+          ].includes(tm.metric_type || alertRule?.metric || "") || (alertRule?.metric && alertRule.metric.includes("ANOMALY"))) && (
             <div className="rounded-xl border border-primary/20 bg-primary/5 p-5 shadow-sm space-y-3">
               <h3 className="font-semibold flex items-center gap-2 text-primary">
                 <ShieldCheck className="h-4 w-4" /> Reliability Finding
@@ -237,7 +245,7 @@ export default function IncidentDetailsPage() {
                 <div>
                   <p className="text-muted-foreground uppercase font-medium text-[10px]">Condition</p>
                   <p className="font-semibold text-foreground text-sm mt-0.5">
-                    {(tm.condition_type || tm.metric_type || alertRule?.metric || "Reliability Violation").replace("_", " ")}
+                    {(tm.condition_type || tm.metric_type || alertRule?.metric || "Reliability Violation").replace(/_/g, " ")}
                   </p>
                 </div>
                 {job && (
