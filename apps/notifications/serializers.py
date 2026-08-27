@@ -183,12 +183,33 @@ class InAppNotificationSerializer(serializers.ModelSerializer):
     Serializer for InAppNotification model. Read-only.
     """
 
+    incident_id = serializers.IntegerField(
+        source="incident_event.incident_id", read_only=True, allow_null=True
+    )
+    event_type = serializers.CharField(
+        source="incident_event.event_type", read_only=True, allow_null=True
+    )
+    incident_severity = serializers.CharField(
+        source="incident_event.incident.severity", read_only=True, allow_null=True
+    )
+    project_name = serializers.CharField(
+        source="incident_event.incident.project.name", read_only=True, allow_null=True
+    )
+    job_name = serializers.CharField(
+        source="incident_event.incident.job.name", read_only=True, allow_null=True
+    )
+
     class Meta:
         model = InAppNotification
         fields = [
             "id",
             "recipient",
             "incident_event",
+            "incident_id",
+            "event_type",
+            "incident_severity",
+            "project_name",
+            "job_name",
             "title",
             "message",
             "is_read",

@@ -2,20 +2,22 @@
 
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getPaginatedAlertRules, deleteAlertRule, AlertRule } from "@/lib/api/alerts";
+import { getPaginatedAlertRules, deleteAlertRule, updateAlertRule, AlertRule } from "@/lib/api/alerts";
 import { getProjects, Project } from "@/lib/api/projects";
 import { getJobs, Job } from "@/lib/api/jobs";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { BellRing, Loader2, Plus, MoreHorizontal, Edit, Trash, Activity } from "lucide-react";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { BellRing, Loader2, Plus, MoreHorizontal, Edit, Trash, Activity, Power, PowerOff } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertRuleModal } from "@/components/bjt/alerts/alert-rule-modal";
 import { PaginationControls } from "@/components/bjt/pagination";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search } from "lucide-react";
 import { useDebounce } from "@/hooks/use-debounce";
+import { useWorkspace } from "@/hooks/use-workspace";
+import { useAuth } from "@/hooks/use-auth";
 
 export default function AlertsPage() {
   const queryClient = useQueryClient();
@@ -23,8 +25,15 @@ export default function AlertsPage() {
   const [ruleToEdit, setRuleToEdit] = useState<AlertRule | null>(null);
   const [page, setPage] = useState(1);
 
-  const { data: projects = [] } = useQuery<Project[]>({ queryKey: ["projects"], queryFn: () => getProjects() });
-  const { data: jobs = [] } = useQuery({ queryKey: ["jobs"], queryFn: () => getJobs() });
+  const { user } = useAuth();
+  const isGlobalStaff = user?.is_staff || user?.is_superuser;
+  const { projects, jobs, teamMap, projectMap, jobMap, isLoading: isLoadingWorkspace } = useWorkspace();
+
+  const manageableProjects = projects.filter(p => {
+    if (isGlobalStaff) return true;
+    const t = teamMap.get(p.team);
+    return t && (t.my_role === "admin" || t.my_role === "owner");
+  });
 
   const [search, setSearch] = useState("");
   const [ordering, setOrdering] = useState("-created_at");
@@ -47,9 +56,6 @@ export default function AlertsPage() {
     }
   }, [rules.length, isLoading, page]);
 
-  const projectMap = new Map<number, Project>(projects.map(p => [p.id, p]));
-  const jobMap = new Map<number, Job>(jobs.map(j => [j.id, j]));
-
   const deleteMutation = useMutation({
     mutationFn: deleteAlertRule,
     onSuccess: () => {
@@ -64,6 +70,20 @@ export default function AlertsPage() {
     if (confirm("Are you sure you want to delete this alert rule?")) {
       deleteMutation.mutate(id);
     }
+  };
+
+  const toggleMutation = useMutation({
+    mutationFn: ({ id, is_active }: { id: number, is_active: boolean }) => updateAlertRule(id, { is_active }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["alert-rules"] });
+    },
+    onError: () => {
+      alert("Failed to update alert rule");
+    },
+  });
+
+  const handleToggle = (rule: AlertRule) => {
+    toggleMutation.mutate({ id: rule.id, is_active: !rule.is_active });
   };
 
   const handleEdit = (rule: AlertRule) => {
@@ -94,9 +114,11 @@ export default function AlertsPage() {
             Configure thresholds to automatically generate incidents when jobs fail or degrade.
           </p>
         </div>
-        <Button onClick={() => { setRuleToEdit(null); setModalOpen(true); }}>
-          <Plus className="mr-2 h-4 w-4" /> Create Rule
-        </Button>
+        {manageableProjects.length > 0 && (
+          <Button onClick={() => { setRuleToEdit(null); setModalOpen(true); }}>
+            <Plus className="mr-2 h-4 w-4" /> Create Rule
+          </Button>
+        )}
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3 items-center justify-between bg-card p-3 rounded-md border">
@@ -182,13 +204,20 @@ export default function AlertsPage() {
               rules.map((rule) => {
                 const project = projectMap.get(rule.project);
                 const job = rule.job ? jobMap.get(rule.job) : null;
+                const t = project ? teamMap.get(project.team) : null;
+                const canManage = isGlobalStaff || (t && (t.my_role === "admin" || t.my_role === "owner"));
 
                 return (
                   <TableRow key={rule.id}>
                     <TableCell>
-                      <div className="flex flex-col">
-                        <span className="font-medium text-sm">
-                          {job ? job.name : "All Jobs (Project-level)"}
+                      <div className="flex flex-col gap-1 items-start">
+                        <span className="font-medium text-sm flex items-center gap-1.5">
+                          {job ? job.name : "All Jobs"}
+                          {job ? (
+                            <Badge variant="outline" className="text-[9px] px-1 h-4">Job-specific</Badge>
+                          ) : (
+                            <Badge variant="secondary" className="text-[9px] px-1 h-4 bg-primary/10 text-primary">Project-wide</Badge>
+                          )}
                         </span>
                         <span className="text-xs text-muted-foreground">
                           {project?.name || `Project #${rule.project}`}
@@ -197,10 +226,7 @@ export default function AlertsPage() {
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-col gap-1">
-                        <span className="font-medium text-sm">{formatMetric(rule.metric)}</span>
-                        <code className="text-xs text-muted-foreground bg-muted w-fit px-1.5 py-0.5 rounded">
-                          {formatCondition(rule)}
-                        </code>
+                        <span className="text-sm">Triggers when <strong>{formatMetric(rule.metric)}</strong> {formatCondition(rule)}</span>
                       </div>
                     </TableCell>
                     <TableCell>
@@ -210,23 +236,30 @@ export default function AlertsPage() {
                     </TableCell>
                     <TableCell>
                       <Badge variant={rule.is_active ? "outline" : "secondary"} className={rule.is_active ? "border-green-500/50 text-green-600 bg-green-500/10" : ""}>
-                        {rule.is_active ? "Active" : "Disabled"}
+                        {rule.is_active ? "Active" : "Inactive"}
                       </Badge>
                     </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger render={<Button variant="ghost" size="icon" className="h-8 w-8" />}>
-                          <MoreHorizontal className="h-4 w-4" />
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => handleEdit(rule)}>
-                            <Edit className="mr-2 h-4 w-4" /> Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleDelete(rule.id)} className="text-destructive">
-                            <Trash className="mr-2 h-4 w-4" /> Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                    <TableCell className="text-right">
+                      {canManage && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger render={<Button variant="ghost" size="icon" className="h-8 w-8" />}>
+                            <MoreHorizontal className="h-4 w-4" />
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleToggle(rule)} disabled={toggleMutation.isPending}>
+                              {rule.is_active ? <PowerOff className="mr-2 h-4 w-4" /> : <Power className="mr-2 h-4 w-4" />}
+                              {rule.is_active ? "Deactivate Rule" : "Activate Rule"}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleEdit(rule)}>
+                              <Edit className="mr-2 h-4 w-4" /> Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => handleDelete(rule.id)} className="text-destructive">
+                              <Trash className="mr-2 h-4 w-4" /> Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
                     </TableCell>
                   </TableRow>
                 );

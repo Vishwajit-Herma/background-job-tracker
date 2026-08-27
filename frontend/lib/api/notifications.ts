@@ -26,6 +26,11 @@ export interface InAppNotification {
   id: number;
   recipient: number;
   incident_event: number;
+  incident_id?: number | null;
+  event_type?: string | null;
+  incident_severity?: "DEGRADED" | "CRITICAL" | null;
+  project_name?: string | null;
+  job_name?: string | null;
   title: string;
   message: string;
   is_read: boolean;
@@ -42,11 +47,12 @@ export interface PaginatedInAppNotifications {
 
 export async function getInAppNotifications(
   page = 1,
-  filters: { search?: string; ordering?: string } = {}
+  filters: { search?: string; ordering?: string; is_read?: boolean } = {}
 ): Promise<PaginatedInAppNotifications> {
   const params = new URLSearchParams({ page: page.toString() });
   if (filters.search) params.append("search", filters.search);
   if (filters.ordering) params.append("ordering", filters.ordering);
+  if (filters.is_read !== undefined) params.append("is_read", filters.is_read.toString());
 
   const res = await apiClient.get<any>(`/notifications/in-app/?${params.toString()}`);
   const payload = res.data;

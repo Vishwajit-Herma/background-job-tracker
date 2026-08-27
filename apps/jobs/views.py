@@ -11,6 +11,8 @@ from apps.executions.serializers import (
     TrendResponseSerializer,
 )
 from apps.projects.models import Project
+from apps.incidents.models import Incident
+from django.db.models import Count, Q, Exists, OuterRef
 from .models import Job
 from .permissions import JobPermission
 from .serializers import (
@@ -48,6 +50,27 @@ class JobViewSet(CustomBaseViewSet):
         projects that the user is an active member of (via team membership).
         """
         base_qs = Job.all_objects if getattr(self, "action", None) == "restore" else Job.objects
+
+        critical_incidents = Incident.objects.filter(
+            job=OuterRef("pk"),
+            status__in=["OPEN", "ACKNOWLEDGED"],
+            severity="CRITICAL",
+        )
+
+        base_qs = base_qs.annotate(
+            executions_count=Count("executions", distinct=True),
+            success_count=Count(
+                "executions",
+                filter=Q(executions__status="success"),
+                distinct=True,
+            ),
+            active_incidents_count=Count(
+                "incidents",
+                filter=Q(incidents__status__in=["OPEN", "ACKNOWLEDGED"]),
+                distinct=True,
+            ),
+            has_critical_incident=Exists(critical_incidents),
+        )
 
         qs = base_qs.select_related("project", "created_by", "modified_by").filter(
             project__is_deleted=False,

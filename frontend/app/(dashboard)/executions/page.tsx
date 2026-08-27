@@ -11,7 +11,7 @@ import { getStatusBadgeVariant, getStatusIcon, formatDuration } from "@/componen
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { getExecutionEvents, Execution } from "@/lib/api/executions";
-import { AlertCircle, Server, AlertTriangle, CheckCircle2, RotateCw, XCircle, Clock, ChevronRight, ChevronLeft } from "lucide-react";
+import { AlertCircle, Server, AlertTriangle, CheckCircle2, RotateCw, XCircle, Clock, ChevronRight, ChevronLeft, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PaginationControls } from "@/components/bjt/pagination";
 import { Input } from "@/components/ui/input";
@@ -215,6 +215,7 @@ export default function ExecutionsPage() {
                 <TableHead>External ID</TableHead>
                 <TableHead>Duration</TableHead>
                 <TableHead>Started</TableHead>
+                <TableHead>Finished</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -248,9 +249,21 @@ export default function ExecutionsPage() {
                         </div>
                       </TableCell>
                       <TableCell className="py-3">
-                        <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono truncate max-w-[150px] inline-block">
-                          {execution.external_id}
-                        </code>
+                        <div className="flex items-center gap-1.5 group">
+                          <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono truncate max-w-[120px] inline-block" title={execution.external_id}>
+                            {execution.external_id}
+                          </code>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigator.clipboard.writeText(execution.external_id);
+                            }}
+                            className="opacity-0 group-hover:opacity-100 p-1 hover:bg-muted rounded text-muted-foreground transition-opacity"
+                            title="Copy full ID"
+                          >
+                            <Copy className="h-3 w-3" />
+                          </button>
+                        </div>
                       </TableCell>
                       <TableCell className="py-3 text-sm text-muted-foreground">
                         {formatDuration(execution.duration_ms)}
@@ -258,11 +271,14 @@ export default function ExecutionsPage() {
                       <TableCell className="py-3 text-sm text-muted-foreground">
                         {execution.started_at ? new Date(execution.started_at).toLocaleString() : "-"}
                       </TableCell>
+                      <TableCell className="py-3 text-sm text-muted-foreground">
+                        {execution.finished_at ? new Date(execution.finished_at).toLocaleString() : "-"}
+                      </TableCell>
                     </TableRow>
                     
                     {isExpanded && (
                       <TableRow>
-                        <TableCell colSpan={6} className="p-0 border-b">
+                        <TableCell colSpan={7} className="p-0 border-b">
                           <StandaloneExecutionDetails execution={execution} />
                         </TableCell>
                       </TableRow>

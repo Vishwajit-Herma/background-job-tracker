@@ -311,6 +311,7 @@ def get_project_analytics(project_id, start_dt, end_dt, base_qs=None):
     qs = base_qs if base_qs is not None else Execution.objects.all()
     qs = qs.filter(
         Q(job__project_id=project_id)
+        & Q(job__is_deleted=False)
         & (
             Q(started_at__gte=start_dt, started_at__lt=end_dt)
             | Q(started_at__isnull=True, created_at__gte=start_dt, created_at__lt=end_dt)
@@ -325,6 +326,7 @@ def get_project_analytics(project_id, start_dt, end_dt, base_qs=None):
     prev_qs = base_qs if base_qs is not None else Execution.objects.all()
     prev_qs = prev_qs.filter(
         Q(job__project_id=project_id)
+        & Q(job__is_deleted=False)
         & (
             Q(started_at__gte=prev_start_dt, started_at__lt=prev_end_dt)
             | Q(started_at__isnull=True, created_at__gte=prev_start_dt, created_at__lt=prev_end_dt)

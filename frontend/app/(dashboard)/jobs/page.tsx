@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, ListChecks, CheckCircle2, XCircle, Activity, Briefcase, Plus, MoreHorizontal, Pencil, Trash2, ToggleLeft, ToggleRight, Search } from "lucide-react";
+import { Loader2, ListChecks, CheckCircle2, XCircle, Activity, Briefcase, Plus, MoreHorizontal, Pencil, Trash2, ToggleLeft, ToggleRight, Search, HelpCircle } from "lucide-react";
 import { ExecutionsSheet } from "@/components/bjt/jobs/executions-sheet";
 import { JobFormModal, ConfirmDeleteJobModal } from "@/components/bjt/jobs/job-modals";
 import { useAuth } from "@/hooks/use-auth";
@@ -78,7 +78,10 @@ export default function JobsPage() {
   });
 
   const queryClient = useQueryClient();
-  const handleRefetch = () => queryClient.invalidateQueries({ queryKey: ["jobs"] });
+  const handleRefetch = () => {
+    queryClient.invalidateQueries({ queryKey: ["jobs"] });
+    queryClient.invalidateQueries({ queryKey: ["jobs-paginated"] });
+  };
 
   return (
     <div className="flex-1 space-y-6 p-8 pt-6">
@@ -165,6 +168,9 @@ export default function JobsPage() {
                 <TableHead>Project</TableHead>
                 <TableHead>Job Name</TableHead>
                 <TableHead>Task Identifier</TableHead>
+                <TableHead title="Real-time operational status (driven by active incidents).">Health <HelpCircle className="inline-block h-3 w-3 opacity-50 cursor-help mb-0.5" /></TableHead>
+                <TableHead>Executions</TableHead>
+                <TableHead>Success Rate</TableHead>
                 <TableHead>Verification</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right"></TableHead>
@@ -196,6 +202,21 @@ export default function JobsPage() {
                       <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono break-all max-w-[250px] inline-block truncate" title={job.task_identifier}>
                         {job.task_identifier}
                       </code>
+                    </TableCell>
+                    <TableCell className="py-3">
+                      {job.operational_status === "CRITICAL" ? (
+                        <Badge variant="destructive" className="bg-destructive/10 text-destructive border-destructive/20 text-[10px]">Critical</Badge>
+                      ) : job.operational_status === "DEGRADED" ? (
+                        <Badge variant="secondary" className="bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20 text-[10px]">Degraded</Badge>
+                      ) : (
+                        <Badge variant="outline" className="bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20 text-[10px]">Healthy</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="py-3 text-sm font-medium">
+                      {job.executions_count ? (job.executions_count > 999 ? (job.executions_count / 1000).toFixed(1) + 'k' : job.executions_count) : 0}
+                    </TableCell>
+                    <TableCell className="py-3 text-sm font-medium">
+                      {job.success_rate !== null && job.success_rate !== undefined ? `${job.success_rate}%` : "—"}
                     </TableCell>
                     <TableCell className="py-3">
                       {job.verification_status === "verified" ? (

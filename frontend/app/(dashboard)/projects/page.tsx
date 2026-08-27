@@ -61,10 +61,18 @@ import {
   Copy,
   CheckCheck,
   ShieldOff,
-  Eye,
   EyeOff,
   Users,
   Search,
+  Settings as SettingsIcon,
+  Archive,
+  ExternalLink,
+  Activity,
+  Bell,
+  AlertTriangle,
+  LayoutDashboard,
+  ListChecks,
+  HelpCircle,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -703,6 +711,28 @@ function APIKeysPanel({ project, canManage }: { project: Project; canManage: boo
 
 // ─── Project Row ──────────────────────────────────────────────────────────────
 
+function StatusBadge({ status }: { status?: "HEALTHY" | "DEGRADED" | "CRITICAL" }) {
+  if (status === "CRITICAL") {
+    return (
+      <Badge variant="destructive" className="bg-destructive/10 text-destructive border-destructive/20 text-[10px]">
+        Critical
+      </Badge>
+    );
+  }
+  if (status === "DEGRADED") {
+    return (
+      <Badge variant="secondary" className="bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20 text-[10px]">
+        Degraded
+      </Badge>
+    );
+  }
+  return (
+    <Badge variant="outline" className="bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20 text-[10px]">
+      Healthy
+    </Badge>
+  );
+}
+
 function ProjectRow({
   project,
   teamMap,
@@ -735,6 +765,16 @@ function ProjectRow({
     } catch {}
     setToggling(false);
   };
+
+  const navItems = [
+    { id: "overview", label: "Overview", icon: LayoutDashboard },
+    { id: "jobs", label: "Jobs", icon: ListChecks },
+    { id: "keys", label: "API Keys", icon: KeyRound },
+    { id: "analytics", label: "Analytics", icon: Activity, href: `/analytics?project=${project.id}` },
+    { id: "alerts", label: "Alerts", icon: Bell, href: `/alerts?project=${project.id}` },
+    { id: "incidents", label: "Incidents", icon: AlertTriangle, href: `/incidents?project=${project.id}` },
+    { id: "settings", label: "Settings", icon: SettingsIcon },
+  ];
 
   return (
     <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
@@ -778,14 +818,28 @@ function ProjectRow({
           </button>
         </div>
 
-        {/* Created date */}
-        <span className="text-xs text-muted-foreground hidden md:block shrink-0">
-          {new Date(project.created_at).toLocaleDateString()}
-        </span>
+        {/* KPIs */}
+        <div className="hidden lg:flex items-center gap-6 mr-4 text-sm text-muted-foreground shrink-0" title="These are all-time summary metrics. Analytics uses a selected time window.">
+          <div className="flex flex-col items-end">
+            <span className="font-medium text-foreground">{project.jobs_count ?? 0}</span>
+            <span className="text-xs">Jobs</span>
+          </div>
+          <div className="flex flex-col items-end">
+            <span className="font-medium text-foreground">
+              {project.executions_count ? (project.executions_count > 999 ? (project.executions_count / 1000).toFixed(1) + 'k' : project.executions_count) : 0}
+            </span>
+            <span className="text-xs">Runs</span>
+          </div>
+          <div className="flex flex-col items-end">
+            <span className="font-medium text-foreground">
+              {project.success_rate !== null && project.success_rate !== undefined ? `${project.success_rate}%` : "—"}
+            </span>
+            <span className="text-xs">Success Rate</span>
+          </div>
+        </div>
 
-        {/* Actions menu — admins/owners only */}
-        {canManage && (
-          <DropdownMenu>
+        {/* Actions menu */}
+        <DropdownMenu>
           <DropdownMenuTrigger
             render={
               <Button
@@ -798,33 +852,32 @@ function ProjectRow({
             <MoreHorizontal className="h-4 w-4" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => setEditOpen(true)}>
-              <Pencil className="mr-2 h-4 w-4" /> Edit
+            <DropdownMenuItem onClick={() => setExpanded(true)}>
+              <FolderOpen className="mr-2 h-4 w-4" /> Open
             </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={handleToggleStatus}
-              disabled={toggling}
-            >
-              {project.status === "active" ? (
-                <>
-                  <ToggleLeft className="mr-2 h-4 w-4" /> Deactivate
-                </>
-              ) : (
-                <>
-                  <ToggleRight className="mr-2 h-4 w-4" /> Activate
-                </>
-              )}
+            <DropdownMenuItem render={<a href={`/analytics?project=${project.id}`} />}>
+              <Activity className="mr-2 h-4 w-4" /> Analytics
             </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="text-destructive focus:text-destructive"
-              onClick={() => setDeleteOpen(true)}
-            >
-              <Trash2 className="mr-2 h-4 w-4" /> Delete
-            </DropdownMenuItem>
+            {canManage && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => { setExpanded(true); setActiveTab("settings"); }}>
+                  <SettingsIcon className="mr-2 h-4 w-4" /> Settings
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => { setExpanded(true); setActiveTab("keys"); }}>
+                  <KeyRound className="mr-2 h-4 w-4" /> API Keys
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive"
+                  onClick={() => setDeleteOpen(true)}
+                >
+                  <Archive className="mr-2 h-4 w-4" /> Archive
+                </DropdownMenuItem>
+              </>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
-        )}
       </div>
 
       {/* Expandable Panel */}
@@ -832,31 +885,85 @@ function ProjectRow({
         <div className="px-5 pb-5">
           {canManage ? (
             <div className="border-t mt-4 pt-4">
-              <div className="flex space-x-1 border-b mb-4">
-                <button
-                  onClick={() => setActiveTab("jobs")}
-                  className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
-                    activeTab === "jobs"
-                      ? "border-primary text-foreground"
-                      : "border-transparent text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  Jobs
-                </button>
-                <button
-                  onClick={() => setActiveTab("keys")}
-                  className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
-                    activeTab === "keys"
-                      ? "border-primary text-foreground"
-                      : "border-transparent text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  API Keys
-                </button>
+              <div className="flex gap-2 border-b overflow-x-auto pb-1 mb-4 hide-scrollbar">
+                {navItems.map((item) => {
+                  if (item.href) {
+                    return (
+                      <a
+                        key={item.id}
+                        href={item.href}
+                        className="px-3 py-1.5 text-sm font-medium transition-colors text-muted-foreground hover:text-foreground flex items-center gap-1.5 whitespace-nowrap"
+                      >
+                        <item.icon className="h-4 w-4" /> {item.label} <ExternalLink className="h-3 w-3 opacity-50" />
+                      </a>
+                    );
+                  }
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => setActiveTab(item.id as any)}
+                      className={`px-3 py-1.5 text-sm font-medium transition-colors border-b-2 -mb-[5px] flex items-center gap-1.5 whitespace-nowrap ${
+                        activeTab === item.id
+                          ? "border-primary text-foreground"
+                          : "border-transparent text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      <item.icon className="h-4 w-4" /> {item.label}
+                    </button>
+                  );
+                })}
               </div>
               
+              {activeTab === "overview" && (
+                <div className="py-4 space-y-4">
+                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                     <div className="border rounded-lg p-4 bg-muted/20">
+                       <p className="text-sm text-muted-foreground flex items-center gap-1.5" title="Real-time status based on active/open Incidents.">
+                         Operational Status
+                         <HelpCircle className="h-3.5 w-3.5 opacity-50 cursor-help" />
+                       </p>
+                       <p className="text-xl font-bold mt-1"><StatusBadge status={project.operational_status} /></p>
+                     </div>
+                     <div className="border rounded-lg p-4 bg-muted/20">
+                       <p className="text-sm text-muted-foreground">All-time Jobs</p>
+                       <p className="text-xl font-bold mt-1">{project.jobs_count ?? 0}</p>
+                     </div>
+                     <div className="border rounded-lg p-4 bg-muted/20">
+                       <p className="text-sm text-muted-foreground">All-time Executions</p>
+                       <p className="text-xl font-bold mt-1">{project.executions_count ?? 0}</p>
+                     </div>
+                     <div className="border rounded-lg p-4 bg-muted/20">
+                       <p className="text-sm text-muted-foreground">All-time Success</p>
+                       <p className="text-xl font-bold mt-1">{project.success_rate !== null && project.success_rate !== undefined ? `${project.success_rate}%` : "—"}</p>
+                     </div>
+                   </div>
+                </div>
+              )}
               {activeTab === "jobs" && <JobsPanel project={project} canManage={canManage} />}
               {activeTab === "keys" && <APIKeysPanel project={project} canManage={canManage} />}
+              {activeTab === "settings" && (
+                 <div className="py-4 max-w-lg">
+                   <h3 className="text-lg font-medium mb-4">Project Settings</h3>
+                   <div className="space-y-4">
+                     <div>
+                       <label className="text-sm font-medium">Project Name</label>
+                       <div className="flex items-center gap-2 mt-1">
+                         <Input value={project.name} disabled />
+                         <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>Edit</Button>
+                       </div>
+                     </div>
+                     <div>
+                       <label className="text-sm font-medium">Project Status</label>
+                       <div className="flex items-center gap-2 mt-1">
+                          <Badge variant={project.status === "active" ? "default" : "secondary"}>{project.status}</Badge>
+                          <Button variant="outline" size="sm" onClick={handleToggleStatus} disabled={toggling}>
+                            {project.status === "active" ? "Deactivate" : "Activate"}
+                          </Button>
+                       </div>
+                     </div>
+                   </div>
+                 </div>
+              )}
             </div>
           ) : (
             <JobsPanel project={project} canManage={canManage} />
@@ -892,7 +999,8 @@ export default function ProjectsPage() {
   const targetProjectId = searchParams?.get("project_id");
   const { teams, activeTeam, isLoading: isTeamLoading } = useTeam();
   const [createOpen, setCreateOpen] = useState(false);
-  const [teamFilter, setTeamFilter] = useState<number | "all">("all");
+  const [teamFilter, setTeamFilter] = useState<string>("all");
+  const [healthFilter, setHealthFilter] = useState<string>("all");
 
   const isGlobalStaff = user?.is_staff ?? false;
 
@@ -913,9 +1021,10 @@ export default function ProjectsPage() {
     enabled: teams.length > 0,
   });
 
-  // Client-side filter by selected team, search text, and then sort
+  // Client-side filter by selected team, health, search text, and then sort
   const projects = allProjects
-    .filter((p) => teamFilter === "all" || p.team === teamFilter)
+    .filter((p) => teamFilter === "all" || p.team === Number(teamFilter))
+    .filter((p) => healthFilter === "all" || p.operational_status?.toLowerCase() === healthFilter)
     .filter((p) => {
       if (!debouncedSearch) return true;
       const s = debouncedSearch.toLowerCase();
@@ -956,15 +1065,13 @@ export default function ProjectsPage() {
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Projects</h2>
           <p className="text-muted-foreground mt-1">
-            Monitoring projects across{" "}
-            <span className="font-medium text-foreground">{teams.length}</span>{" "}
-            team{teams.length !== 1 ? "s" : ""}
-            {!isLoading && allProjects.length > 0 && (
-              <span className="ml-2 text-xs">
-                — {allProjects.filter((p) => p.status === "active").length}{" "}
-                active / {allProjects.length} total
+            {teams.length} team{teams.length !== 1 ? "s" : ""} ·{" "}
+            {!isLoading && (
+              <span className="font-medium text-foreground">
+                {allProjects.filter((p) => p.status === "active").length}
               </span>
-            )}
+            )}{" "}
+            active projects
           </p>
         </div>
         {manageableTeams.length > 0 && (
@@ -974,42 +1081,45 @@ export default function ProjectsPage() {
         )}
       </div>
 
-      {/* Team filter tabs */}
-      {teams.length > 1 && (
-        <div className="flex gap-1 border-b overflow-x-auto">
-          <button
-            onClick={() => setTeamFilter("all")}
-            className={`px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors border-b-2 -mb-px ${
-              teamFilter === "all"
-                ? "border-primary text-foreground"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            All Teams
-          </button>
-          {teams.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setTeamFilter(t.id)}
-              className={`px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors border-b-2 -mb-px ${
-                teamFilter === t.id
-                  ? "border-primary text-foreground"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {t.name}
-              {t.my_role && (
-                <span className="ml-1.5 text-xs opacity-60">({t.my_role})</span>
-              )}
-            </button>
-          ))}
-        </div>
-      )}
+      {/* Filters & Actions */}
+      <div className="flex flex-col sm:flex-row gap-3 items-center justify-between bg-card p-3 rounded-md border mt-4">
+        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+          {teams.length > 1 && (
+            <Select value={teamFilter} onValueChange={setTeamFilter}>
+              <SelectTrigger className="w-full sm:w-[180px] h-9">
+                <SelectValue placeholder="All Teams">
+                  {teamFilter === "all" ? "All Teams" : teams.find((t) => String(t.id) === teamFilter)?.name}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Teams</SelectItem>
+                {teams.map((t) => (
+                  <SelectItem key={t.id} value={String(t.id)}>
+                    {t.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
 
-      {/* Search and Sort */}
-      {allProjects.length > 0 && (
-        <div className="flex flex-col sm:flex-row gap-3 items-center justify-between bg-card p-3 rounded-md border mt-4">
-          <div className="relative w-full sm:w-72">
+          <Select value={healthFilter} onValueChange={setHealthFilter}>
+            <SelectTrigger className="w-full sm:w-[160px] h-9">
+              <SelectValue placeholder="All Health">
+                {healthFilter === "all" && "All Health"}
+                {healthFilter === "healthy" && "Healthy"}
+                {healthFilter === "degraded" && "Degraded"}
+                {healthFilter === "critical" && "Critical"}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Health</SelectItem>
+              <SelectItem value="healthy">Healthy</SelectItem>
+              <SelectItem value="degraded">Degraded</SelectItem>
+              <SelectItem value="critical">Critical</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <div className="relative w-full sm:w-64">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search projects..."
@@ -1018,24 +1128,25 @@ export default function ProjectsPage() {
               className="pl-9 h-9"
             />
           </div>
-          <div className="w-full sm:w-48">
-            <Select value={ordering} onValueChange={setOrdering}>
-              <SelectTrigger className="h-9">
-                <SelectValue placeholder="Sort by">
-                  {ordering === "-created_at" && "Newest First"}
-                  {ordering === "created_at" && "Oldest First"}
-                  {ordering === "name" && "Name (A-Z)"}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="-created_at">Newest First</SelectItem>
-                <SelectItem value="created_at">Oldest First</SelectItem>
-                <SelectItem value="name">Name (A-Z)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
         </div>
-      )}
+
+        <div className="w-full sm:w-48">
+          <Select value={ordering} onValueChange={setOrdering}>
+            <SelectTrigger className="h-9">
+              <SelectValue placeholder="Sort by">
+                {ordering === "-created_at" && "Newest First"}
+                {ordering === "created_at" && "Oldest First"}
+                {ordering === "name" && "Name (A-Z)"}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="-created_at">Newest First</SelectItem>
+              <SelectItem value="created_at">Oldest First</SelectItem>
+              <SelectItem value="name">Name (A-Z)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
 
       {/* Content */}
       {isLoading ? (

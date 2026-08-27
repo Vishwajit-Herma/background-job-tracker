@@ -122,7 +122,7 @@ export function JobAnalyticsClient({ jobId }: JobAnalyticsClientProps) {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-6">
         <div>
           {isAnalyticsLoading || !analytics ? <MetricCardSkeleton /> : (
-            <HealthCard health={analytics.health || "HEALTHY"} infoText="Overall job health based on failure and retry rates" />
+            <HealthCard health={analytics.health || "HEALTHY"} infoText="Mathematical health based on failure/retry rates in the selected time window (differs from real-time Operational Status which is based on active incidents)." />
           )}
         </div>
         <div>

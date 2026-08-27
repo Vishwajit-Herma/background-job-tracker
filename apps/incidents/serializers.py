@@ -50,9 +50,12 @@ class IncidentSerializer(serializers.ModelSerializer):
     assigned_to_user_id = serializers.IntegerField(
         source="assigned_to.user_id", read_only=True, allow_null=True
     )
-    assigned_to_name = serializers.CharField(
-        source="assigned_to.user.get_full_name", read_only=True, allow_null=True
-    )
+    assigned_to_name = serializers.SerializerMethodField()
+
+    def get_assigned_to_name(self, obj):
+        if obj.assigned_to and obj.assigned_to.user:
+            return obj.assigned_to.user.get_full_name() or obj.assigned_to.user.email
+        return None
 
     class Meta:
         model = Incident

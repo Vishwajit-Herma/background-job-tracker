@@ -144,6 +144,11 @@ export default function IncidentDetailsPage() {
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold tracking-tight">INC-{incident.id}</h1>
             {getStatusBadge(incident.status)}
+            {incident.status === "RESOLVED" && (
+              <Badge variant="outline" className="bg-muted/50 text-muted-foreground font-medium text-xs">
+                {incident.resolution_type === "AUTOMATIC" ? "Auto-resolved" : "Manually resolved"}
+              </Badge>
+            )}
             <Badge variant="outline" className={incident.severity === "CRITICAL" ? "text-destructive border-destructive" : ""}>
               {incident.severity}
             </Badge>
@@ -181,7 +186,7 @@ export default function IncidentDetailsPage() {
             </Button>
           )}
           {hasManagePermission && incident.status === "RESOLVED" && (
-            <Button onClick={() => reopenMutation.mutate()} disabled={reopenMutation.isPending} variant="outline">
+            <Button onClick={() => { if(window.confirm("Are you sure you want to reopen this incident?")) reopenMutation.mutate(); }} disabled={reopenMutation.isPending} variant="outline">
               Reopen Incident
             </Button>
           )}
@@ -211,7 +216,8 @@ export default function IncidentDetailsPage() {
               <div>
                 <p className="text-xs text-muted-foreground font-medium uppercase mb-1">Alert Rule</p>
                 {alertRule ? (
-                  <Link href="/alerts" className="text-sm font-medium text-primary hover:underline flex items-center gap-1">
+                  <Link href="/alerts" className="text-sm font-medium text-primary hover:underline flex items-center gap-1.5 bg-primary/5 w-fit px-2 py-1 rounded-md border border-primary/20">
+                    <Activity className="h-3.5 w-3.5" />
                     {alertRule.metric.replace("_", " ")} &gt; {alertRule.threshold}
                   </Link>
                 ) : (
@@ -225,6 +231,14 @@ export default function IncidentDetailsPage() {
               <h3 className="font-semibold mb-4 flex items-center gap-2"><User className="h-4 w-4 text-primary" /> Assignment</h3>
               <div className="space-y-3">
                 <p className="text-sm text-muted-foreground">Assign this incident to a team member to investigate.</p>
+                {incident.assigned_to_name && (
+                  <div className="flex items-center gap-2 p-2.5 bg-muted/30 border rounded-md">
+                    <User className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm font-medium text-foreground">
+                      Assigned to: {isAssignee ? "You" : incident.assigned_to_name}
+                    </span>
+                  </div>
+                )}
                 <div className="flex gap-2">
                   <select 
                     className="flex h-9 w-full items-center justify-between whitespace-nowrap rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
@@ -345,14 +359,20 @@ export default function IncidentDetailsPage() {
                   className="mb-3 resize-none"
                   rows={3}
                 />
-                <Button 
-                  onClick={() => noteMutation.mutate(newNote)}
-                  disabled={!newNote.trim() || noteMutation.isPending}
-                  className="w-full sm:w-auto"
-                >
-                  {noteMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : null}
-                  Post Note
-                </Button>
+                <div className="flex items-center justify-between mt-3">
+                  <span className="text-xs text-muted-foreground flex items-center gap-1.5 bg-muted/50 px-2 py-1 rounded">
+                    <AlertTriangle className="h-3.5 w-3.5" /> 
+                    Notes are immutable once saved
+                  </span>
+                  <Button 
+                    onClick={() => noteMutation.mutate(newNote)}
+                    disabled={!newNote.trim() || noteMutation.isPending}
+                    className="w-full sm:w-auto"
+                  >
+                    {noteMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : null}
+                    Post Note
+                  </Button>
+                </div>
               </div>
             </TabsContent>
           </Tabs>
