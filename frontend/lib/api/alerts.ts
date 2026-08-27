@@ -38,6 +38,7 @@ interface AlertRuleFilters {
   page?: number;
   search?: string;
   ordering?: string;
+  is_active?: boolean;
 }
 
 export async function getPaginatedAlertRules(filters: AlertRuleFilters = {}): Promise<PaginatedAlertRules> {

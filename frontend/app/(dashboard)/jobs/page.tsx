@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useSearchParams } from "next/navigation";
+import { useState, useEffect, Suspense } from "react";
+import Link from "next/link";
+import { useSearchParams, useRouter } from "next/navigation";
 import { useWorkspace } from "@/hooks/use-workspace";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -9,11 +10,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, ListChecks, CheckCircle2, XCircle, Activity, Briefcase, Plus, MoreHorizontal, Pencil, Trash2, ToggleLeft, ToggleRight, Search, HelpCircle } from "lucide-react";
+import { Loader2, ListChecks, CheckCircle2, XCircle, Activity, Briefcase, Plus, MoreHorizontal, Pencil, Trash2, ToggleLeft, ToggleRight, Search, HelpCircle, ShieldCheck } from "lucide-react";
 import { ExecutionsSheet } from "@/components/bjt/jobs/executions-sheet";
 import { JobFormModal, ConfirmDeleteJobModal } from "@/components/bjt/jobs/job-modals";
 import { useAuth } from "@/hooks/use-auth";
 import { updateJob, getJobsPaginated } from "@/lib/api/jobs";
+import { getProjectReliability, ReliabilityState } from "@/lib/api/reliability";
+import { ReliabilityBadge } from "@/components/bjt/reliability/reliability-badge";
 import { useDebounce } from "@/hooks/use-debounce";
 import { PaginationControls } from "@/components/bjt/pagination";
 import {
@@ -24,7 +27,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-export default function JobsPage() {
+function JobsPageContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { user } = useAuth();
   const isGlobalStaff = user?.is_staff ?? false;
 
@@ -38,9 +43,23 @@ export default function JobsPage() {
   const [ordering, setOrdering] = useState("-created_at");
   const [statusFilter, setStatusFilter] = useState("all");
 
+  const reliabilityParam = searchParams?.get("reliability") || "all";
+  const [reliabilityFilter, setReliabilityFilter] = useState(reliabilityParam);
+
   const { projects, jobs, teamMap, projectMap, isLoading: isLoadingWorkspace, isError: isWorkspaceError } = useWorkspace();
-  const searchParams = useSearchParams();
   const targetJobId = searchParams?.get("job_id");
+
+  // Synchronize reliability filter with URL search params
+  const handleReliabilityFilterChange = (val: string) => {
+    setReliabilityFilter(val);
+    const params = new URLSearchParams(searchParams?.toString() || "");
+    if (val === "all") {
+      params.delete("reliability");
+    } else {
+      params.set("reliability", val);
+    }
+    router.replace(`/jobs?${params.toString()}`);
+  };
 
   // Fetch jobs with server-side pagination for the table
   const debouncedSearch = useDebounce(search, 500);
@@ -50,10 +69,37 @@ export default function JobsPage() {
     queryFn: () => getJobsPaginated({ page, search: debouncedSearch, ordering, status: statusFilter !== "all" ? statusFilter : undefined }),
   });
 
+  // Query project reliability maps for all active projects
+  const { data: projectReliabilityMap = {} } = useQuery({
+    queryKey: ["project-reliability-map", projects.map(p => p.id)],
+    queryFn: async () => {
+      const map: Record<number, ReliabilityState> = {};
+      const results = await Promise.all(
+        projects.map(p => getProjectReliability(p.id).catch(() => null))
+      );
+      results.forEach(res => {
+        if (res && res.jobs) {
+          res.jobs.forEach(j => {
+            map[j.job_id] = j.current_state;
+          });
+        }
+      });
+      return map;
+    },
+    enabled: projects.length > 0,
+  });
+
   const pagedJobs = paginatedJobs?.data || [];
   const totalPages = paginatedJobs?.totalPages || 1;
 
-  // Reset to first page if current page becomes out of range (e.g., after deleting items)
+  // Filter jobs by reliability state if filtered
+  const displayedJobs = pagedJobs.filter(job => {
+    if (reliabilityFilter === "all") return true;
+    const state = projectReliabilityMap[job.id] || "HEALTHY";
+    return state === reliabilityFilter;
+  });
+
+  // Reset to first page if current page becomes out of range
   useEffect(() => {
     if (!isLoadingJobs && pagedJobs.length === 0 && page > 1) {
       setPage(1);
@@ -81,6 +127,7 @@ export default function JobsPage() {
   const handleRefetch = () => {
     queryClient.invalidateQueries({ queryKey: ["jobs"] });
     queryClient.invalidateQueries({ queryKey: ["jobs-paginated"] });
+    queryClient.invalidateQueries({ queryKey: ["project-reliability-map"] });
   };
 
   return (
@@ -99,8 +146,8 @@ export default function JobsPage() {
         )}
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-3 items-center justify-between bg-card p-3 rounded-md border">
-        <div className="relative w-full sm:w-72">
+      <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-card p-3 rounded-md border">
+        <div className="relative w-full lg:w-72">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search jobs..."
@@ -109,9 +156,32 @@ export default function JobsPage() {
             className="pl-9 h-9"
           />
         </div>
-        <div className="flex w-full sm:w-auto gap-3">
+        <div className="flex flex-wrap w-full lg:w-auto gap-3">
+          {/* Reliability Filter */}
           <div className="w-full sm:w-40">
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <Select value={reliabilityFilter} onValueChange={(val) => { if (val) handleReliabilityFilterChange(val); }}>
+              <SelectTrigger className="h-9">
+                <SelectValue placeholder="Reliability">
+                  {reliabilityFilter === "all" && "All Reliability"}
+                  {reliabilityFilter === "HEALTHY" && "Healthy"}
+                  {reliabilityFilter === "MISSED" && "Missed"}
+                  {reliabilityFilter === "STALLED" && "Stalled"}
+                  {reliabilityFilter === "OVERDUE" && "Overdue"}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Reliability</SelectItem>
+                <SelectItem value="HEALTHY">Healthy</SelectItem>
+                <SelectItem value="MISSED">Missed</SelectItem>
+                <SelectItem value="STALLED">Stalled</SelectItem>
+                <SelectItem value="OVERDUE">Overdue</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Status Filter */}
+          <div className="w-full sm:w-36">
+            <Select value={statusFilter} onValueChange={(val) => { if (val) setStatusFilter(val); }}>
               <SelectTrigger className="h-9">
                 <SelectValue placeholder="Status">
                   {statusFilter === "all" && "All Statuses"}
@@ -126,8 +196,10 @@ export default function JobsPage() {
               </SelectContent>
             </Select>
           </div>
-          <div className="w-full sm:w-48">
-            <Select value={ordering} onValueChange={setOrdering}>
+
+          {/* Ordering Filter */}
+          <div className="w-full sm:w-44">
+            <Select value={ordering} onValueChange={(val) => { if (val) setOrdering(val); }}>
               <SelectTrigger className="h-9">
                 <SelectValue placeholder="Sort by">
                   {ordering === "-created_at" && "Newest First"}
@@ -154,20 +226,21 @@ export default function JobsPage() {
         <div className="rounded-md border border-destructive/30 bg-destructive/10 p-4 text-destructive">
           Failed to load jobs. <button onClick={() => handleRefetch()} className="underline font-medium">Retry</button>
         </div>
-      ) : pagedJobs.length === 0 ? (
+      ) : displayedJobs.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-64 rounded-xl border border-dashed text-muted-foreground text-sm">
           <ListChecks className="h-10 w-10 mb-4 opacity-20" />
-          <p>No jobs found.</p>
+          <p>No jobs match the current filters.</p>
           <p className="text-xs mt-1">Jobs will appear here once your SDK starts reporting telemetry.</p>
         </div>
       ) : (
-        <div className="rounded-md border bg-card">
+        <div className="rounded-md border bg-card overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Project</TableHead>
                 <TableHead>Job Name</TableHead>
                 <TableHead>Task Identifier</TableHead>
+                <TableHead title="Schedule & runtime behavior adherence (Healthy, Missed, Stalled, Overdue).">Reliability <HelpCircle className="inline-block h-3 w-3 opacity-50 cursor-help mb-0.5" /></TableHead>
                 <TableHead title="Real-time operational status (driven by active incidents).">Health <HelpCircle className="inline-block h-3 w-3 opacity-50 cursor-help mb-0.5" /></TableHead>
                 <TableHead>Executions</TableHead>
                 <TableHead>Success Rate</TableHead>
@@ -177,10 +250,11 @@ export default function JobsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {pagedJobs.map((job) => {
+              {displayedJobs.map((job) => {
                 const project = projectMap.get(job.project as number);
                 const t = project ? teamMap.get(project.team) : null;
                 const canManage = isGlobalStaff || (t && (t.my_role === "admin" || t.my_role === "owner"));
+                const reliabilityState = projectReliabilityMap[job.id] || "HEALTHY";
 
                 return (
                   <TableRow key={job.id} className={job.status === "inactive" ? "opacity-60" : ""}>
@@ -190,34 +264,51 @@ export default function JobsPage() {
                         {project?.name || `Project #${job.project}`}
                       </div>
                     </TableCell>
+
                     <TableCell className="py-3 font-medium">
-                      {job.name}
+                      <Link
+                        href={`/jobs/${job.id}`}
+                        className="hover:underline text-foreground font-semibold hover:text-primary transition-colors"
+                      >
+                        {job.name}
+                      </Link>
                       {job.description && (
                         <p className="text-xs text-muted-foreground truncate max-w-[250px] mt-0.5 font-normal">
                           {job.description}
                         </p>
                       )}
                     </TableCell>
+
                     <TableCell className="py-3">
                       <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono break-all max-w-[250px] inline-block truncate" title={job.task_identifier}>
                         {job.task_identifier}
                       </code>
                     </TableCell>
+
+                    {/* Reliability Column */}
+                    <TableCell className="py-3">
+                      <ReliabilityBadge state={reliabilityState} jobId={job.id} size="sm" />
+                    </TableCell>
+
+                    {/* Health / Operational Status */}
                     <TableCell className="py-3">
                       {job.operational_status === "CRITICAL" ? (
                         <Badge variant="destructive" className="bg-destructive/10 text-destructive border-destructive/20 text-[10px]">Critical</Badge>
                       ) : job.operational_status === "DEGRADED" ? (
-                        <Badge variant="secondary" className="bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20 text-[10px]">Degraded</Badge>
+                        <Badge variant="warning" className="text-[10px]">Degraded</Badge>
                       ) : (
-                        <Badge variant="outline" className="bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20 text-[10px]">Healthy</Badge>
+                        <Badge variant="success" className="text-[10px]">Healthy</Badge>
                       )}
                     </TableCell>
+
                     <TableCell className="py-3 text-sm font-medium">
                       {job.executions_count ? (job.executions_count > 999 ? (job.executions_count / 1000).toFixed(1) + 'k' : job.executions_count) : 0}
                     </TableCell>
+
                     <TableCell className="py-3 text-sm font-medium">
                       {job.success_rate !== null && job.success_rate !== undefined ? `${job.success_rate}%` : "—"}
                     </TableCell>
+
                     <TableCell className="py-3">
                       {job.verification_status === "verified" ? (
                         <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-500 font-medium">
@@ -229,6 +320,7 @@ export default function JobsPage() {
                         </span>
                       )}
                     </TableCell>
+
                     <TableCell className="py-3">
                       {job.status === "active" ? (
                         <Badge className="text-xs bg-green-500/15 text-green-700 dark:text-green-400 border-green-500/30">Active</Badge>
@@ -236,6 +328,7 @@ export default function JobsPage() {
                         <Badge variant="secondary" className="text-xs">Inactive</Badge>
                       )}
                     </TableCell>
+
                     <TableCell className="py-3 text-right">
                       <div className="flex items-center justify-end gap-2">
                         <Button
@@ -329,5 +422,13 @@ export default function JobsPage() {
         />
       )}
     </div>
+  );
+}
+
+export default function JobsPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-sm text-muted-foreground">Loading jobs...</div>}>
+      <JobsPageContent />
+    </Suspense>
   );
 }

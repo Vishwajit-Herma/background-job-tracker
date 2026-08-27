@@ -137,7 +137,7 @@ export default function NotificationsPage() {
 
         <div className="flex items-center gap-3 w-full sm:w-auto">
           <div className="w-full sm:w-36">
-            <Select value={readFilter} onValueChange={setReadFilter}>
+            <Select value={readFilter} onValueChange={(val) => { if (val) setReadFilter(val); }}>
               <SelectTrigger className="h-9">
                 <SelectValue placeholder="Status">
                   {readFilter === "all" && "All Notifications"}
@@ -154,7 +154,7 @@ export default function NotificationsPage() {
           </div>
 
           <div className="w-full sm:w-44">
-            <Select value={ordering} onValueChange={setOrdering}>
+            <Select value={ordering} onValueChange={(val) => { if (val) setOrdering(val); }}>
               <SelectTrigger className="h-9">
                 <SelectValue placeholder="Sort by">
                   {ordering === "-created_at" && "Newest First"}

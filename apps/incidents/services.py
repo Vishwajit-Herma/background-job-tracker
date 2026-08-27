@@ -33,6 +33,27 @@ def _log_incident_event(incident, event_type, actor=None, metadata=None):
         transaction.on_commit(lambda: dispatch_incident_event(event.id))
 
 
+def create_incident(project, severity, alert_rule=None, job=None, trigger_metadata=None):
+    """
+    Creates an incident and logs the CREATED IncidentEvent with on_commit notifications.
+    """
+    with transaction.atomic():
+        incident = Incident.objects.create(
+            project=project,
+            job=job,
+            alert_rule=alert_rule,
+            severity=severity,
+            trigger_metadata=trigger_metadata or {},
+        )
+        _log_incident_event(
+            incident,
+            IncidentEvent.EventType.CREATED,
+            actor=None,
+            metadata={"trigger_metadata": trigger_metadata or {}},
+        )
+        return incident
+
+
 def assign_incident(incident_id, member_id, actor):
     """
     Assigns an incident to a member.

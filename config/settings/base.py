@@ -71,6 +71,7 @@ LOCAL_APPS = [
     "apps.alerts",
     "apps.incidents",
     "apps.notifications",
+    "apps.reliability",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -275,6 +276,14 @@ CELERY_BEAT_SCHEDULE = {
     "recover-orphaned-deliveries": {
         "task": "notifications.recover_orphaned_deliveries",
         "schedule": crontab(minute="*/15"),  # Runs every 15 minutes
+    },
+    "evaluate-job-reliability": {
+        "task": "reliability.evaluate_reliability",
+        "schedule": crontab(minute="*"),  # Runs every minute
+    },
+    "recalculate-job-baselines": {
+        "task": "reliability.recalculate_baselines",
+        "schedule": crontab(hour="*/6", minute=0),  # Runs every 6 hours
     },
 }
 

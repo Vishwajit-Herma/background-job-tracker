@@ -8,8 +8,8 @@ from django.db.models import Q
 
 from .models import AlertRule
 from apps.executions.analytics import get_job_analytics, get_project_analytics
-from apps.incidents.models import Incident, IncidentEvent
-from apps.incidents.services import auto_resolve_incident
+from apps.incidents.models import Incident
+from apps.incidents.services import auto_resolve_incident, create_incident
 
 logger = logging.getLogger(__name__)
 
@@ -103,17 +103,12 @@ def _evaluate_single_rule(rule):
                 try:
                     # CREATE new incident
                     with transaction.atomic():
-                        incident = Incident.objects.create(
-                            alert_rule=locked_rule,
+                        create_incident(
                             project=locked_rule.project,
                             job=locked_rule.job,
+                            alert_rule=locked_rule,
                             severity=locked_rule.severity,
                             trigger_metadata=trigger_metadata,
-                        )
-                        IncidentEvent.objects.create(
-                            incident=incident,
-                            event_type=IncidentEvent.EventType.CREATED,
-                            metadata={"trigger_metadata": trigger_metadata},
                         )
                 except IntegrityError:
                     # Another process created the incident right after we checked. That's fine.

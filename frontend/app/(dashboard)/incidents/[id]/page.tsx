@@ -18,7 +18,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { 
   Loader2, ArrowLeft, AlertTriangle, CheckCircle2, 
-  Clock, Server, Activity, User, MessageSquare, ListTree
+  Clock, Server, Activity, User, MessageSquare, ListTree, ShieldCheck
 } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@/hooks/use-auth";
@@ -226,6 +226,38 @@ export default function IncidentDetailsPage() {
               </div>
             </div>
           </div>
+
+          {/* Reliability Finding Context Card if applicable */}
+          {(tm.reliability_finding_id || ["MISSED_EXECUTION", "STALLED_EXECUTION", "OVERDUE_EXECUTION"].includes(tm.metric_type || alertRule?.metric || "")) && (
+            <div className="rounded-xl border border-primary/20 bg-primary/5 p-5 shadow-sm space-y-3">
+              <h3 className="font-semibold flex items-center gap-2 text-primary">
+                <ShieldCheck className="h-4 w-4" /> Reliability Finding
+              </h3>
+              <div className="space-y-2 text-xs">
+                <div>
+                  <p className="text-muted-foreground uppercase font-medium text-[10px]">Condition</p>
+                  <p className="font-semibold text-foreground text-sm mt-0.5">
+                    {(tm.condition_type || tm.metric_type || alertRule?.metric || "Reliability Violation").replace("_", " ")}
+                  </p>
+                </div>
+                {job && (
+                  <div>
+                    <p className="text-muted-foreground uppercase font-medium text-[10px]">Job</p>
+                    <p className="font-semibold text-foreground text-sm mt-0.5">{job.name}</p>
+                  </div>
+                )}
+                {incident.job && (
+                  <div className="pt-2">
+                    <Link href={`/jobs/${incident.job}/reliability`}>
+                      <Button size="sm" variant="default" className="w-full h-8 text-xs gap-1.5">
+                        <ShieldCheck className="h-3.5 w-3.5" /> View Job Reliability
+                      </Button>
+                    </Link>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
           {hasManagePermission && (
             <div className="rounded-xl border bg-card p-5 shadow-sm">
               <h3 className="font-semibold mb-4 flex items-center gap-2"><User className="h-4 w-4 text-primary" /> Assignment</h3>

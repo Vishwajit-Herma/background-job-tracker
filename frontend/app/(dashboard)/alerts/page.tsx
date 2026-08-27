@@ -26,7 +26,7 @@ export default function AlertsPage() {
   const [page, setPage] = useState(1);
 
   const { user } = useAuth();
-  const isGlobalStaff = user?.is_staff || user?.is_superuser;
+  const isGlobalStaff = Boolean(user?.is_staff);
   const { projects, jobs, teamMap, projectMap, jobMap, isLoading: isLoadingWorkspace } = useWorkspace();
 
   const manageableProjects = projects.filter(p => {

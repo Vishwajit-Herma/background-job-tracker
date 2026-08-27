@@ -20,6 +20,7 @@ urlpatterns = [
     path("alerts/", include("apps.alerts.urls")),
     path("incidents/", include("apps.incidents.urls")),
     path("notifications/", include("apps.notifications.urls")),
+    path("reliability/", include("apps.reliability.urls")),
     path("auth/registration/", include("dj_rest_auth.registration.urls")),
     path("auth/", include("dj_rest_auth.urls")),
     path("teams/", include("apps.teams.api.urls", namespace="teams_api")),

@@ -1,5 +1,6 @@
 import { AnalyticsPageClient } from "./analytics-page-client";
 import { Metadata } from "next";
+import { Suspense } from "react";
 
 export const metadata: Metadata = {
   title: "Analytics | Background Job Tracker",
@@ -9,7 +10,9 @@ export const metadata: Metadata = {
 export default function AnalyticsPage() {
   return (
     <div className="container mx-auto py-8">
-      <AnalyticsPageClient />
+      <Suspense fallback={<div className="p-8 text-sm text-muted-foreground">Loading analytics...</div>}>
+        <AnalyticsPageClient />
+      </Suspense>
     </div>
   );
 }

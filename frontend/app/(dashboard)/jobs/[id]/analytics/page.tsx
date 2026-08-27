@@ -1,5 +1,6 @@
 import { JobAnalyticsClient } from "./job-analytics-client";
 import { Metadata } from "next";
+import { Suspense } from "react";
 
 export const metadata: Metadata = {
   title: "Job Analytics | Background Job Tracker",
@@ -7,7 +8,7 @@ export const metadata: Metadata = {
 };
 
 interface Props {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 export default async function JobAnalyticsPage({ params }: Props) {
@@ -16,7 +17,9 @@ export default async function JobAnalyticsPage({ params }: Props) {
 
   return (
     <div className="container mx-auto py-8">
-      <JobAnalyticsClient jobId={jobId} />
+      <Suspense fallback={<div className="p-8 text-sm text-muted-foreground">Loading job analytics...</div>}>
+        <JobAnalyticsClient jobId={jobId} />
+      </Suspense>
     </div>
   );
 }

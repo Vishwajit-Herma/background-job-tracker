@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTeam } from "@/components/bjt/team-provider";
@@ -19,6 +19,7 @@ import {
   APIKeyCreated,
 } from "@/lib/api/projects";
 import { JobsPanel } from "@/components/bjt/jobs/jobs-panel";
+import { ProjectReliabilitySummary } from "@/components/bjt/projects/project-reliability-summary";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -61,6 +62,7 @@ import {
   Copy,
   CheckCheck,
   ShieldOff,
+  Eye,
   EyeOff,
   Users,
   Search,
@@ -751,7 +753,7 @@ function ProjectRow({
   const userRole = memberRoleForProject(team, isGlobalStaff);
   const canManage = userRole === "admin";
   const [expanded, setExpanded] = useState(defaultExpanded);
-  const [activeTab, setActiveTab] = useState<"jobs" | "keys">("jobs");
+  const [activeTab, setActiveTab] = useState<"overview" | "jobs" | "keys" | "settings">("overview");
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [toggling, setToggling] = useState(false);
@@ -937,6 +939,9 @@ function ProjectRow({
                        <p className="text-xl font-bold mt-1">{project.success_rate !== null && project.success_rate !== undefined ? `${project.success_rate}%` : "—"}</p>
                      </div>
                    </div>
+
+                   {/* Reliability Summary Section */}
+                   <ProjectReliabilitySummary projectId={project.id} />
                 </div>
               )}
               {activeTab === "jobs" && <JobsPanel project={project} canManage={canManage} />}
@@ -993,7 +998,7 @@ function ProjectRow({
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function ProjectsPage() {
+function ProjectsPageContent() {
   const { user } = useAuth();
   const searchParams = useSearchParams();
   const targetProjectId = searchParams?.get("project_id");
@@ -1085,7 +1090,7 @@ export default function ProjectsPage() {
       <div className="flex flex-col sm:flex-row gap-3 items-center justify-between bg-card p-3 rounded-md border mt-4">
         <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
           {teams.length > 1 && (
-            <Select value={teamFilter} onValueChange={setTeamFilter}>
+            <Select value={teamFilter} onValueChange={(val) => { if (val) setTeamFilter(val); }}>
               <SelectTrigger className="w-full sm:w-[180px] h-9">
                 <SelectValue placeholder="All Teams">
                   {teamFilter === "all" ? "All Teams" : teams.find((t) => String(t.id) === teamFilter)?.name}
@@ -1102,7 +1107,7 @@ export default function ProjectsPage() {
             </Select>
           )}
 
-          <Select value={healthFilter} onValueChange={setHealthFilter}>
+          <Select value={healthFilter} onValueChange={(val) => { if (val) setHealthFilter(val); }}>
             <SelectTrigger className="w-full sm:w-[160px] h-9">
               <SelectValue placeholder="All Health">
                 {healthFilter === "all" && "All Health"}
@@ -1131,7 +1136,7 @@ export default function ProjectsPage() {
         </div>
 
         <div className="w-full sm:w-48">
-          <Select value={ordering} onValueChange={setOrdering}>
+          <Select value={ordering} onValueChange={(val) => { if (val) setOrdering(val); }}>
             <SelectTrigger className="h-9">
               <SelectValue placeholder="Sort by">
                 {ordering === "-created_at" && "Newest First"}
@@ -1206,5 +1211,13 @@ export default function ProjectsPage() {
         />
       )}
     </div>
+  );
+}
+
+export default function ProjectsPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-sm text-muted-foreground">Loading projects...</div>}>
+      <ProjectsPageContent />
+    </Suspense>
   );
 }

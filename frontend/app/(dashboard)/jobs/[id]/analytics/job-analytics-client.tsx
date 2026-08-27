@@ -58,6 +58,9 @@ function buildTrend(
   };
 }
 
+import { JobHeader } from "@/components/bjt/jobs/job-header";
+import { useWorkspace } from "@/hooks/use-workspace";
+
 interface JobAnalyticsClientProps {
   jobId: number;
 }
@@ -66,6 +69,10 @@ export function JobAnalyticsClient({ jobId }: JobAnalyticsClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const range = searchParams.get("range") || "24h";
+
+  const { jobs, projectMap } = useWorkspace();
+  const job = jobs.find((j) => j.id === jobId);
+  const project = job ? projectMap.get(job.project) : null;
 
   const { data: analytics, isLoading: isAnalyticsLoading, isError: isAnalyticsError, refetch: refetchAnalytics, isRefetching: isRefetchingAnalytics } = useJobAnalytics(jobId, { range });
   const { data: trendData, isLoading: isTrendLoading, isError: isTrendError, refetch: refetchTrend, isRefetching: isRefetchingTrend } = useJobAnalyticsTrend(jobId, { range });
@@ -88,19 +95,19 @@ export function JobAnalyticsClient({ jobId }: JobAnalyticsClientProps) {
     refetchTrend();
   };
 
+  const jobHeaderInfo = {
+    id: jobId,
+    name: job?.name || analytics?.job_name || `Job #${jobId}`,
+    task_identifier: job?.task_identifier || analytics?.task_identifier || "",
+    status: job?.status || "active",
+    operational_status: job?.operational_status,
+    project_id: project?.id,
+    project_name: project?.name,
+  };
+
   return (
     <div className="space-y-6">
-      <div className="mb-4">
-        <Button 
-          variant="ghost" 
-          size="sm" 
-          className="pl-0 text-muted-foreground hover:text-foreground"
-          onClick={() => router.back()}
-        >
-          <ArrowLeftIcon className="mr-2 h-4 w-4" />
-          Back to Project Analytics
-        </Button>
-      </div>
+      <JobHeader job={jobHeaderInfo} />
 
       <AnalyticsHeader 
         title={analytics?.job_name || "Job Analytics"} 

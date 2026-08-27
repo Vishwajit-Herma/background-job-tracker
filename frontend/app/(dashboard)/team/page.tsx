@@ -343,7 +343,7 @@ export default function TeamPage() {
                     />
                   </div>
                   <div className="w-full sm:w-48">
-                    <Select value={ordering} onValueChange={setOrdering}>
+                    <Select value={ordering} onValueChange={(val) => { if (val) setOrdering(val); }}>
                       <SelectTrigger className="h-9">
                         <SelectValue placeholder="Sort by">
                           {ordering === "-joined_at" && "Newest Members"}
