@@ -1,7 +1,7 @@
 # Register your models here.
 
 from django.contrib import admin
-from .models import Incident, IncidentEvent, IncidentNote
+from .models import Incident, IncidentEvent, IncidentNote, IncidentIntelligence
 
 
 @admin.register(Incident)
@@ -18,9 +18,6 @@ class ReadOnlyAdminMixin:
     def has_change_permission(self, request, obj=None):
         return False
 
-    # def has_delete_permission(self, request, obj=None):
-    #     return False
-
 
 @admin.register(IncidentEvent)
 class IncidentEventAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
@@ -31,3 +28,15 @@ class IncidentEventAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
 @admin.register(IncidentNote)
 class IncidentNoteAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
     list_display = ["id", "incident", "author", "created_at"]
+
+
+@admin.register(IncidentIntelligence)
+class IncidentIntelligenceAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
+    list_display = [
+        "id",
+        "incident",
+        "analysis_version",
+        "analysis_window_start",
+        "analysis_window_end",
+        "calculated_at",
+    ]

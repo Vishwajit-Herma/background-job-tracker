@@ -1,3 +1,4 @@
+from django.core.cache import cache
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -10,6 +11,8 @@ from .serializers import (
     IncidentEventSerializer,
     IncidentNoteSerializer,
     IncidentAssignSerializer,
+    IncidentIntelligenceSerializer,
+    IncidentIntelligencePendingSerializer,
 )
 from apps.config_management.views import BaseViewSetConfig, CustomResponseMixin
 from .services import (
@@ -19,6 +22,7 @@ from .services import (
     reopen_incident,
     add_incident_note,
 )
+from .tasks import calculate_incident_intelligence_task
 
 
 class IncidentViewSet(BaseViewSetConfig, CustomResponseMixin, viewsets.ReadOnlyModelViewSet):
@@ -125,3 +129,36 @@ class IncidentViewSet(BaseViewSetConfig, CustomResponseMixin, viewsets.ReadOnlyM
         events = incident.events.order_by("event_time", "id")
         serializer = IncidentEventSerializer(events, many=True)
         return Response(serializer.data)
+
+    @action(detail=True, methods=["get"], url_path="intelligence")
+    def intelligence(self, request, pk=None):
+        """
+        Returns derived intelligence for an incident.
+        Never executes heavy synchronous calculation in the request cycle.
+        If intelligence is pending, returns 202 Accepted and queues async calculation.
+        """
+        incident = self.get_object()
+        intel = getattr(incident, "intelligence", None)
+        if intel:
+            serializer = IncidentIntelligenceSerializer(intel)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        # Trigger async calculation if missing and not already calculating
+        lock_key = f"intelligence_calculating_{incident.id}"
+        if cache.add(lock_key, True, timeout=300):
+            calculate_incident_intelligence_task.delay(incident.id)
+
+        pending_data = {
+            "status": "PENDING",
+            "message": "Incident intelligence calculation is in progress.",
+            "incident_id": incident.id,
+            "impact": None,
+            "correlations": [],
+            "probable_causes": [],
+            "analysis_window_start": None,
+            "analysis_window_end": None,
+            "analysis_version": "1.0",
+            "calculated_at": None,
+        }
+        serializer = IncidentIntelligencePendingSerializer(pending_data)
+        return Response(serializer.data, status=status.HTTP_202_ACCEPTED)

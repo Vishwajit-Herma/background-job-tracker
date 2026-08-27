@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@/hooks/use-auth";
+import { IncidentIntelligenceSection } from "@/components/bjt/incidents/incident-intelligence-section";
 
 export default function IncidentDetailsPage() {
   const params = useParams();
@@ -192,6 +193,13 @@ export default function IncidentDetailsPage() {
           )}
         </div>
       </div>
+
+      {/* Incident Intelligence Section */}
+      <IncidentIntelligenceSection
+        incidentId={incident.id}
+        jobId={incident.job}
+        projectId={incident.project}
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Left Column: Details & Trigger */}
