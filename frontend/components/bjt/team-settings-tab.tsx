@@ -8,8 +8,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { useRouter } from "next/navigation";
+import { toastError, toastSuccess } from "@/lib/toast";
 
-export function TeamSettingsTab({ team }: { team: Team }) {
+interface TeamSettingsTabProps {
+  team: Team;
+}
+
+export function TeamSettingsTab({ team }: TeamSettingsTabProps) {
   const queryClient = useQueryClient();
   const router = useRouter();
   
@@ -22,24 +27,23 @@ export function TeamSettingsTab({ team }: { team: Team }) {
     try {
       await updateTeam(team.id, { name });
       queryClient.invalidateQueries({ queryKey: ["teams"] });
-      alert("Team updated successfully");
-    } catch (e) {
-      alert("Failed to update team");
+      toastSuccess("Team updated successfully");
+    } catch (e: any) {
+      toastError("Failed to update team", e);
     } finally {
       setIsUpdating(false);
     }
   };
 
   const handleDelete = async () => {
-    if (!confirm("Are you sure you want to delete this team? This action cannot be undone.")) return;
-    
     setIsDeleting(true);
     try {
       await deleteTeam(team.id);
+      toastSuccess("Team deleted successfully");
       queryClient.invalidateQueries({ queryKey: ["teams"] });
       router.push("/");
-    } catch (e) {
-      alert("Failed to delete team. You must be the owner.");
+    } catch (e: any) {
+      toastError("Failed to delete team. You must be the owner.", e);
     } finally {
       setIsDeleting(false);
     }

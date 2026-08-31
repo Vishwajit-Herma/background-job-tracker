@@ -5,8 +5,19 @@ import { Badge } from "@/components/ui/badge";
 import { JobReliabilityOverview } from "@/lib/api/reliability";
 import { ReliabilityBadge } from "./reliability-badge";
 import { formatDurationMs, formatDurationSeconds, formatReliabilityTime } from "@/lib/reliability-utils";
-import { Activity, Clock, ShieldOff, AlertTriangle, CalendarClock, Timer, CheckCircle2 } from "lucide-react";
+import { Activity, Clock, ShieldOff, AlertTriangle, CalendarClock, Timer, CheckCircle2, HeartPulse } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+function formatSeconds(seconds?: number | null): string {
+  if (seconds === null || seconds === undefined) return "—";
+  if (seconds < 60) return `${Math.round(seconds)}s`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ${Math.round(seconds % 60)}s`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ${minutes % 60}m`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ${hours % 24}h`;
+}
 
 interface CurrentStatusCardProps {
   reliability: JobReliabilityOverview;
@@ -95,8 +106,33 @@ export function CurrentStatusCard({ reliability }: CurrentStatusCardProps) {
           </div>
         )}
 
+        {/* Recovery Velocity Metrics (MTTR / MTBF) */}
+        <div className="grid grid-cols-2 gap-3 pt-1">
+          <div className="p-3 rounded-lg border bg-card/60">
+            <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+              <span className="font-medium uppercase text-[10px] tracking-wider">MTTR (Mean Time to Resolve)</span>
+              <Timer className="h-3.5 w-3.5 text-primary" />
+            </div>
+            <p className="text-base font-bold font-mono text-foreground">
+              {formatSeconds(reliability.mttr_seconds)}
+            </p>
+            <p className="text-[10px] text-muted-foreground">Incident resolution velocity</p>
+          </div>
+
+          <div className="p-3 rounded-lg border bg-card/60">
+            <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+              <span className="font-medium uppercase text-[10px] tracking-wider">MTBF (Mean Time Between Failures)</span>
+              <HeartPulse className="h-3.5 w-3.5 text-emerald-500" />
+            </div>
+            <p className="text-base font-bold font-mono text-foreground">
+              {formatSeconds(reliability.mtbf_seconds)}
+            </p>
+            <p className="text-[10px] text-muted-foreground">Failure frequency interval</p>
+          </div>
+        </div>
+
         {/* Schedule Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1 border-t">
           {/* Last Execution */}
           <div className="p-3 rounded-lg border bg-card/60">
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">

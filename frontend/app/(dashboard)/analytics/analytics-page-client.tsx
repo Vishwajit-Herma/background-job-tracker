@@ -9,10 +9,13 @@ import { ChartSkeleton, ListSkeleton, MetricCardSkeleton, TableSkeleton } from "
 import { MultiSeriesChart, TrendLineChart, CHART_COLORS } from "@/components/bjt/analytics/charts";
 import { format } from "date-fns";
 import { QueueSummaryTable, SlowestJobsList, TopFailingJobsList, WorkerSummaryTable } from "@/components/bjt/analytics/summary-tables";
+import { ReliabilityReportCard } from "@/components/bjt/analytics/reliability-report-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ActivityIcon, CheckCircleIcon, CircleXIcon, ClockIcon, RotateCcwIcon, TriangleAlertIcon, InfoIcon, Loader2 as Spinner } from "lucide-react";
 import { useWorkspace } from "@/hooks/use-workspace";
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { getReliabilityReport } from "@/lib/api/projects";
 import { AnalyticsMetricDelta } from "@/lib/api/analytics";
 import Link from "next/link";
 
@@ -81,6 +84,18 @@ export function AnalyticsPageClient() {
   const { data: analytics, isLoading: isAnalyticsLoading, isError: isAnalyticsError, refetch: refetchAnalytics, isRefetching: isRefetchingAnalytics } = useProjectAnalytics(projectId, { range });
   const { data: trendData, isLoading: isTrendLoading, isError: isTrendError, refetch: refetchTrend, isRefetching: isRefetchingTrend } = useProjectAnalyticsTrend(projectId, { range });
 
+  const {
+    data: reliabilityReport,
+    isLoading: isReliabilityLoading,
+    refetch: refetchReliability,
+    isRefetching: isRefetchingReliability,
+  } = useQuery({
+    queryKey: ["reliability-report", projectId, analytics?.period?.start, analytics?.period?.end],
+    queryFn: () => getReliabilityReport(projectId!, analytics!.period.start, analytics!.period.end),
+    enabled: !!projectId && !!analytics?.period?.start && !!analytics?.period?.end,
+    staleTime: 60 * 1000,
+  });
+
   const hasDurationData = trendData?.trend.some(t => t.average_duration_ms !== null || t.p95_duration_ms !== null);
 
   const getXAxisFormatter = (range: string) => {
@@ -92,12 +107,13 @@ export function AnalyticsPageClient() {
   const xAxisFormatter = getXAxisFormatter(range);
 
   const isLoading = isWorkspaceLoading || isAnalyticsLoading || isTrendLoading;
-  const isRefreshing = isRefetchingAnalytics || isRefetchingTrend;
+  const isRefreshing = isRefetchingAnalytics || isRefetchingTrend || isRefetchingReliability;
 
   const handleRefresh = () => {
     if (projectId) {
       refetchAnalytics();
       refetchTrend();
+      refetchReliability();
     }
   };
 
@@ -351,6 +367,9 @@ export function AnalyticsPageClient() {
             )}
           </CardContent>
         </Card>
+
+        {/* Reliability & Recovery (MTTR / MTBF) Report */}
+        <ReliabilityReportCard report={reliabilityReport} isLoading={isReliabilityLoading} />
 
       </div>
     </div>

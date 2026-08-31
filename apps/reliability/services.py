@@ -1,9 +1,10 @@
 import statistics
 from datetime import timedelta
-from django.db.models import F
+from django.db.models import Avg, Count, DurationField, ExpressionWrapper, F, Max, Min
 from django.utils import timezone
 
 from apps.executions.models import Execution
+from apps.incidents.models import Incident
 from apps.reliability.models import JobBaseline, ReliabilityFinding
 
 
@@ -388,6 +389,33 @@ def get_job_reliability_overview(job):
         },
     }
 
+    # Calculate MTTR and MTBF metrics for this specific job
+    job_incidents = Incident.objects.filter(job=job)
+    resolved_job_incidents = job_incidents.filter(
+        status=Incident.Status.RESOLVED, resolved_at__isnull=False
+    )
+    mttr_res = resolved_job_incidents.annotate(
+        duration=ExpressionWrapper(
+            F("resolved_at") - F("created_at"), output_field=DurationField()
+        )
+    ).aggregate(avg_mttr=Avg("duration"))
+    mttr_td = mttr_res["avg_mttr"]
+    job_mttr_seconds = mttr_td.total_seconds() if mttr_td else None
+
+    mtbf_res = job_incidents.aggregate(
+        min_created=Min("created_at"),
+        max_created=Max("created_at"),
+        count=Count("id"),
+    )
+    job_mtbf_seconds = None
+    if (
+        mtbf_res["count"] >= 2
+        and mtbf_res["max_created"]
+        and mtbf_res["min_created"]
+    ):
+        delta = (mtbf_res["max_created"] - mtbf_res["min_created"]).total_seconds()
+        job_mtbf_seconds = delta / (mtbf_res["count"] - 1)
+
     return {
         "job_id": job.id,
         "job_name": job.name,
@@ -402,6 +430,8 @@ def get_job_reliability_overview(job):
         "next_expected_at": next_expected_at.isoformat() if next_expected_at else None,
         "missed_after_at": missed_after_at.isoformat() if missed_after_at else None,
         "overdue_by_seconds": overdue_by_seconds,
+        "mttr_seconds": job_mttr_seconds,
+        "mtbf_seconds": job_mtbf_seconds,
         "latest_execution": {
             "id": latest_exec.id,
             "status": latest_exec.status,

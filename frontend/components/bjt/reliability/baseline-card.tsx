@@ -10,6 +10,7 @@ import { JobBaseline, recalculateJobBaseline } from "@/lib/api/reliability";
 import { formatDurationMs, formatDurationSeconds, formatReliabilityTime } from "@/lib/reliability-utils";
 import { BarChart3, RotateCw, Sparkles, AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Clock, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toastError, toastSuccess } from "@/lib/toast";
 
 interface BaselineCardProps {
   jobId: number;
@@ -26,13 +27,14 @@ export function BaselineCard({ jobId, baseline, canManage = true }: BaselineCard
   const mutation = useMutation({
     mutationFn: () => recalculateJobBaseline(jobId, { sample_window_days: parseInt(sampleWindow, 10) }),
     onSuccess: (res) => {
+      toastSuccess("Baseline Recalculation Queued", res.message);
       setQueuedMessage(res.message || `Baseline recalculation queued over a ${sampleWindow}-day window.`);
       queryClient.invalidateQueries({ queryKey: ["job-reliability", jobId] });
       queryClient.invalidateQueries({ queryKey: ["project-reliability"] });
       setTimeout(() => setQueuedMessage(null), 6000);
     },
     onError: (err: any) => {
-      alert(err.message || "Failed to trigger baseline recalculation.");
+      toastError("Recalculation Failed", err);
     },
   });
 

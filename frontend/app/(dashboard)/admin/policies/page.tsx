@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Search, Loader2, Edit, Trash2, ShieldAlert } from "lucide-react";
+import { Plus, Search, Loader2, Edit, Trash2, ShieldCheck } from "lucide-react";
+import { toastError, toastSuccess } from "@/lib/toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -125,14 +126,15 @@ export default function AdminPoliciesPage() {
     try {
       if (editingPolicy) {
         await updateNotificationPolicy(editingPolicy.id, values);
+        toastSuccess("Policy updated successfully");
       } else {
         await createNotificationPolicy(values);
+        toastSuccess("Policy created successfully");
       }
       queryClient.invalidateQueries({ queryKey: ["admin-policies"] });
       setIsModalOpen(false);
-    } catch (e) {
-      console.error(e);
-      alert("Failed to save policy. Make sure channel belongs to project and rule is unique.");
+    } catch (e: any) {
+      toastError("Failed to save policy", e);
     }
   };
 
@@ -206,7 +208,7 @@ export default function AdminPoliciesPage() {
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <Button variant="ghost" size="icon" onClick={() => openEditModal(p)}><Edit className="h-4 w-4" /></Button>
-                      <Button variant="ghost" size="icon" onClick={() => { if (confirm("Are you sure?")) deleteMutation.mutate(p.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                      <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(p.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                     </div>
                   </TableCell>
                 </TableRow>
