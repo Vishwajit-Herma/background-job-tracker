@@ -15,7 +15,8 @@ import {
   Key,
   LogOut,
   Shield,
-  MessageSquare
+  MessageSquare,
+  BookOpen
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
@@ -28,6 +29,7 @@ const routes = [
   { href: "/analytics", label: "Analytics", icon: LineChart },
   { href: "/alerts", label: "Alerts", icon: BellRing },
   { href: "/incidents", label: "Incidents", icon: AlertTriangle },
+  { href: "/runbooks", label: "Runbooks", icon: BookOpen },
   { href: "/team", label: "Team", icon: Users },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
@@ -67,6 +69,7 @@ export function Sidebar({ className }: { className?: string }) {
               <Link
                 key={route.href}
                 href={route.href}
+                prefetch={false}
                 className={cn(
                   "flex items-center gap-3 rounded-lg px-3 py-2 transition-all hover:text-primary",
                   active ? "bg-muted text-primary" : "text-muted-foreground"

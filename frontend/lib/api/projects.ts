@@ -102,3 +102,37 @@ export async function revokeAPIKey(
   );
   return (data as any).data ?? data;
 }
+
+// ─── Reliability Report ───────────────────────────────────────────────────────
+
+export interface JobReliabilityMetric {
+  job_id: number;
+  job_name: string;
+  task_identifier: string;
+  mttr_seconds: number | null;
+  mtbf_seconds: number | null;
+  total_incidents: number;
+  resolved_incidents: number;
+}
+
+export interface ReliabilityReport {
+  project_id: number;
+  start: string;
+  end: string;
+  total_incidents: number;
+  resolved_incidents: number;
+  mttr_seconds: number | null;
+  mtbf_seconds: number | null;
+  per_job: JobReliabilityMetric[];
+}
+
+export async function getReliabilityReport(
+  projectId: number,
+  start: string,
+  end: string
+): Promise<ReliabilityReport> {
+  const { data } = await apiClient.get<any>(
+    `/projects/${projectId}/reliability-report/?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`
+  );
+  return (data as any).data ?? data;
+}

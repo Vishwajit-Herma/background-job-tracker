@@ -3,39 +3,200 @@
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { 
-  getIncident, 
-  getIncidentEvents, 
-  getIncidentNotes, 
-  acknowledgeIncident, 
+import {
+  getIncident,
+  getIncidentEvents,
+  getIncidentNotes,
+  acknowledgeIncident,
   resolveIncident,
-  addIncidentNote
+  reopenIncident,
+  addIncidentNote,
+  IncidentEvent,
 } from "@/lib/api/incidents";
 import { useWorkspace } from "@/hooks/use-workspace";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { 
-  Loader2, ArrowLeft, AlertTriangle, CheckCircle2, 
-  Clock, Server, Activity, User, MessageSquare, ListTree, ShieldCheck
+import {
+  Loader2,
+  ArrowLeft,
+  AlertTriangle,
+  CheckCircle2,
+  Clock,
+  Server,
+  Activity,
+  User,
+  MessageSquare,
+  ListTree,
+  ShieldCheck,
+  BookOpen,
+  FileText,
+  Brain,
+  Play,
+  XCircle,
+  SkipForward,
 } from "lucide-react";
 import Link from "next/link";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { toastError, toastSuccess } from "@/lib/toast";
 import { useAuth } from "@/hooks/use-auth";
 import { IncidentIntelligenceSection } from "@/components/bjt/incidents/incident-intelligence-section";
+import { RecommendedRunbooks } from "@/components/bjt/incidents/runbook/recommended-runbooks";
+import { PostmortemSection } from "@/components/bjt/incidents/postmortem/postmortem-section";
+import { IncidentKnowledgePanel } from "@/components/bjt/incidents/incident-knowledge-panel";
+
+// ─── Timeline Event Rendering ─────────────────────────────────────────────────
+
+function getEventDotColor(eventType: IncidentEvent["event_type"]): string {
+  if (eventType === "CREATED") return "bg-destructive";
+  if (eventType.includes("RESOLVED")) return "bg-emerald-500";
+  if (eventType === "RUNBOOK_COMPLETED") return "bg-emerald-500";
+  if (eventType === "RUNBOOK_CANCELLED") return "bg-amber-500";
+  if (eventType === "RUNBOOK_STARTED") return "bg-blue-500";
+  if (eventType === "POSTMORTEM_COMPLETED") return "bg-violet-500";
+  if (eventType === "POSTMORTEM_SUBMITTED") return "bg-violet-400";
+  return "bg-primary";
+}
+
+function getEventIcon(eventType: IncidentEvent["event_type"]) {
+  if (eventType === "RUNBOOK_STARTED") return <Play className="h-3 w-3" />;
+  if (eventType === "RUNBOOK_COMPLETED") return <CheckCircle2 className="h-3 w-3" />;
+  if (eventType === "RUNBOOK_CANCELLED") return <XCircle className="h-3 w-3" />;
+  if (eventType === "POSTMORTEM_SUBMITTED") return <FileText className="h-3 w-3" />;
+  if (eventType === "POSTMORTEM_COMPLETED") return <CheckCircle2 className="h-3 w-3" />;
+  return null;
+}
+
+function formatEventLabel(eventType: string): string {
+  return eventType.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function TimelineEvent({ event, isLast }: { event: IncidentEvent; isLast: boolean }) {
+  const dotColor = getEventDotColor(event.event_type);
+
+  return (
+    <div className="flex gap-4 relative">
+      {!isLast && <div className="absolute left-[11px] top-7 bottom-[-16px] w-px bg-border" />}
+      <div className="h-6 w-6 rounded-full border-2 bg-background flex items-center justify-center shrink-0 mt-0.5 z-10">
+        <div className={`h-2 w-2 rounded-full ${dotColor}`} />
+      </div>
+      <div className="flex-1 pb-2">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-medium">{formatEventLabel(event.event_type)}</p>
+          <span className="text-xs text-muted-foreground">{new Date(event.event_time).toLocaleString()}</span>
+        </div>
+        {event.actor_name && event.event_type !== "ASSIGNED" && (
+          <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+            <User className="h-3 w-3" /> by {event.actor_name}
+          </p>
+        )}
+        {event.event_type === "ASSIGNED" && (
+          <p className="text-sm text-muted-foreground mt-2 bg-muted/50 p-2 rounded">
+            Assigned to:{" "}
+            <span className="font-medium text-foreground">
+              {event.metadata?.new_assignee_name || "Team Member"}
+            </span>
+            {event.actor_name && (
+              <span className="text-xs text-muted-foreground ml-2">(by {event.actor_name})</span>
+            )}
+          </p>
+        )}
+        {event.event_type === "ACKNOWLEDGED" &&
+          (event.metadata?.acknowledged_by_name || event.actor_name) && (
+            <p className="text-sm text-muted-foreground mt-2 bg-muted/50 p-2 rounded">
+              Acknowledged by:{" "}
+              <span className="font-medium text-foreground">
+                {event.metadata?.acknowledged_by_name || event.actor_name}
+              </span>
+            </p>
+          )}
+        {(event.event_type === "MANUALLY_RESOLVED" || event.event_type === "AUTO_RESOLVED") && (
+          <p className="text-sm text-muted-foreground mt-2 bg-muted/50 p-2 rounded">
+            Resolved by:{" "}
+            <span className="font-medium text-foreground">
+              {event.event_type === "AUTO_RESOLVED"
+                ? "System (Auto-recovery)"
+                : event.metadata?.resolved_by_name || event.actor_name || "Unknown"}
+            </span>
+          </p>
+        )}
+        {event.event_type === "REOPENED" &&
+          (event.metadata?.reopened_by_name || event.actor_name) && (
+            <p className="text-sm text-muted-foreground mt-2 bg-muted/50 p-2 rounded">
+              Reopened by:{" "}
+              <span className="font-medium text-foreground">
+                {event.metadata?.reopened_by_name || event.actor_name}
+              </span>
+            </p>
+          )}
+        {event.event_type === "RUNBOOK_STARTED" && event.metadata?.runbook_name && (
+          <p className="text-sm text-muted-foreground mt-2 bg-blue-500/5 border border-blue-500/20 p-2 rounded flex items-center gap-1.5">
+            <BookOpen className="h-3.5 w-3.5 text-blue-500" />
+            Runbook: <span className="font-medium text-foreground">{event.metadata.runbook_name}</span>
+          </p>
+        )}
+        {(event.event_type === "RUNBOOK_COMPLETED" || event.event_type === "RUNBOOK_CANCELLED") &&
+          event.metadata?.runbook_name && (
+            <p className="text-sm text-muted-foreground mt-2 bg-muted/50 p-2 rounded flex items-center gap-1.5">
+              <BookOpen className="h-3.5 w-3.5" />
+              Runbook: <span className="font-medium text-foreground">{event.metadata.runbook_name}</span>
+              {" "}·{" "}
+              <span className={event.event_type === "RUNBOOK_COMPLETED" ? "text-emerald-600" : "text-amber-600"}>
+                {event.event_type === "RUNBOOK_COMPLETED" ? "Completed" : "Cancelled"}
+              </span>
+            </p>
+          )}
+        {(event.event_type === "POSTMORTEM_SUBMITTED" ||
+          event.event_type === "POSTMORTEM_COMPLETED") && (
+          <p className="text-sm text-muted-foreground mt-2 bg-violet-500/5 border border-violet-500/20 p-2 rounded flex items-center gap-1.5">
+            <FileText className="h-3.5 w-3.5 text-violet-500" />
+            Postmortem{" "}
+            {event.event_type === "POSTMORTEM_SUBMITTED" ? "submitted for review" : "completed"}
+          </p>
+        )}
+        {event.metadata?.reason && (
+          <p className="text-sm text-muted-foreground mt-2 italic bg-muted/50 p-2 rounded">
+            {event.metadata.reason}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function IncidentDetailsPage() {
   const params = useParams();
   const router = useRouter();
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  
+
   const incidentId = parseInt(params.id as string, 10);
   const [newNote, setNewNote] = useState("");
+  const [showReopenDialog, setShowReopenDialog] = useState(false);
 
-  const { projects, jobs, alertRules, projectMap, jobMap, alertRuleMap, canManageProject, isLoading: isLoadingWorkspace } = useWorkspace();
+  const {
+    projects,
+    jobs,
+    alertRules,
+    canManageProject,
+    isLoading: isLoadingWorkspace,
+  } = useWorkspace();
 
-  const { data: incident, isLoading: isLoadingIncident, isError } = useQuery({
+  const {
+    data: incident,
+    isLoading: isLoadingIncident,
+    isError,
+  } = useQuery({
     queryKey: ["incident", incidentId],
     queryFn: () => getIncident(incidentId),
     enabled: !!incidentId,
@@ -58,84 +219,118 @@ export default function IncidentDetailsPage() {
   const ackMutation = useMutation({
     mutationFn: () => acknowledgeIncident(incidentId),
     onSuccess: () => {
+      toastSuccess("Incident Acknowledged");
       queryClient.invalidateQueries({ queryKey: ["incident", incidentId] });
       queryClient.invalidateQueries({ queryKey: ["incident-events", incidentId] });
     },
-    onError: (err: any) => alert(err.response?.data?.error || "Failed to acknowledge"),
+    onError: (err: any) => toastError("Failed to Acknowledge", err),
   });
 
   const resolveMutation = useMutation({
     mutationFn: () => resolveIncident(incidentId),
     onSuccess: () => {
+      toastSuccess("Incident Resolved");
       queryClient.invalidateQueries({ queryKey: ["incident", incidentId] });
       queryClient.invalidateQueries({ queryKey: ["incident-events", incidentId] });
     },
-    onError: (err: any) => alert(err.response?.data?.error || "Failed to resolve"),
+    onError: (err: any) => toastError("Failed to Resolve", err),
   });
 
   const noteMutation = useMutation({
     mutationFn: (content: string) => addIncidentNote(incidentId, content),
     onSuccess: () => {
+      toastSuccess("Note Added");
       queryClient.invalidateQueries({ queryKey: ["incident-notes", incidentId] });
       queryClient.invalidateQueries({ queryKey: ["incident-events", incidentId] });
       setNewNote("");
     },
+    onError: (err: any) => toastError("Failed to Add Note", err),
   });
 
   const reopenMutation = useMutation({
-    mutationFn: () => import("@/lib/api/incidents").then(m => m.reopenIncident(incidentId)),
+    mutationFn: () => reopenIncident(incidentId),
     onSuccess: () => {
+      toastSuccess("Incident Reopened");
       queryClient.invalidateQueries({ queryKey: ["incident", incidentId] });
       queryClient.invalidateQueries({ queryKey: ["incident-events", incidentId] });
     },
-    onError: (err: any) => alert(err.response?.data?.error || err.response?.data?.detail || "Failed to reopen"),
+    onError: (err: any) => toastError("Failed to Reopen", err),
   });
 
-  const project = incident ? projects.find(p => p.id === incident.project) : null;
+  const project = incident ? projects.find((p) => p.id === incident.project) : null;
   const hasManagePermission = project ? canManageProject(project.id) : false;
-  
+
   const currentUserId = user?.id || (user as any)?.pk;
   const isAssignee = Boolean(
-    incident?.assigned_to_user_id && 
-    currentUserId && 
-    Number(incident.assigned_to_user_id) === Number(currentUserId)
+    incident?.assigned_to_user_id &&
+      currentUserId &&
+      Number(incident.assigned_to_user_id) === Number(currentUserId)
   );
   const canAckOrResolve = hasManagePermission || isAssignee;
 
   const { data: teamMembers = [] } = useQuery({
     queryKey: ["team-members", project?.team],
-    queryFn: () => import("@/lib/api/teams").then(m => m.getTeamMembers(project!.team)),
-    enabled: !!project?.team && hasManagePermission,
+    queryFn: () => import("@/lib/api/teams").then((m) => m.getTeamMembers(project!.team)),
+    enabled: !!project?.team,
   });
 
   const assignMutation = useMutation({
-    mutationFn: (memberId: number) => import("@/lib/api/incidents").then(m => m.assignIncident(incidentId, memberId)),
+    mutationFn: (memberId: number | null) =>
+      import("@/lib/api/incidents").then((m) => m.assignIncident(incidentId, memberId)),
     onSuccess: () => {
+      toastSuccess("Incident Assignee Updated");
       queryClient.invalidateQueries({ queryKey: ["incident", incidentId] });
       queryClient.invalidateQueries({ queryKey: ["incident-events", incidentId] });
     },
-    onError: (err: any) => alert(err.response?.data?.error || err.response?.data?.detail || "Failed to assign"),
+    onError: (err: any) => toastError("Assignment Failed", err),
   });
 
-  if (isLoading) return <div className="p-8 flex justify-center"><Loader2 className="h-6 w-6 animate-spin" /></div>;
-  if (isError || !incident) return <div className="p-8 text-destructive">Failed to load incident.</div>;
+  if (isLoading)
+    return (
+      <div className="p-8 flex justify-center">
+        <Loader2 className="h-6 w-6 animate-spin" />
+      </div>
+    );
+  if (isError || !incident)
+    return <div className="p-8 text-destructive">Failed to load incident.</div>;
 
-  const job = incident.job ? jobs.find(j => j.id === incident.job) : null;
-  const alertRule = incident.alert_rule ? alertRules.find(r => r.id === incident.alert_rule) : null;
+  const job = incident.job ? jobs.find((j) => j.id === incident.job) : null;
+  const alertRule = incident.alert_rule ? alertRules.find((r) => r.id === incident.alert_rule) : null;
   const tm = incident.trigger_metadata || {};
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case "OPEN": return <Badge variant="destructive" className="px-3 py-1 text-sm shadow-sm">Open</Badge>;
-      case "ACKNOWLEDGED": return <Badge variant="secondary" className="bg-amber-500/10 text-amber-600 border-amber-500/20 px-3 py-1 text-sm">Acknowledged</Badge>;
-      case "RESOLVED": return <Badge variant="outline" className="border-green-500/50 text-green-600 bg-green-500/10 px-3 py-1 text-sm">Resolved</Badge>;
-      default: return <Badge variant="outline">{status}</Badge>;
+      case "OPEN":
+        return (
+          <Badge variant="destructive" className="px-3 py-1 text-sm shadow-sm">
+            Open
+          </Badge>
+        );
+      case "ACKNOWLEDGED":
+        return (
+          <Badge variant="secondary" className="bg-amber-500/10 text-amber-600 border-amber-500/20 px-3 py-1 text-sm">
+            Acknowledged
+          </Badge>
+        );
+      case "RESOLVED":
+        return (
+          <Badge variant="outline" className="border-green-500/50 text-green-600 bg-green-500/10 px-3 py-1 text-sm">
+            Resolved
+          </Badge>
+        );
+      default:
+        return <Badge variant="outline">{status}</Badge>;
     }
   };
 
   return (
-    <div className="flex-1 space-y-6 p-8 pt-6 max-w-5xl">
-      <Button variant="ghost" size="sm" onClick={() => router.push("/incidents")} className="text-muted-foreground -ml-3 mb-2">
+    <div className="flex-1 space-y-6 p-8 pt-6 max-w-6xl">
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => router.push("/incidents")}
+        className="text-muted-foreground -ml-3 mb-2"
+      >
         <ArrowLeft className="h-4 w-4 mr-2" /> Back to Incidents
       </Button>
 
@@ -150,282 +345,367 @@ export default function IncidentDetailsPage() {
                 {incident.resolution_type === "AUTOMATIC" ? "Auto-resolved" : "Manually resolved"}
               </Badge>
             )}
-            <Badge variant="outline" className={incident.severity === "CRITICAL" ? "text-destructive border-destructive" : ""}>
+            <Badge
+              variant="outline"
+              className={incident.severity === "CRITICAL" ? "text-destructive border-destructive" : ""}
+            >
               {incident.severity}
             </Badge>
           </div>
-          
+
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
             {project ? (
-              <Link href={`/projects?project_id=${project.id}`} className="flex items-center gap-1.5 hover:text-foreground transition-colors">
+              <Link
+                href={`/projects?project_id=${project.id}`}
+                className="flex items-center gap-1.5 hover:text-foreground transition-colors"
+              >
                 <Server className="h-4 w-4" /> {project.name}
               </Link>
             ) : (
-              <span className="flex items-center gap-1.5"><Server className="h-4 w-4" /> Unknown Project</span>
+              <span className="flex items-center gap-1.5">
+                <Server className="h-4 w-4" /> Unknown Project
+              </span>
             )}
-            
+
             {job ? (
-              <Link href={`/jobs?job_id=${job.id}`} className="flex items-center gap-1.5 hover:text-foreground transition-colors">
+              <Link
+                href={`/jobs?job_id=${job.id}`}
+                className="flex items-center gap-1.5 hover:text-foreground transition-colors"
+              >
                 <Activity className="h-4 w-4" /> {job.name}
               </Link>
             ) : (
-              <span className="flex items-center gap-1.5"><Activity className="h-4 w-4" /> Project-level</span>
+              <span className="flex items-center gap-1.5">
+                <Activity className="h-4 w-4" /> Project-level
+              </span>
             )}
-            <span className="flex items-center gap-1.5"><Clock className="h-4 w-4" /> {new Date(incident.created_at).toLocaleString()}</span>
+            <span className="flex items-center gap-1.5">
+              <Clock className="h-4 w-4" /> {new Date(incident.created_at).toLocaleString()}
+            </span>
+            <div className="flex items-center gap-1.5">
+              <User className="h-4 w-4 text-muted-foreground" />
+              {hasManagePermission ? (
+                <select
+                  className="bg-background border border-input rounded px-2 py-0.5 text-xs focus:outline-none focus:border-primary font-medium cursor-pointer"
+                  value={incident.assigned_to ?? ""}
+                  disabled={assignMutation.isPending}
+                  onChange={(e) => {
+                    const val = e.target.value ? Number(e.target.value) : null;
+                    assignMutation.mutate(val);
+                  }}
+                >
+                  <option value="">Unassigned</option>
+                  {teamMembers.map((m: any) => {
+                    const name =
+                      [m.user?.first_name, m.user?.last_name].filter(Boolean).join(" ") ||
+                      m.user?.email ||
+                      `Member #${m.id}`;
+                    return (
+                      <option key={m.id} value={m.id}>
+                        {name}
+                      </option>
+                    );
+                  })}
+                </select>
+              ) : (
+                <span className="font-medium text-foreground">
+                  {incident.assigned_to_name || "Unassigned"}
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
           {canAckOrResolve && incident.status === "OPEN" && (
-            <Button onClick={() => ackMutation.mutate()} disabled={ackMutation.isPending} variant="secondary">
+            <Button
+              onClick={() => ackMutation.mutate()}
+              disabled={ackMutation.isPending}
+              variant="secondary"
+            >
+              {ackMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Acknowledge
             </Button>
           )}
           {canAckOrResolve && incident.status !== "RESOLVED" && (
-            <Button onClick={() => resolveMutation.mutate()} disabled={resolveMutation.isPending} variant="default">
+            <Button
+              onClick={() => resolveMutation.mutate()}
+              disabled={resolveMutation.isPending}
+              variant="default"
+            >
               <CheckCircle2 className="mr-2 h-4 w-4" /> Resolve
             </Button>
           )}
           {hasManagePermission && incident.status === "RESOLVED" && (
-            <Button onClick={() => { if(window.confirm("Are you sure you want to reopen this incident?")) reopenMutation.mutate(); }} disabled={reopenMutation.isPending} variant="outline">
+            <Button
+              onClick={() => setShowReopenDialog(true)}
+              disabled={reopenMutation.isPending}
+              variant="outline"
+            >
               Reopen Incident
             </Button>
           )}
         </div>
       </div>
 
-      {/* Incident Intelligence Section */}
-      <IncidentIntelligenceSection
-        incidentId={incident.id}
-        jobId={incident.job}
-        projectId={incident.project}
-      />
+      {/* Reopen Confirmation Dialog */}
+      <Dialog open={showReopenDialog} onOpenChange={setShowReopenDialog}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Reopen Incident INC-{incident.id}?</DialogTitle>
+            <DialogDescription>
+              Reopening this incident will change its status back to OPEN and log a timeline event.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setShowReopenDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={reopenMutation.isPending}
+              onClick={() => {
+                reopenMutation.mutate();
+                setShowReopenDialog(false);
+              }}
+            >
+              {reopenMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+              Reopen Incident
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Left Column: Details & Trigger */}
-        <div className="md:col-span-1 space-y-6">
-          <div className="rounded-xl border bg-card p-5 shadow-sm">
-            <h3 className="font-semibold mb-4 flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-primary" /> Trigger Details</h3>
-            <div className="space-y-4">
-              <div>
-                <p className="text-xs text-muted-foreground font-medium uppercase mb-1">Metric</p>
-                <p className="text-sm font-medium">{tm.metric_type ? tm.metric_type.replace("_", " ") : "Unknown"}</p>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium uppercase mb-1">Actual Value</p>
-                  <p className="text-xl font-mono text-destructive">{tm.metric_value !== undefined ? tm.metric_value : (tm.actual_value !== undefined ? tm.actual_value : "-")}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium uppercase mb-1">Threshold</p>
-                  <p className="text-xl font-mono">{tm.threshold !== undefined ? tm.threshold : "-"}</p>
-                </div>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground font-medium uppercase mb-1">Alert Rule</p>
-                {alertRule ? (
-                  <Link href="/alerts" className="text-sm font-medium text-primary hover:underline flex items-center gap-1.5 bg-primary/5 w-fit px-2 py-1 rounded-md border border-primary/20">
-                    <Activity className="h-3.5 w-3.5" />
-                    {alertRule.metric.replace(/_/g, " ")} {alertRule.metric.includes("ANOMALY") ? "(Anomaly)" : `> ${alertRule.threshold}`}
-                  </Link>
-                ) : (
-                  <p className="text-sm font-mono bg-muted px-2 py-1 rounded inline-block">{incident.alert_rule || "-"}</p>
-                )}
-              </div>
-            </div>
-          </div>
+      {/* 5-Tab Layout */}
+      <Tabs defaultValue="overview" className="w-full">
+        <TabsList className="grid w-full grid-cols-5 mb-6">
+          <TabsTrigger value="overview" className="flex items-center gap-1.5 text-xs sm:text-sm">
+            <AlertTriangle className="h-4 w-4" />
+            <span className="hidden sm:inline">Overview</span>
+          </TabsTrigger>
+          <TabsTrigger value="intelligence" className="flex items-center gap-1.5 text-xs sm:text-sm">
+            <Activity className="h-4 w-4" />
+            <span className="hidden sm:inline">Intelligence</span>
+          </TabsTrigger>
+          <TabsTrigger value="response" className="flex items-center gap-1.5 text-xs sm:text-sm">
+            <BookOpen className="h-4 w-4" />
+            <span className="hidden sm:inline">Response</span>
+          </TabsTrigger>
+          <TabsTrigger value="timeline" className="flex items-center gap-1.5 text-xs sm:text-sm">
+            <ListTree className="h-4 w-4" />
+            <span className="hidden sm:inline">Timeline</span>
+          </TabsTrigger>
+          <TabsTrigger value="postmortem" className="flex items-center gap-1.5 text-xs sm:text-sm">
+            <FileText className="h-4 w-4" />
+            <span className="hidden sm:inline">Postmortem</span>
+          </TabsTrigger>
+        </TabsList>
 
-          {/* Reliability Finding Context Card if applicable */}
-          {(tm.reliability_finding_id || [
-            "MISSED_EXECUTION",
-            "STALLED_EXECUTION",
-            "OVERDUE_EXECUTION",
-            "FAILURE_RATE_ANOMALY",
-            "RETRY_RATE_ANOMALY",
-            "DURATION_ANOMALY",
-            "EXECUTION_VOLUME_ANOMALY",
-          ].includes(tm.metric_type || alertRule?.metric || "") || (alertRule?.metric && alertRule.metric.includes("ANOMALY"))) && (
-            <div className="rounded-xl border border-primary/20 bg-primary/5 p-5 shadow-sm space-y-3">
-              <h3 className="font-semibold flex items-center gap-2 text-primary">
-                <ShieldCheck className="h-4 w-4" /> Reliability Finding
+        {/* ── Overview ── */}
+        <TabsContent value="overview">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Trigger Details */}
+            <div className="rounded-xl border bg-card p-5 shadow-sm">
+              <h3 className="font-semibold mb-4 flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-primary" /> Trigger Details
               </h3>
-              <div className="space-y-2 text-xs">
+              <div className="space-y-4">
                 <div>
-                  <p className="text-muted-foreground uppercase font-medium text-[10px]">Condition</p>
-                  <p className="font-semibold text-foreground text-sm mt-0.5">
-                    {(tm.condition_type || tm.metric_type || alertRule?.metric || "Reliability Violation").replace(/_/g, " ")}
+                  <p className="text-xs text-muted-foreground font-medium uppercase mb-1">Metric</p>
+                  <p className="text-sm font-medium">
+                    {tm.metric_type ? tm.metric_type.replace("_", " ") : "Unknown"}
                   </p>
                 </div>
-                {job && (
+                <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <p className="text-muted-foreground uppercase font-medium text-[10px]">Job</p>
-                    <p className="font-semibold text-foreground text-sm mt-0.5">{job.name}</p>
+                    <p className="text-xs text-muted-foreground font-medium uppercase mb-1">
+                      Actual Value
+                    </p>
+                    <p className="text-xl font-mono text-destructive">
+                      {tm.metric_value !== undefined
+                        ? tm.metric_value
+                        : tm.actual_value !== undefined
+                        ? tm.actual_value
+                        : "–"}
+                    </p>
                   </div>
-                )}
-                {incident.job && (
-                  <div className="pt-2">
-                    <Link href={`/jobs/${incident.job}/reliability`}>
-                      <Button size="sm" variant="default" className="w-full h-8 text-xs gap-1.5">
-                        <ShieldCheck className="h-3.5 w-3.5" /> View Job Reliability
-                      </Button>
+                  <div>
+                    <p className="text-xs text-muted-foreground font-medium uppercase mb-1">
+                      Threshold
+                    </p>
+                    <p className="text-xl font-mono">{tm.threshold !== undefined ? tm.threshold : "–"}</p>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground font-medium uppercase mb-1">Alert Rule</p>
+                  {alertRule ? (
+                    <Link
+                      href="/alerts"
+                      className="text-sm font-medium text-primary hover:underline flex items-center gap-1.5 bg-primary/5 w-fit px-2 py-1 rounded-md border border-primary/20"
+                    >
+                      <Activity className="h-3.5 w-3.5" />
+                      {alertRule.metric.replace(/_/g, " ")}{" "}
+                      {alertRule.metric.includes("ANOMALY") ? "(Anomaly)" : `> ${alertRule.threshold}`}
                     </Link>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-          {hasManagePermission && (
-            <div className="rounded-xl border bg-card p-5 shadow-sm">
-              <h3 className="font-semibold mb-4 flex items-center gap-2"><User className="h-4 w-4 text-primary" /> Assignment</h3>
-              <div className="space-y-3">
-                <p className="text-sm text-muted-foreground">Assign this incident to a team member to investigate.</p>
-                {incident.assigned_to_name && (
-                  <div className="flex items-center gap-2 p-2.5 bg-muted/30 border rounded-md">
-                    <User className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm font-medium text-foreground">
-                      Assigned to: {isAssignee ? "You" : incident.assigned_to_name}
-                    </span>
-                  </div>
-                )}
-                <div className="flex gap-2">
-                  <select 
-                    className="flex h-9 w-full items-center justify-between whitespace-nowrap rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                    value={incident.assigned_to || ""}
-                    onChange={(e) => assignMutation.mutate(Number(e.target.value))}
-                    disabled={assignMutation.isPending}
-                  >
-                    <option value="">Unassigned</option>
-                    {teamMembers.map((member: any) => (
-                      <option key={member.id} value={member.id}>
-                        {member.user.first_name} {member.user.last_name} ({member.user.email})
-                      </option>
-                    ))}
-                  </select>
+                  ) : (
+                    <p className="text-sm font-mono bg-muted px-2 py-1 rounded inline-block">
+                      {incident.alert_rule || "–"}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
-          )}
-        </div>
 
-        {/* Right Column: Timeline & Notes */}
-        <div className="md:col-span-2">
-          <Tabs defaultValue="timeline" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 mb-4">
-              <TabsTrigger value="timeline" className="flex items-center gap-2">
-                <ListTree className="h-4 w-4" /> Timeline
-              </TabsTrigger>
-              <TabsTrigger value="notes" className="flex items-center gap-2">
-                <MessageSquare className="h-4 w-4" /> Investigation Notes ({notes.length})
-              </TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="timeline" className="rounded-xl border bg-card p-6 shadow-sm min-h-[400px]">
-              <h3 className="font-semibold mb-6">Activity Timeline</h3>
-              <div className="space-y-6">
-                {events.map((event, i) => (
-                  <div key={event.id} className="flex gap-4 relative">
-                    {i < events.length - 1 && <div className="absolute left-[11px] top-7 bottom-[-16px] w-px bg-border" />}
-                    
-                    <div className="h-6 w-6 rounded-full border-2 bg-background flex items-center justify-center shrink-0 mt-0.5 z-10">
-                      <div className={`h-2 w-2 rounded-full ${
-                        event.event_type.includes("RESOLVED") ? "bg-green-500" :
-                        event.event_type === "CREATED" ? "bg-destructive" : "bg-primary"
-                      }`} />
-                    </div>
-                    
-                    <div className="flex-1 pb-2">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium capitalize">{event.event_type.replace("_", " ").toLowerCase()}</p>
-                        <span className="text-xs text-muted-foreground">{new Date(event.event_time).toLocaleString()}</span>
-                      </div>
-                      {event.actor_name && event.event_type !== "ASSIGNED" && (
-                        <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-                          <User className="h-3 w-3" /> by {event.actor_name}
-                        </p>
-                      )}
-                      {event.event_type === "ASSIGNED" && (
-                        <p className="text-sm text-muted-foreground mt-2 bg-muted/50 p-2 rounded">
-                          Assigned to: <span className="font-medium text-foreground">{event.metadata?.new_assignee_name || "Team Member"}</span>
-                          {event.actor_name && <span className="text-xs text-muted-foreground ml-2">(by {event.actor_name})</span>}
-                        </p>
-                      )}
-                      {event.event_type === "ACKNOWLEDGED" && (event.metadata?.acknowledged_by_name || event.actor_name) && (
-                        <p className="text-sm text-muted-foreground mt-2 bg-muted/50 p-2 rounded">
-                          Acknowledged by: <span className="font-medium text-foreground">{event.metadata?.acknowledged_by_name || event.actor_name}</span>
-                        </p>
-                      )}
-                      {event.event_type === "MANUALLY_RESOLVED" && (event.metadata?.resolved_by_name || event.actor_name) && (
-                        <p className="text-sm text-muted-foreground mt-2 bg-muted/50 p-2 rounded">
-                          Resolved by: <span className="font-medium text-foreground">{event.metadata?.resolved_by_name || event.actor_name}</span>
-                        </p>
-                      )}
-                      {event.event_type === "AUTO_RESOLVED" && (
-                        <p className="text-sm text-muted-foreground mt-2 bg-muted/50 p-2 rounded">
-                          Resolved by: <span className="font-medium text-foreground">System (Auto-recovery)</span>
-                        </p>
-                      )}
-                      {event.event_type === "REOPENED" && (event.metadata?.reopened_by_name || event.actor_name) && (
-                        <p className="text-sm text-muted-foreground mt-2 bg-muted/50 p-2 rounded">
-                          Reopened by: <span className="font-medium text-foreground">{event.metadata?.reopened_by_name || event.actor_name}</span>
-                        </p>
-                      )}
-                      {event.metadata?.reason && (
-                        <p className="text-sm text-muted-foreground mt-2 italic bg-muted/50 p-2 rounded">{event.metadata.reason}</p>
-                      )}
-                    </div>
+            {/* Reliability Finding */}
+            {(tm.reliability_finding_id ||
+              [
+                "MISSED_EXECUTION",
+                "STALLED_EXECUTION",
+                "OVERDUE_EXECUTION",
+                "FAILURE_RATE_ANOMALY",
+                "RETRY_RATE_ANOMALY",
+                "DURATION_ANOMALY",
+                "EXECUTION_VOLUME_ANOMALY",
+              ].includes(tm.metric_type || alertRule?.metric || "") ||
+              (alertRule?.metric && alertRule.metric.includes("ANOMALY"))) && (
+              <div className="rounded-xl border border-primary/20 bg-primary/5 p-5 shadow-sm space-y-3">
+                <h3 className="font-semibold flex items-center gap-2 text-primary">
+                  <ShieldCheck className="h-4 w-4" /> Reliability Finding
+                </h3>
+                <div className="space-y-2 text-xs">
+                  <div>
+                    <p className="text-muted-foreground uppercase font-medium text-[10px]">Condition</p>
+                    <p className="font-semibold text-foreground text-sm mt-0.5">
+                      {(
+                        tm.condition_type ||
+                        tm.metric_type ||
+                        alertRule?.metric ||
+                        "Reliability Violation"
+                      ).replace(/_/g, " ")}
+                    </p>
                   </div>
-                ))}
+                  {job && (
+                    <div>
+                      <p className="text-muted-foreground uppercase font-medium text-[10px]">Job</p>
+                      <p className="font-semibold text-foreground text-sm mt-0.5">{job.name}</p>
+                    </div>
+                  )}
+                  {incident.job && (
+                    <div className="pt-2">
+                      <Link href={`/jobs/${incident.job}/reliability`}>
+                        <Button size="sm" variant="default" className="w-full h-8 text-xs gap-1.5">
+                          <ShieldCheck className="h-3.5 w-3.5" /> View Job Reliability
+                        </Button>
+                      </Link>
+                    </div>
+                  )}
+                </div>
               </div>
-            </TabsContent>
+            )}
 
-            <TabsContent value="notes" className="rounded-xl border bg-card p-6 shadow-sm min-h-[400px] flex flex-col">
-              <h3 className="font-semibold mb-6">Investigation Notes</h3>
-              
-              <div className="flex-1 space-y-4 mb-6">
-                {notes.length === 0 ? (
-                  <div className="h-32 flex items-center justify-center text-muted-foreground text-sm italic bg-muted/20 rounded-lg border border-dashed">
-                    No notes added yet.
-                  </div>
-                ) : (
-                  notes.map(note => (
-                    <div key={note.id} className="bg-muted/30 border rounded-lg p-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-medium flex items-center gap-1.5"><User className="h-3.5 w-3.5 text-muted-foreground"/> {note.author_name}</span>
-                        <span className="text-xs text-muted-foreground">{new Date(note.created_at).toLocaleString()}</span>
+
+            {/* Notes (compact in overview) */}
+            <div className="rounded-xl border bg-card p-5 shadow-sm md:col-span-2">
+              <h3 className="font-semibold mb-4 flex items-center gap-2">
+                <MessageSquare className="h-4 w-4 text-primary" /> Investigation Notes ({notes.length})
+              </h3>
+              {notes.length > 0 && (
+                <div className="space-y-3 mb-4 max-h-48 overflow-y-auto">
+                  {notes.map((note) => (
+                    <div key={note.id} className="bg-muted/30 border rounded-lg p-3">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-medium flex items-center gap-1">
+                          <User className="h-3 w-3 text-muted-foreground" /> {note.author_name}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {new Date(note.created_at).toLocaleString()}
+                        </span>
                       </div>
                       <p className="text-sm whitespace-pre-wrap">{note.content}</p>
                     </div>
-                  ))
-                )}
-              </div>
-
-              <div className="mt-auto pt-4 border-t">
-                <Textarea 
-                  placeholder="Add a note about your investigation..." 
+                  ))}
+                </div>
+              )}
+              <div className="space-y-2">
+                <Textarea
+                  placeholder="Add a note about your investigation…"
                   value={newNote}
                   onChange={(e) => setNewNote(e.target.value)}
-                  className="mb-3 resize-none"
-                  rows={3}
+                  className="resize-none"
+                  rows={2}
                 />
-                <div className="flex items-center justify-between mt-3">
+                <div className="flex items-center justify-between">
                   <span className="text-xs text-muted-foreground flex items-center gap-1.5 bg-muted/50 px-2 py-1 rounded">
-                    <AlertTriangle className="h-3.5 w-3.5" /> 
-                    Notes are immutable once saved
+                    <AlertTriangle className="h-3.5 w-3.5" /> Notes are immutable once saved
                   </span>
-                  <Button 
+                  <Button
+                    size="sm"
                     onClick={() => noteMutation.mutate(newNote)}
                     disabled={!newNote.trim() || noteMutation.isPending}
-                    className="w-full sm:w-auto"
                   >
-                    {noteMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : null}
+                    {noteMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                     Post Note
                   </Button>
                 </div>
               </div>
-            </TabsContent>
-          </Tabs>
-        </div>
-      </div>
+            </div>
+          </div>
+        </TabsContent>
+
+        {/* ── Intelligence ── */}
+        <TabsContent value="intelligence">
+          <div className="rounded-xl border bg-card p-6 shadow-sm">
+            <IncidentIntelligenceSection
+              incidentId={incident.id}
+              jobId={incident.job}
+              projectId={incident.project}
+            />
+          </div>
+        </TabsContent>
+
+        {/* ── Response ── */}
+        <TabsContent value="response">
+          <div className="rounded-xl border bg-card p-6 shadow-sm">
+            <RecommendedRunbooks
+              incidentId={incident.id}
+              projectId={incident.project}
+              jobId={incident.job}
+              triggerType={incident.trigger_metadata?.metric_type}
+            />
+          </div>
+        </TabsContent>
+
+        {/* ── Timeline ── */}
+        <TabsContent value="timeline">
+          <div className="rounded-xl border bg-card p-6 shadow-sm min-h-[400px]">
+            <h3 className="font-semibold mb-6">Activity Timeline</h3>
+            <div className="space-y-6">
+              {events.length === 0 ? (
+                <div className="flex items-center justify-center h-32 text-muted-foreground text-sm italic border border-dashed rounded-lg">
+                  No events recorded yet.
+                </div>
+              ) : (
+                events.map((event, i) => (
+                  <TimelineEvent key={event.id} event={event} isLast={i === events.length - 1} />
+                ))
+              )}
+            </div>
+          </div>
+        </TabsContent>
+
+        {/* ── Postmortem ── */}
+        <TabsContent value="postmortem">
+          <div className="rounded-xl border bg-card p-6 shadow-sm space-y-8">
+            <PostmortemSection
+              incidentId={incident.id}
+              teamId={project?.team}
+              hasManagePermission={hasManagePermission}
+            />
+            <div className="border-t pt-6">
+              <IncidentKnowledgePanel incidentId={incident.id} />
+            </div>
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Search, Loader2, Edit, Trash2, Mail, Webhook, ShieldAlert } from "lucide-react";
+import { toastError, toastSuccess } from "@/lib/toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -91,14 +92,15 @@ export default function AdminChannelsPage() {
       }
       if (editingChannel) {
         await updateNotificationChannel(editingChannel.id, values);
+        toastSuccess("Channel updated successfully");
       } else {
         await createNotificationChannel(values);
+        toastSuccess("Channel created successfully");
       }
       queryClient.invalidateQueries({ queryKey: ["admin-channels"] });
       setIsModalOpen(false);
-    } catch (e) {
-      console.error(e);
-      alert("Failed to save channel. Please check the inputs.");
+    } catch (e: any) {
+      toastError("Failed to save channel", e);
     }
   };
 
@@ -175,7 +177,7 @@ export default function AdminChannelsPage() {
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <Button variant="ghost" size="icon" onClick={() => openEditModal(c)}><Edit className="h-4 w-4" /></Button>
-                      <Button variant="ghost" size="icon" onClick={() => { if (confirm("Are you sure?")) deleteMutation.mutate(c.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                      <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(c.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                     </div>
                   </TableCell>
                 </TableRow>

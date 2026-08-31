@@ -109,6 +109,8 @@ export interface JobReliabilityOverview {
   next_expected_at: string | null;
   missed_after_at: string | null;
   overdue_by_seconds: number;
+  mttr_seconds?: number | null;
+  mtbf_seconds?: number | null;
   latest_execution: LatestReliabilityExecution | null;
   active_findings: ReliabilityFinding[];
   active_anomalies: ReliabilityFinding[];

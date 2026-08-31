@@ -168,6 +168,8 @@ class JobReliabilityOverviewSerializer(serializers.Serializer):
     next_expected_at = serializers.CharField(allow_null=True)
     missed_after_at = serializers.CharField(allow_null=True)
     overdue_by_seconds = serializers.IntegerField()
+    mttr_seconds = serializers.FloatField(allow_null=True, required=False)
+    mtbf_seconds = serializers.FloatField(allow_null=True, required=False)
     latest_execution = LatestExecutionSerializer(allow_null=True)
     active_findings = ReliabilityFindingSerializer(many=True)
     active_anomalies = ReliabilityFindingSerializer(many=True)

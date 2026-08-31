@@ -127,6 +127,25 @@ class ProjectViewSet(CustomBaseViewSet):
         serializer = TrendResponseSerializer(trend_data)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+    @action(detail=True, methods=["get"], url_path="reliability-report")
+    def reliability_report(self, request, pk=None):
+        """
+        Get MTTR and MTBF metrics for a specific Project.
+        """
+        from apps.incidents.services import get_reliability_report
+
+        project = self.get_object()
+        start, end, _, _ = parse_analytics_query(request)
+
+        if not start or not end:
+            return Response(
+                {"error": "start and end parameters are required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        report = get_reliability_report(project.id, start, end)
+        return Response(report, status=status.HTTP_200_OK)
+
 
 class APIKeyViewSet(CustomBaseViewSet):
     """

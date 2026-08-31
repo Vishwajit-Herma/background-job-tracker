@@ -8,13 +8,13 @@ import { getJobs, Job } from "@/lib/api/jobs";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { BellRing, Loader2, Plus, MoreHorizontal, Edit, Trash, Activity, Power, PowerOff } from "lucide-react";
+import { Plus, Bell, Shield, Pencil, Trash2, ArrowUpDown, ChevronLeft, ChevronRight, Activity, Search, Loader2, BellRing, MoreHorizontal, Power, PowerOff, Edit, Trash } from "lucide-react";
+import { toastError, toastSuccess } from "@/lib/toast";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertRuleModal } from "@/components/bjt/alerts/alert-rule-modal";
 import { PaginationControls } from "@/components/bjt/pagination";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search } from "lucide-react";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useWorkspace } from "@/hooks/use-workspace";
 import { useAuth } from "@/hooks/use-auth";
@@ -59,26 +59,26 @@ export default function AlertsPage() {
   const deleteMutation = useMutation({
     mutationFn: deleteAlertRule,
     onSuccess: () => {
+      toastSuccess("Alert rule deleted");
       queryClient.invalidateQueries({ queryKey: ["alert-rules"] });
     },
-    onError: () => {
-      alert("Failed to delete alert rule");
+    onError: (err: any) => {
+      toastError("Failed to delete alert rule", err);
     },
   });
 
   const handleDelete = (id: number) => {
-    if (confirm("Are you sure you want to delete this alert rule?")) {
-      deleteMutation.mutate(id);
-    }
+    deleteMutation.mutate(id);
   };
 
   const toggleMutation = useMutation({
-    mutationFn: ({ id, is_active }: { id: number, is_active: boolean }) => updateAlertRule(id, { is_active }),
-    onSuccess: () => {
+    mutationFn: ({ id, is_active }: { id: number; is_active: boolean }) => updateAlertRule(id, { is_active }),
+    onSuccess: (_, variables) => {
+      toastSuccess(`Alert rule ${variables.is_active ? "enabled" : "disabled"}`);
       queryClient.invalidateQueries({ queryKey: ["alert-rules"] });
     },
-    onError: () => {
-      alert("Failed to update alert rule");
+    onError: (err: any) => {
+      toastError("Failed to update alert rule", err);
     },
   });
 
