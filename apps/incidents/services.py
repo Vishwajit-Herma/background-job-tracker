@@ -423,9 +423,10 @@ def get_reliability_report(project_id, start_time, end_time):
 
     by_job_qs = (
         qs.filter(job__isnull=False)
-        .values("job_id")
+        .values("job_id", "job__name", "job__task_identifier")
         .annotate(
-            count=Count("id"),
+            total_count=Count("id"),
+            resolved_count=Count("id", filter=Q(status=Incident.Status.RESOLVED)),
             min_created=Min("created_at"),
             max_created=Max("created_at"),
         )
@@ -448,7 +449,7 @@ def get_reliability_report(project_id, start_time, end_time):
     by_job_list = []
     for row in by_job_qs:
         j_id = row["job_id"]
-        j_count = row["count"]
+        j_count = row["total_count"]
 
         j_mtbf = None
         if j_count >= 2 and row["max_created"] and row["min_created"]:
@@ -460,6 +461,10 @@ def get_reliability_report(project_id, start_time, end_time):
         by_job_list.append(
             {
                 "job_id": j_id,
+                "job_name": row["job__name"] or f"Job #{j_id}",
+                "task_identifier": row["job__task_identifier"] or "",
+                "total_incidents": j_count,
+                "resolved_incidents": row["resolved_count"],
                 "mttr_seconds": j_mttr,
                 "mtbf_seconds": j_mtbf,
             }
