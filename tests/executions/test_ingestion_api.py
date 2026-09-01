@@ -46,6 +46,7 @@ class TestIngestionAPI:
             "started_at": "2026-08-20T10:00:00Z",
             "finished_at": "2026-08-20T10:00:05Z",
             "event_timestamp": "2026-08-20T10:00:05Z",
+            "framework": "celery",
             "queue": "default",
         }
 
@@ -59,6 +60,7 @@ class TestIngestionAPI:
         # Verify execution was created
         exec_obj = Execution.objects.get(job=job, external_id="exec_1")
         assert exec_obj.status == "success"
+        assert exec_obj.framework == "celery"
         assert exec_obj.duration_ms == 5000  # Calculated automatically
 
     def test_batch_ingestion(self, api_client, api_key, project1):

@@ -7,7 +7,7 @@ import { getJobs, Job } from "@/lib/api/jobs";
 import { getProjects, Project } from "@/lib/api/projects";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Loader2, Activity, Briefcase, ListChecks, ChevronDown } from "lucide-react";
-import { getStatusBadgeVariant, getStatusIcon, formatDuration } from "@/components/bjt/jobs/executions-sheet";
+import { getStatusBadgeVariant, getStatusIcon, formatDuration, FrameworkBadge } from "@/components/bjt/jobs/executions-sheet";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { getExecutionEvents, Execution } from "@/lib/api/executions";
@@ -29,6 +29,12 @@ function StandaloneExecutionDetails({ execution }: { execution: Execution }) {
   return (
     <div className="p-4 bg-muted/20 border-t space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+        <div className="min-w-0 flex flex-col space-y-1.5">
+          <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Framework</p>
+          <div className="mt-1">
+            <FrameworkBadge framework={execution.framework} />
+          </div>
+        </div>
         <div className="min-w-0 flex flex-col space-y-1.5">
           <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Worker</p>
           <p className="text-sm break-words leading-relaxed text-foreground bg-background/50 p-2 rounded border">
@@ -212,6 +218,7 @@ export default function ExecutionsPage() {
                 <TableHead className="w-[40px]"></TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Job / Project</TableHead>
+                <TableHead>Framework</TableHead>
                 <TableHead>External ID</TableHead>
                 <TableHead>Duration</TableHead>
                 <TableHead>Started</TableHead>
@@ -249,6 +256,9 @@ export default function ExecutionsPage() {
                         </div>
                       </TableCell>
                       <TableCell className="py-3">
+                        <FrameworkBadge framework={execution.framework} />
+                      </TableCell>
+                      <TableCell className="py-3">
                         <div className="flex items-center gap-1.5 group">
                           <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono truncate max-w-[120px] inline-block" title={execution.external_id}>
                             {execution.external_id}
@@ -278,7 +288,7 @@ export default function ExecutionsPage() {
                     
                     {isExpanded && (
                       <TableRow>
-                        <TableCell colSpan={7} className="p-0 border-b">
+                        <TableCell colSpan={8} className="p-0 border-b">
                           <StandaloneExecutionDetails execution={execution} />
                         </TableCell>
                       </TableRow>

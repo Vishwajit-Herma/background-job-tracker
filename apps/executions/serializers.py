@@ -23,6 +23,7 @@ class ExecutionSerializer(serializers.ModelSerializer):
             "started_at",
             "finished_at",
             "duration_ms",
+            "framework",
             "queue",
             "worker",
             "retry_count",
@@ -54,6 +55,7 @@ class ExecutionEventSerializer(serializers.ModelSerializer):
             "started_at",
             "finished_at",
             "duration_ms",
+            "framework",
             "queue",
             "worker",
             "retry_count",
@@ -83,6 +85,9 @@ class ExecutionIngestSerializer(serializers.Serializer):
     finished_at = serializers.DateTimeField(required=False, allow_null=True)
     duration_ms = serializers.IntegerField(required=False, allow_null=True, min_value=0)
 
+    framework = serializers.CharField(
+        max_length=50, required=False, allow_blank=True, allow_null=True, default=""
+    )
     queue = serializers.CharField(
         max_length=255, required=False, allow_blank=True, allow_null=True, default=""
     )

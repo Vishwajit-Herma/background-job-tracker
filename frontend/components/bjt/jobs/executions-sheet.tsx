@@ -46,6 +46,22 @@ export function formatDuration(ms: number | null | undefined): string {
   return `${m}m ${rs}s`;
 }
 
+export function FrameworkBadge({ framework }: { framework?: string | null }) {
+  if (!framework) return <span className="text-xs text-muted-foreground">—</span>;
+  const label = framework.charAt(0).toUpperCase() + framework.slice(1);
+  const colorClass =
+    framework === "celery"
+      ? "bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20"
+      : framework === "rq"
+      ? "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20"
+      : "bg-muted text-muted-foreground border";
+  return (
+    <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide border ${colorClass}`}>
+      {label}
+    </span>
+  );
+}
+
 // ─── Execution Details Sub-Panel ──────────────────────────────────────────────
 
 function ExecutionDetails({ execution }: { execution: Execution }) {
@@ -74,6 +90,10 @@ function ExecutionDetails({ execution }: { execution: Execution }) {
               <Copy className="h-3 w-3" />
             </button>
           </div>
+        </div>
+        <div className="space-y-1 min-w-0">
+          <p className="text-muted-foreground">Framework</p>
+          <FrameworkBadge framework={execution.framework} />
         </div>
         <div className="space-y-1 min-w-0">
           <p className="text-muted-foreground">Worker / Queue</p>
@@ -228,9 +248,17 @@ export function ExecutionsSheet({
                   isExpanded ? "border-primary/50 shadow-sm" : "hover:border-primary/30"
                 )}>
                   {/* Summary Row */}
-                  <button 
+                  <div 
+                    role="button"
+                    tabIndex={0}
                     onClick={() => setExpandedId(isExpanded ? null : execution.id)}
-                    className="w-full flex items-center justify-between p-4 text-left bg-card hover:bg-muted/30 transition-colors"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setExpandedId(isExpanded ? null : execution.id);
+                      }
+                    }}
+                    className="w-full flex items-center justify-between p-4 text-left bg-card hover:bg-muted/30 transition-colors cursor-pointer"
                   >
                     <div className="flex items-center gap-4 min-w-0">
                       <div className="shrink-0">
@@ -281,7 +309,7 @@ export function ExecutionsSheet({
                         isExpanded && "rotate-90"
                       )} />
                     </div>
-                  </button>
+                  </div>
 
                   {/* Expanded Detail Panel */}
                   {isExpanded && (

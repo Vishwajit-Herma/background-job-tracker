@@ -332,3 +332,11 @@ class TestProjectAPI:
         # We just want to ensure it doesn't return 500 Internal Server Error
         # It will likely return 400 Bad Request
         assert response.status_code != status.HTTP_500_INTERNAL_SERVER_ERROR
+
+    def test_staff_can_delete_project(self, api_client, user1, project1):
+        user1.is_staff = True
+        user1.save()
+        api_client.force_authenticate(user=user1)
+        detail_url = reverse("api:projects:project-detail", args=[project1.id])
+        response = api_client.delete(detail_url)
+        assert response.status_code == 204

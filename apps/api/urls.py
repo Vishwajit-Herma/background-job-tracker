@@ -1,6 +1,6 @@
 """API URLs."""
 
-from django.urls import path, include
+from django.urls import include, path
 from drf_spectacular.views import (
     SpectacularAPIView,
     SpectacularRedocView,
@@ -19,6 +19,7 @@ urlpatterns = [
     path("jobs/", include("apps.jobs.urls")),
     path("alerts/", include("apps.alerts.urls")),
     path("incidents/", include("apps.incidents.urls")),
+    path("incidents/", include("apps.ai.urls")),
     path("notifications/", include("apps.notifications.urls")),
     path("reliability/", include("apps.reliability.urls")),
     path("auth/registration/", include("dj_rest_auth.registration.urls")),

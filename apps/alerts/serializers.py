@@ -3,6 +3,11 @@ from .models import AlertRule
 
 
 class AlertRuleSerializer(serializers.ModelSerializer):
+    """
+    Serializer for managing Alert Rules tied to Projects and optional Jobs.
+    Handles metric-specific threshold validation for rates, duration, and anomaly detection.
+    """
+
     threshold = serializers.FloatField(required=False, default=0.0)
 
     class Meta:

@@ -101,7 +101,9 @@ class IncidentViewSet(BaseViewSetConfig, CustomResponseMixin, viewsets.ReadOnlyM
             incident = assign_incident(incident.id, member_id, request.user)
             return Response(IncidentSerializer(incident).data)
         except ValueError as e:
-            return Response({"error": str(e), "message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": str(e), "message": str(e)}, status=status.HTTP_400_BAD_REQUEST
+            )
 
     @action(detail=True, methods=["post"])
     def acknowledge(self, request, pk=None):
@@ -119,7 +121,9 @@ class IncidentViewSet(BaseViewSetConfig, CustomResponseMixin, viewsets.ReadOnlyM
             incident = acknowledge_incident(incident.id, request.user)
             return Response(IncidentSerializer(incident).data)
         except ValueError as e:
-            return Response({"error": str(e), "message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": str(e), "message": str(e)}, status=status.HTTP_400_BAD_REQUEST
+            )
 
     @action(detail=True, methods=["post"])
     def resolve(self, request, pk=None):
@@ -138,7 +142,9 @@ class IncidentViewSet(BaseViewSetConfig, CustomResponseMixin, viewsets.ReadOnlyM
             incident = resolve_incident(incident.id, request.user)
             return Response(IncidentSerializer(incident).data)
         except ValueError as e:
-            return Response({"error": str(e), "message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": str(e), "message": str(e)}, status=status.HTTP_400_BAD_REQUEST
+            )
 
     @action(detail=True, methods=["post"])
     def reopen(self, request, pk=None):
@@ -156,7 +162,9 @@ class IncidentViewSet(BaseViewSetConfig, CustomResponseMixin, viewsets.ReadOnlyM
             incident = reopen_incident(incident.id, request.user)
             return Response(IncidentSerializer(incident).data)
         except ValueError as e:
-            return Response({"error": str(e), "message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": str(e), "message": str(e)}, status=status.HTTP_400_BAD_REQUEST
+            )
 
     @action(
         detail=True,
@@ -504,9 +512,7 @@ class IncidentViewSet(BaseViewSetConfig, CustomResponseMixin, viewsets.ReadOnlyM
                 new_owner = request.data.get("owner") or request.data.get("owner_id")
                 if new_owner and int(new_owner) != member.id:
                     return Response(
-                        {
-                            "error": "Only team admins can reassign action items to other members."
-                        },
+                        {"error": "Only team admins can reassign action items to other members."},
                         status=status.HTTP_400_BAD_REQUEST,
                     )
 

@@ -12,10 +12,17 @@ class IncidentPermission(BasePermission):
         if not request.user or not request.user.is_authenticated:
             return False
 
+        if request.user.is_staff or request.user.is_superuser:
+            return True
+
         # No general POST create endpoint for incidents. Evaluator creates them.
-        return not (request.method == "POST" and view.action == "create")
+        return not (request.method == "POST" and getattr(view, "action", None) == "create")
 
     def has_object_permission(self, request, view, obj):
+        # Staff users and superusers always have full access
+        if request.user and (request.user.is_staff or request.user.is_superuser):
+            return True
+
         # Tenant isolation: User must be active member of incident's project's team
         member = TeamMember.objects.filter(
             team=obj.project.team, user=request.user, is_active=True
@@ -23,6 +30,13 @@ class IncidentPermission(BasePermission):
 
         if not member:
             return False
+
+        # AI investigation is accessible to all active team members
+        if (
+            view.__class__.__name__ == "IncidentAIInvestigateView"
+            or getattr(view, "action", None) == "ai_investigate"
+        ):
+            return True
 
         action = getattr(view, "action", None)
 

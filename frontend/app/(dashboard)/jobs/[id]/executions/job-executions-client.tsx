@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Activity, ChevronDown, ChevronRight } from "lucide-react";
 import { PaginationControls } from "@/components/bjt/pagination";
-import { formatDuration, getStatusBadgeVariant, getStatusIcon } from "@/components/bjt/jobs/executions-sheet";
+import { formatDuration, getStatusBadgeVariant, getStatusIcon, FrameworkBadge } from "@/components/bjt/jobs/executions-sheet";
 import { getExecutionEvents } from "@/lib/api/executions";
 import { formatReliabilityTime } from "@/lib/reliability-utils";
 import { ErrorState } from "@/components/bjt/states";
@@ -28,6 +28,10 @@ function ExecutionDetailsRow({ execution }: { execution: Execution }) {
   return (
     <div className="p-4 bg-muted/20 border-t space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4">
+        <div>
+          <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Framework</p>
+          <div className="mt-1"><FrameworkBadge framework={execution.framework} /></div>
+        </div>
         <div>
           <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Worker</p>
           <p className="text-sm font-mono bg-background/50 p-2 rounded border mt-1">{execution.worker || "—"}</p>
@@ -125,6 +129,7 @@ export function JobExecutionsClient({ jobId }: JobExecutionsClientProps) {
                 <TableHead className="w-10"></TableHead>
                 <TableHead>Execution ID</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Framework</TableHead>
                 <TableHead>Duration</TableHead>
                 <TableHead>Queue</TableHead>
                 <TableHead>Worker</TableHead>
@@ -156,6 +161,9 @@ export function JobExecutionsClient({ jobId }: JobExecutionsClientProps) {
                           </Badge>
                         </div>
                       </TableCell>
+                      <TableCell className="py-2.5">
+                        <FrameworkBadge framework={exec.framework} />
+                      </TableCell>
                       <TableCell className="py-2.5 text-xs font-mono">
                         {formatDuration(exec.duration_ms)}
                       </TableCell>
@@ -171,7 +179,7 @@ export function JobExecutionsClient({ jobId }: JobExecutionsClientProps) {
                     </TableRow>
                     {isExpanded && (
                       <TableRow>
-                        <TableCell colSpan={7} className="p-0">
+                        <TableCell colSpan={8} className="p-0">
                           <ExecutionDetailsRow execution={exec} />
                         </TableCell>
                       </TableRow>
