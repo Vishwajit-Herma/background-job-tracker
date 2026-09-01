@@ -395,9 +395,7 @@ def get_job_reliability_overview(job):
         status=Incident.Status.RESOLVED, resolved_at__isnull=False
     )
     mttr_res = resolved_job_incidents.annotate(
-        duration=ExpressionWrapper(
-            F("resolved_at") - F("created_at"), output_field=DurationField()
-        )
+        duration=ExpressionWrapper(F("resolved_at") - F("created_at"), output_field=DurationField())
     ).aggregate(avg_mttr=Avg("duration"))
     mttr_td = mttr_res["avg_mttr"]
     job_mttr_seconds = mttr_td.total_seconds() if mttr_td else None
@@ -408,11 +406,7 @@ def get_job_reliability_overview(job):
         count=Count("id"),
     )
     job_mtbf_seconds = None
-    if (
-        mtbf_res["count"] >= 2
-        and mtbf_res["max_created"]
-        and mtbf_res["min_created"]
-    ):
+    if mtbf_res["count"] >= 2 and mtbf_res["max_created"] and mtbf_res["min_created"]:
         delta = (mtbf_res["max_created"] - mtbf_res["min_created"]).total_seconds()
         job_mtbf_seconds = delta / (mtbf_res["count"] - 1)
 

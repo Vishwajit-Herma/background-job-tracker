@@ -72,6 +72,7 @@ LOCAL_APPS = [
     "apps.incidents",
     "apps.notifications",
     "apps.reliability",
+    "apps.ai",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -227,6 +228,7 @@ REST_FRAMEWORK: dict[str, Any] = {
     "DEFAULT_THROTTLE_RATES": {
         "anon": "100/hour",
         "user": "1000/hour",
+        "ai_investigate": "20/min",
     },
 }
 
@@ -350,3 +352,10 @@ REST_AUTH = {
 FRONTEND_URL = env("FRONTEND_URL", default="http://localhost:3000")
 
 ACCOUNT_ADAPTER = "apps.users.adapters.CustomAccountAdapter"
+
+# AI Reliability Assistant (Gemini)
+GEMINI_API_KEY = env.str("GEMINI_API_KEY", default="")
+GEMINI_MODEL = env.str("GEMINI_MODEL", default="gemini-3.6-flash")
+# gemini-3.6-flash with thinking can take 30-90s on large contexts.
+# Override with GEMINI_TIMEOUT env var if needed.
+GEMINI_TIMEOUT = env.int("GEMINI_TIMEOUT", default=60)

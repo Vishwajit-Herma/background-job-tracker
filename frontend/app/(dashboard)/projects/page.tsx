@@ -874,7 +874,7 @@ function ProjectRow({
                   className="text-destructive focus:text-destructive"
                   onClick={() => setDeleteOpen(true)}
                 >
-                  <Archive className="mr-2 h-4 w-4" /> Archive
+                  <Trash2 className="mr-2 h-4 w-4" /> Delete
                 </DropdownMenuItem>
               </>
             )}

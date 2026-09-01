@@ -33,6 +33,7 @@ import {
   BookOpen,
   FileText,
   Brain,
+  Sparkles,
   Play,
   XCircle,
   SkipForward,
@@ -51,7 +52,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { IncidentIntelligenceSection } from "@/components/bjt/incidents/incident-intelligence-section";
 import { RecommendedRunbooks } from "@/components/bjt/incidents/runbook/recommended-runbooks";
 import { PostmortemSection } from "@/components/bjt/incidents/postmortem/postmortem-section";
-import { IncidentKnowledgePanel } from "@/components/bjt/incidents/incident-knowledge-panel";
+import { AskAIPanel } from "@/components/bjt/incidents/ai/ask-ai-panel";
 
 // ─── Timeline Event Rendering ─────────────────────────────────────────────────
 
@@ -183,6 +184,7 @@ export default function IncidentDetailsPage() {
   const incidentId = parseInt(params.id as string, 10);
   const [newNote, setNewNote] = useState("");
   const [showReopenDialog, setShowReopenDialog] = useState(false);
+  const [isAiOpen, setIsAiOpen] = useState(false);
 
   const {
     projects,
@@ -417,6 +419,14 @@ export default function IncidentDetailsPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          <Button
+            onClick={() => setIsAiOpen(true)}
+            variant="outline"
+            className="border-primary/30 bg-primary/5 hover:bg-primary/10 text-primary gap-1.5 shadow-2xs font-medium"
+          >
+            <Sparkles className="h-4 w-4 text-primary animate-pulse" /> Ask AI
+          </Button>
+
           {canAckOrResolve && incident.status === "OPEN" && (
             <Button
               onClick={() => ackMutation.mutate()}
@@ -694,18 +704,23 @@ export default function IncidentDetailsPage() {
 
         {/* ── Postmortem ── */}
         <TabsContent value="postmortem">
-          <div className="rounded-xl border bg-card p-6 shadow-sm space-y-8">
+          <div className="rounded-xl border bg-card p-6 shadow-sm">
             <PostmortemSection
               incidentId={incident.id}
               teamId={project?.team}
               hasManagePermission={hasManagePermission}
             />
-            <div className="border-t pt-6">
-              <IncidentKnowledgePanel incidentId={incident.id} />
-            </div>
+
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* AI Reliability Assistant Slide-over Panel */}
+      <AskAIPanel
+        incidentId={incident.id}
+        open={isAiOpen}
+        onOpenChange={setIsAiOpen}
+      />
     </div>
   );
 }

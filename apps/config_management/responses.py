@@ -114,6 +114,11 @@ class CustomResponse(Response):
             payload["meta"] = meta
 
         payload.update(pagination)
+        extra_keys = [
+            k for k in kwargs if k not in ("headers", "content_type", "template_name", "exception")
+        ]
+        for k in extra_keys:
+            payload[k] = kwargs.pop(k)
 
         super().__init__(payload, status=code, **kwargs)
 

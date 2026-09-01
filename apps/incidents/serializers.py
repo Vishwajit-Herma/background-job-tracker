@@ -12,6 +12,11 @@ from .models import (
 
 
 class IncidentEventSerializer(serializers.ModelSerializer):
+    """
+    Serializer for audit timeline events associated with an Incident.
+    Includes resolution of human-readable actor names for users or system events.
+    """
+
     actor_name = serializers.SerializerMethodField()
 
     class Meta:
@@ -40,6 +45,11 @@ class IncidentEventSerializer(serializers.ModelSerializer):
 
 
 class IncidentNoteSerializer(serializers.ModelSerializer):
+    """
+    Serializer for investigation notes attached to an Incident.
+    Captures immutable note content and author details.
+    """
+
     author_name = serializers.CharField(source="author.get_full_name", read_only=True)
 
     class Meta:
@@ -56,6 +66,11 @@ class IncidentNoteSerializer(serializers.ModelSerializer):
 
 
 class IncidentSerializer(serializers.ModelSerializer):
+    """
+    Serializer for Incident records, exposing status, severity, assignment,
+    resolution metadata, and trigger condition context.
+    """
+
     assigned_to_user_id = serializers.IntegerField(
         source="assigned_to.user_id", read_only=True, allow_null=True
     )
@@ -93,6 +108,10 @@ class IncidentSerializer(serializers.ModelSerializer):
 
 
 class IncidentAssignSerializer(serializers.Serializer):
+    """
+    Serializer for assigning or unassigning an Incident to a TeamMember.
+    """
+
     member_id = serializers.IntegerField(required=False, allow_null=True)
 
     def validate_member_id(self, value):
@@ -101,6 +120,10 @@ class IncidentAssignSerializer(serializers.Serializer):
 
 
 class IncidentIntelligenceSerializer(serializers.ModelSerializer):
+    """
+    Serializer for computed Incident Intelligence analysis (impact, correlations, probable root causes).
+    """
+
     status = serializers.SerializerMethodField()
 
     class Meta:
@@ -124,6 +147,10 @@ class IncidentIntelligenceSerializer(serializers.ModelSerializer):
 
 
 class IncidentIntelligencePendingSerializer(serializers.Serializer):
+    """
+    Serializer for pending/async Incident Intelligence calculation responses (HTTP 202 Accepted).
+    """
+
     status = serializers.CharField(default="PENDING")
     message = serializers.CharField(default="Incident intelligence calculation is in progress.")
     incident_id = serializers.IntegerField()
@@ -137,6 +164,11 @@ class IncidentIntelligencePendingSerializer(serializers.Serializer):
 
 
 class RunbookSerializer(serializers.ModelSerializer):
+    """
+    Serializer for managing operational Runbooks.
+    Includes match priority and reasoning attributes when scored for an incident.
+    """
+
     created_by_name = serializers.CharField(source="created_by.get_full_name", read_only=True)
     updated_by_name = serializers.CharField(source="updated_by.get_full_name", read_only=True)
     match_priority = serializers.IntegerField(read_only=True, required=False)
@@ -194,6 +226,10 @@ class RunbookSerializer(serializers.ModelSerializer):
 
 
 class IncidentRunbookExecutionSerializer(serializers.ModelSerializer):
+    """
+    Serializer for tracking an active or past execution instance of a Runbook for an Incident.
+    """
+
     runbook_name = serializers.CharField(source="runbook.name", read_only=True)
     runbook_details = RunbookSerializer(source="runbook", read_only=True)
     started_by_name = serializers.SerializerMethodField()
@@ -232,6 +268,10 @@ class IncidentRunbookExecutionSerializer(serializers.ModelSerializer):
 
 
 class PostmortemActionItemSerializer(serializers.ModelSerializer):
+    """
+    Serializer for action items (prevention tasks) created during postmortem analysis.
+    """
+
     owner_name = serializers.SerializerMethodField()
 
     class Meta:
@@ -258,6 +298,10 @@ class PostmortemActionItemSerializer(serializers.ModelSerializer):
 
 
 class IncidentPostmortemSerializer(serializers.ModelSerializer):
+    """
+    Serializer for comprehensive Incident Postmortem reports and review status.
+    """
+
     created_by_name = serializers.CharField(source="created_by.get_full_name", read_only=True)
     updated_by_name = serializers.CharField(source="updated_by.get_full_name", read_only=True)
     reviewed_by_name = serializers.CharField(source="reviewed_by.get_full_name", read_only=True)
@@ -305,10 +349,18 @@ class IncidentPostmortemSerializer(serializers.ModelSerializer):
 
 
 class ExecuteRunbookSerializer(serializers.Serializer):
+    """
+    Serializer payload for launching execution of a specific Runbook.
+    """
+
     runbook_id = serializers.IntegerField(required=True)
 
 
 class TransitionStepSerializer(serializers.Serializer):
+    """
+    Serializer payload for transitioning state of an individual step in a Runbook execution.
+    """
+
     execution_id = serializers.IntegerField(required=True)
     step_id = serializers.CharField(required=True)
     from_state = serializers.CharField(required=True)
@@ -316,12 +368,20 @@ class TransitionStepSerializer(serializers.Serializer):
 
 
 class ActionItemCreateSerializer(serializers.ModelSerializer):
+    """
+    Serializer for creating a new Postmortem action item.
+    """
+
     class Meta:
         model = PostmortemActionItem
         fields = ["title", "description", "owner", "status", "due_date"]
 
 
 class UpdateRunbookExecutionStatusSerializer(serializers.Serializer):
+    """
+    Serializer payload for updating the overall status of a Runbook execution.
+    """
+
     status = serializers.ChoiceField(
         choices=["IN_PROGRESS", "COMPLETED", "CANCELLED"],
         required=True,
