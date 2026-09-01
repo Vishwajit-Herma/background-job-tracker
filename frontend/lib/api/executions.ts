@@ -18,6 +18,7 @@ export interface Execution {
   started_at: string | null;
   finished_at: string | null;
   duration_ms: number | null;
+  framework: string;
   queue: string;
   worker: string;
   retry_count: number;

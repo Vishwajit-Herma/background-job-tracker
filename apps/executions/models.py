@@ -40,6 +40,7 @@ class Execution(models.Model):
     finished_at = models.DateTimeField(_("finished at"), null=True, blank=True)
     duration_ms = models.IntegerField(_("duration in ms"), null=True, blank=True)
 
+    framework = models.CharField(_("framework"), max_length=50, blank=True, default="")
     queue = models.CharField(_("queue"), max_length=255, blank=True)
     worker = models.CharField(_("worker"), max_length=255, blank=True)
     retry_count = models.IntegerField(_("retry count"), default=0)
@@ -95,6 +96,7 @@ class ExecutionEvent(models.Model):
     finished_at = models.DateTimeField(_("finished at"), null=True, blank=True)
     duration_ms = models.IntegerField(_("duration in ms"), null=True, blank=True)
 
+    framework = models.CharField(_("framework"), max_length=50, blank=True, default="")
     queue = models.CharField(_("queue"), max_length=255, blank=True)
     worker = models.CharField(_("worker"), max_length=255, blank=True)
     retry_count = models.IntegerField(_("retry count"), default=0)

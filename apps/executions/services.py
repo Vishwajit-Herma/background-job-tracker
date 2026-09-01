@@ -110,6 +110,7 @@ def ingest_executions_batch(project, executions_data):
             "started_at",
             "finished_at",
             "duration_ms",
+            "framework",
             "queue",
             "worker",
             "retry_count",
@@ -172,6 +173,8 @@ def ingest_executions_batch(project, executions_data):
                             exec_obj.finished_at = item["finished_at"]
                         if duration_ms is not None:
                             exec_obj.duration_ms = duration_ms
+                        if item.get("framework"):
+                            exec_obj.framework = item["framework"]
                         if item.get("queue"):
                             exec_obj.queue = item["queue"]
                         if item.get("worker"):
@@ -260,6 +263,7 @@ def ingest_executions_batch(project, executions_data):
                     started_at=merged_item.get("started_at"),
                     finished_at=merged_item.get("finished_at"),
                     duration_ms=duration_ms,
+                    framework=merged_item.get("framework", ""),
                     queue=merged_item.get("queue", ""),
                     worker=merged_item.get("worker", ""),
                     retry_count=merged_item.get("retry_count", 0),
@@ -301,6 +305,7 @@ def ingest_executions_batch(project, executions_data):
                     started_at=item.get("started_at"),
                     finished_at=item.get("finished_at"),
                     duration_ms=duration_ms,
+                    framework=item.get("framework", ""),
                     queue=item.get("queue", ""),
                     worker=item.get("worker", ""),
                     retry_count=item.get("retry_count", 0),
