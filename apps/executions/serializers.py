@@ -97,18 +97,34 @@ class ExecutionIngestSerializer(serializers.Serializer):
     retry_count = serializers.IntegerField(required=False, default=0, min_value=0)
 
     error_type = serializers.CharField(max_length=255, required=False, allow_blank=True, default="")
-    error_message = serializers.CharField(
-        max_length=50000, required=False, allow_blank=True, default=""
-    )
-    traceback = serializers.CharField(
-        max_length=100000, required=False, allow_blank=True, default=""
-    )
+    error_message = serializers.CharField(required=False, allow_blank=True, default="")
+    traceback = serializers.CharField(required=False, allow_blank=True, default="")
 
     metadata = serializers.JSONField(required=False, default=dict)
+
+    def validate_error_message(self, value):
+        if value and len(value) > 2000:
+            return value[:1997] + "..."
+        return value
+
+    def validate_traceback(self, value):
+        if value and len(value) > 16000:
+            # Tracebacks are usually most useful at the bottom (the actual exception)
+            # and the top (the entry point). We preserve both.
+            half = 7950
+            return value[:half] + "\n\n...[BJT_TRUNCATED]...\n\n" + value[-half:]
+        return value
 
     def validate_metadata(self, value):
         if value is not None and not isinstance(value, dict):
             raise serializers.ValidationError("metadata must be a JSON object (dictionary).")
+
+        if value:
+            import json
+
+            # Limit metadata to ~10KB serialized
+            if len(json.dumps(value)) > 10240:
+                return {"_bjt_warning": "metadata dropped because it exceeded 10KB size limit"}
         return value
 
     def validate(self, data):

@@ -27,12 +27,6 @@ dependencies = [
     "django-celery-beat>=2.9.0",  # 2.9+ required for Django 6.0 compatibility
     "django-celery-results>=2.5.0",
     "flower>=2.0.0",
-    "opentelemetry-api>=1.24.0",
-    "opentelemetry-sdk>=1.24.0",
-    "opentelemetry-instrumentation-django>=0.45b0",
-    "opentelemetry-instrumentation-psycopg>=0.45b0",
-    "opentelemetry-instrumentation-celery>=0.45b0",
-    "opentelemetry-exporter-otlp>=1.24.0",
     "django-prometheus>=2.3.0",
     "django-waffle>=4.1.0",
     "django-extensions>=3.2.0",
@@ -142,10 +136,9 @@ ignore_errors = true
 # Third-party packages without type stubs / py.typed markers.
 [[tool.mypy.overrides]]
 module = [
-"celery.*",
-"allauth.*",
-"opentelemetry.*",
-"waffle.*",
+    "celery.*",
+    "allauth.*",
+    "waffle.*",
     "django_alive.*",
     "environ.*",
 ]

@@ -90,7 +90,6 @@ Settings are environment-specific and split across files:
   - Strict security headers (CSP, HSTS)
   - Gunicorn WSGI server
 - Sentry error tracking
-- OpenTelemetry tracing
 ### Deployment
 
 #### Kubernetes (Enterprise)
@@ -195,12 +194,10 @@ Status available via Flower dashboard
 - **Format**: Structured JSON logs
 - **Levels**: DEBUG → INFO → WARNING → ERROR → CRITICAL
 - **Context**: Request ID, user ID, team ID
-- **Aggregation**: OpenTelemetry → Logging backend
 ### Monitoring
 - **Error Tracking**: Sentry (real-time error alerts)
 - **Metrics**: Prometheus (custom metrics + Django metrics)
 - **Dashboards**: Grafana (pre-built dashboards)
-- **Tracing**: OpenTelemetry (distributed request tracing)
 - **APM**: Application performance monitoring
 - **Health Checks**: `/health/` endpoint (database, cache, Redis)
 

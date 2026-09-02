@@ -64,6 +64,11 @@ class Execution(models.Model):
                 name="unique_execution_external_id_per_job",
             )
         ]
+        indexes = [
+            models.Index(fields=["job", "-started_at"]),
+            models.Index(fields=["job", "status"]),
+            models.Index(fields=["created_at"]),
+        ]
 
     def __str__(self):
         return f"Execution {self.external_id} ({self.status})"

@@ -31,7 +31,6 @@ A Django Project to track Background jobs.
 - **Error Tracking**: Sentry + distributed tracing
 - **Structured Logging**: JSON logs with correlation IDs
 - **Metrics**: Prometheus + Grafana dashboards
-- **Tracing**: OpenTelemetry for distributed tracing
 - **APM**: Application Performance Monitoring
 - **Health Checks**: `/health/` endpoint with database connectivity checks
 ### Security

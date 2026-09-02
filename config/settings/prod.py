@@ -5,7 +5,7 @@ from .base import *  # noqa: F403, F401
 DEBUG = False
 
 # Security settings
-SECURE_SSL_REDIRECT = env.bool("SECURE_SSL_REDIRECT", default=True)  # noqa: F405
+SECURE_SSL_REDIRECT = True  # noqa: F405
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SECURE_HSTS_SECONDS = env.int("SECURE_HSTS_SECONDS", default=31536000)  # noqa: F405
 SECURE_HSTS_INCLUDE_SUBDOMAINS = env.bool("SECURE_HSTS_INCLUDE_SUBDOMAINS", default=True)  # noqa: F405
@@ -66,34 +66,6 @@ LOGGING = {  # noqa: F405
         },
     },
 }
-
-
-# OpenTelemetry
-from opentelemetry import trace
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
-from opentelemetry.instrumentation.django import DjangoInstrumentor
-from opentelemetry.instrumentation.psycopg import PsycopgInstrumentor
-from opentelemetry.instrumentation.celery import CeleryInstrumentor
-
-
-# Set up tracer provider
-tracer_provider = TracerProvider()
-trace.set_tracer_provider(tracer_provider)
-tracer = trace.get_tracer(__name__)
-
-# Configure OTLP exporter
-otlp_exporter = OTLPSpanExporter(
-    endpoint=env("OTEL_EXPORTER_OTLP_ENDPOINT", default="http://localhost:4317"),  # noqa: F405
-)
-span_processor = BatchSpanProcessor(otlp_exporter)
-tracer_provider.add_span_processor(span_processor)
-
-# Auto-instrument
-DjangoInstrumentor().instrument()
-PsycopgInstrumentor().instrument()
-CeleryInstrumentor().instrument()
 
 
 # Email - SMTP by default, configured via environment

@@ -3,6 +3,7 @@ Base settings for Background Job Tracker project.
 """
 
 from pathlib import Path
+import ssl
 
 import environ
 
@@ -192,8 +193,6 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # django-allauth
 SITE_ID = 1
 ACCOUNT_LOGIN_METHODS = {"email"}
-ACCOUNT_AUTHENTICATION_METHOD = "email"
-ACCOUNT_USERNAME_REQUIRED = False
 ACCOUNT_SIGNUP_FIELDS = ["email*", "password1*", "password2*"]
 ACCOUNT_EMAIL_VERIFICATION = "mandatory"
 ACCOUNT_USER_MODEL_USERNAME_FIELD = None
@@ -257,6 +256,9 @@ CSRF_TRUSTED_ORIGINS = env.list(
 from celery.schedules import crontab
 
 CELERY_BROKER_URL = env("CELERY_BROKER_URL", default="redis://localhost:6379/1")
+CELERY_BROKER_USE_SSL = {
+    "ssl_cert_reqs": ssl.CERT_REQUIRED,
+}
 CELERY_RESULT_BACKEND = "django-db"
 CELERY_CACHE_BACKEND = "django-cache"
 CELERY_TASK_TRACK_STARTED = True

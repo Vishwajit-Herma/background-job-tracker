@@ -29,7 +29,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Local media storage with Whitenoise
 - Observability stack:
   - Structured logging
-- OpenTelemetry instrumentation
   - Prometheus metrics
 - Development tooling:
   - Ruff for linting and formatting
