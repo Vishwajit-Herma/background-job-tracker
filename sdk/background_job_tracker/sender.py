@@ -105,75 +105,81 @@ class BackgroundSender(threading.Thread):
         MAX_FALLBACK_RETRIES = 5
 
         while not self._stop_event.is_set():
-            now = time.monotonic()
-
-            # Periodic Task Discovery
-            # Note: This is a best-effort synchronization mechanism.
-            # `last_discovery_time` is updated regardless of network success,
-            # meaning it will try again at the next periodic interval rather than aggressively retrying in a loop.
-            if (
-                self.task_provider
-                and self.task_discovery_interval
-                and now - last_discovery_time >= self.task_discovery_interval
-            ):
-                try:
-                    tasks = self.task_provider()
-                    if tasks:
-                        self._sync_tasks(tasks)
-                except Exception as e:
-                    logger.error(f"Error during periodic task discovery: {e}")
-                last_discovery_time = time.monotonic()
+            try:
                 now = time.monotonic()
 
-            try:
-                # Calculate remaining wait time based on the flush interval
-                timeout = max(0.1, self.flush_interval - (now - last_flush_time))
-                item = self.event_queue.get(timeout=timeout)
+                # Periodic Task Discovery
+                # Note: This is a best-effort synchronization mechanism.
+                # `last_discovery_time` is updated regardless of network success,
+                # meaning it will try again at the next periodic interval rather than aggressively retrying in a loop.
+                if (
+                    self.task_provider
+                    and self.task_discovery_interval
+                    and now - last_discovery_time >= self.task_discovery_interval
+                ):
+                    try:
+                        tasks = self.task_provider()
+                        if tasks:
+                            self._sync_tasks(tasks)
+                    except Exception as e:
+                        logger.error(f"Error during periodic task discovery: {e}")
+                    last_discovery_time = time.monotonic()
+                    now = time.monotonic()
 
-                if item.get("_type") == "_stop":
-                    pass  # Ignore, just to wake up
-                elif item.get("_type") == "sync_tasks":
-                    # If we receive an explicit sync command, flush existing batch first
-                    if batch:
-                        if self._flush_batch(batch):
-                            batch = []
-                            fallback_retries = 0
-                        last_flush_time = time.monotonic()
-                    self._sync_tasks(item["tasks"])
-                else:
-                    batch.append(item)
+                try:
+                    # Calculate remaining wait time based on the flush interval
+                    timeout = max(0.1, self.flush_interval - (now - last_flush_time))
+                    item = self.event_queue.get(timeout=timeout)
 
-            except queue.Empty:
-                pass
+                    if item.get("_type") == "_stop":
+                        pass  # Ignore, just to wake up
+                    elif item.get("_type") == "sync_tasks":
+                        # If we receive an explicit sync command, flush existing batch first
+                        if batch:
+                            if self._flush_batch(batch):
+                                batch = []
+                                fallback_retries = 0
+                            last_flush_time = time.monotonic()
+                        self._sync_tasks(item["tasks"])
+                    else:
+                        batch.append(item)
 
-            now = time.monotonic()
-            # Flush batch if batch size is reached, or flush interval has elapsed with items in batch
-            if batch and (
-                len(batch) >= self.batch_size or now - last_flush_time >= self.flush_interval
-            ):
-                if self._flush_batch(batch):
-                    batch = []
-                    fallback_retries = 0
-                else:
-                    # Transient error, apply fallback retry with exponential backoff + jitter
-                    # Trade-off note: Using time.sleep() here blocks this telemetry sender thread.
-                    # While this sender is backing off, new events will accumulate in the queue.
-                    # If the queue fills up, new events will be safely dropped, preserving customer
-                    # task execution performance without throwing blocking exceptions.
-                    fallback_retries += 1
-                    if fallback_retries > MAX_FALLBACK_RETRIES:
-                        logger.error("Max fallback retries exceeded. Dropping batch.")
+                except queue.Empty:
+                    pass
+
+                now = time.monotonic()
+                # Flush batch if batch size is reached, or flush interval has elapsed with items in batch
+                if batch and (
+                    len(batch) >= self.batch_size or now - last_flush_time >= self.flush_interval
+                ):
+                    if self._flush_batch(batch):
                         batch = []
                         fallback_retries = 0
                     else:
-                        base_delay = 2 ** (fallback_retries - 1)
-                        jitter = random.uniform(0, 0.5)
-                        # TWEAK: Using _stop_event.wait() instead of time.sleep() ensures that
-                        # if the application is shutting down, we immediately abort the backoff
-                        # delay and allow the daemon to gracefully exit, rather than blocking.
-                        self._stop_event.wait(base_delay + jitter)
+                        # Transient error, apply fallback retry with exponential backoff + jitter
+                        # Trade-off note: Using time.sleep() here blocks this telemetry sender thread.
+                        # While this sender is backing off, new events will accumulate in the queue.
+                        # If the queue fills up, new events will be safely dropped, preserving customer
+                        # task execution performance without throwing blocking exceptions.
+                        fallback_retries += 1
+                        if fallback_retries > MAX_FALLBACK_RETRIES:
+                            logger.error("Max fallback retries exceeded. Dropping batch.")
+                            batch = []
+                            fallback_retries = 0
+                        else:
+                            base_delay = 2 ** (fallback_retries - 1)
+                            jitter = random.uniform(0, 0.5)
+                            # TWEAK: Using _stop_event.wait() instead of time.sleep() ensures that
+                            # if the application is shutting down, we immediately abort the backoff
+                            # delay and allow the daemon to gracefully exit, rather than blocking.
+                            self._stop_event.wait(base_delay + jitter)
 
-                last_flush_time = time.monotonic()
+                    last_flush_time = time.monotonic()
+
+            except Exception as e:
+                logger.error(f"Unexpected error in background sender loop: {e}")
+                # Sleep briefly to avoid tight loops on persistent internal errors
+                self._stop_event.wait(1.0)
 
         # Loop exited due to stop_event, drain remaining queue and flush
         try:

@@ -174,3 +174,70 @@ class TestIngestionAPI:
         exec_obj = Execution.objects.get(job=job, external_id="exec_retry")
         # Ensure it didn't overwrite status because timestamp was equal
         assert exec_obj.status == "running"
+
+    def test_traceback_truncation(self, api_client, api_key):
+        key_record, raw_key = api_key
+        url = reverse("api:executions:ingestion-list")
+
+        long_traceback = "A" * 20000  # 20KB
+
+        data = {
+            "event_id": "evt-trunc-1",
+            "external_id": "exec_trunc",
+            "task_identifier": "tasks.test_trunc",
+            "status": "failed",
+            "event_timestamp": "2026-08-20T10:00:00Z",
+            "traceback": long_traceback,
+        }
+
+        response = api_client.post(url, data, HTTP_X_API_KEY=raw_key, format="json")
+        assert response.status_code == status.HTTP_202_ACCEPTED
+
+        exec_obj = Execution.objects.get(external_id="exec_trunc")
+        assert len(exec_obj.traceback) < 17000
+        assert "...[BJT_TRUNCATED]..." in exec_obj.traceback
+
+    def test_error_message_truncation(self, api_client, api_key):
+        key_record, raw_key = api_key
+        url = reverse("api:executions:ingestion-list")
+
+        long_err = "B" * 5000
+
+        data = {
+            "event_id": "evt-trunc-2",
+            "external_id": "exec_trunc2",
+            "task_identifier": "tasks.test_trunc",
+            "status": "failed",
+            "event_timestamp": "2026-08-20T10:00:00Z",
+            "error_message": long_err,
+        }
+
+        response = api_client.post(url, data, HTTP_X_API_KEY=raw_key, format="json")
+        assert response.status_code == status.HTTP_202_ACCEPTED
+
+        exec_obj = Execution.objects.get(external_id="exec_trunc2")
+        assert len(exec_obj.error_message) == 2000
+        assert exec_obj.error_message.endswith("...")
+
+    def test_metadata_size_limit_dropped(self, api_client, api_key):
+        key_record, raw_key = api_key
+        url = reverse("api:executions:ingestion-list")
+
+        # Create a dict that will exceed 10KB when serialized
+        large_metadata = {"key": "C" * 15000}
+
+        data = {
+            "event_id": "evt-trunc-3",
+            "external_id": "exec_trunc3",
+            "task_identifier": "tasks.test_trunc",
+            "status": "success",
+            "event_timestamp": "2026-08-20T10:00:00Z",
+            "metadata": large_metadata,
+        }
+
+        response = api_client.post(url, data, HTTP_X_API_KEY=raw_key, format="json")
+        assert response.status_code == status.HTTP_202_ACCEPTED
+
+        exec_obj = Execution.objects.get(external_id="exec_trunc3")
+        assert "_bjt_warning" in exec_obj.metadata
+        assert "exceeded 10KB" in exec_obj.metadata["_bjt_warning"]

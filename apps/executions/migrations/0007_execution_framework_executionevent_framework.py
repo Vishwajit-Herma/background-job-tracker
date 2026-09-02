@@ -4,7 +4,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("executions", "0006_executionevent"),
     ]
@@ -13,15 +12,11 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name="execution",
             name="framework",
-            field=models.CharField(
-                blank=True, default="", max_length=50, verbose_name="framework"
-            ),
+            field=models.CharField(blank=True, default="", max_length=50, verbose_name="framework"),
         ),
         migrations.AddField(
             model_name="executionevent",
             name="framework",
-            field=models.CharField(
-                blank=True, default="", max_length=50, verbose_name="framework"
-            ),
+            field=models.CharField(blank=True, default="", max_length=50, verbose_name="framework"),
         ),
     ]
