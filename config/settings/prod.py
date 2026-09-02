@@ -68,13 +68,16 @@ LOGGING = {  # noqa: F405
 }
 
 
-# Email - SMTP by default, configured via environment
-EMAIL_BACKEND = env("EMAIL_BACKEND", default="django.core.mail.backends.smtp.EmailBackend")  # noqa: F405
-EMAIL_HOST = env("EMAIL_HOST", default="localhost")  # noqa: F405
-EMAIL_PORT = env.int("EMAIL_PORT", default=587)  # noqa: F405
-EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="")  # noqa: F405
-EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="")  # noqa: F405
-EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=True)  # noqa: F405
+# Email - SMTP when EMAIL_HOST is set, console backend fallback otherwise
+EMAIL_HOST = env("EMAIL_HOST", default="")  # noqa: F405
+if EMAIL_HOST:
+    EMAIL_BACKEND = env("EMAIL_BACKEND", default="django.core.mail.backends.smtp.EmailBackend")  # noqa: F405
+    EMAIL_PORT = env.int("EMAIL_PORT", default=587)  # noqa: F405
+    EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="")  # noqa: F405
+    EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="")  # noqa: F405
+    EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=True)  # noqa: F405
+else:
+    EMAIL_BACKEND = env("EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend")  # noqa: F405
 
 # Admin
 ADMINS = [

@@ -64,7 +64,7 @@ export default function ForgotPasswordPage() {
 
   if (success) {
     return (
-      <div className="flex w-full max-w-[400px] flex-col justify-center space-y-6 text-center">
+      <div className="mx-auto flex w-full flex-col justify-center space-y-6 text-center">
         <CheckCircle2 className="mx-auto h-12 w-12 text-green-500" />
         <div className="space-y-2">
           <h1 className="text-2xl font-semibold tracking-tight">Check your email</h1>
@@ -80,7 +80,7 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <div className="flex w-full max-w-[400px] flex-col justify-center space-y-6">
+    <div className="mx-auto flex w-full flex-col justify-center space-y-6">
       <div className="flex flex-col space-y-2 text-center">
         <h1 className="text-2xl font-semibold tracking-tight">Forgot password?</h1>
         <p className="text-sm text-muted-foreground">
