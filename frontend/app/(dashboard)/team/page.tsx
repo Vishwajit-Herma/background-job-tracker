@@ -37,6 +37,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search } from "lucide-react";
 import { useDebounce } from "@/hooks/use-debounce";
+import { CreateTeamModal } from "@/components/bjt/create-team-modal";
 
 export default function TeamPage() {
   const { user } = useAuth();
@@ -44,6 +45,7 @@ export default function TeamPage() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<"members" | "invitations" | "settings">("members");
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const [isCreateTeamModalOpen, setIsCreateTeamModalOpen] = useState(false);
   const [removingId, setRemovingId] = useState<number | null>(null);
   const [changingRoleId, setChangingRoleId] = useState<number | null>(null);
   const [acceptingId, setAcceptingId] = useState<number | null>(null);
@@ -223,9 +225,16 @@ export default function TeamPage() {
   if (teams.length === 0) {
     return (
       <div className="flex-1 space-y-6 p-8 pt-6">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">Teams</h2>
-          <p className="text-muted-foreground mt-1">Manage your team memberships and invitations.</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-3xl font-bold tracking-tight">Teams</h2>
+            <p className="text-muted-foreground mt-1">Manage your team memberships and invitations.</p>
+          </div>
+          {user?.is_staff && (
+            <Button onClick={() => setIsCreateTeamModalOpen(true)}>
+              Create Team
+            </Button>
+          )}
         </div>
 
         {isLoadingInvites ? (
@@ -304,12 +313,19 @@ export default function TeamPage() {
                   Manage members, invitations and settings for this team.
                 </p>
               </div>
-              {canManage && activeTab !== "settings" && (
-                <Button onClick={() => setIsInviteModalOpen(true)}>
-                  <UserPlus className="mr-2 h-4 w-4" />
-                  Invite Member
-                </Button>
-              )}
+              <div className="flex items-center gap-2">
+                {user?.is_staff && (
+                  <Button variant="outline" onClick={() => setIsCreateTeamModalOpen(true)}>
+                    Create Team
+                  </Button>
+                )}
+                {canManage && activeTab !== "settings" && (
+                  <Button onClick={() => setIsInviteModalOpen(true)}>
+                    <UserPlus className="mr-2 h-4 w-4" />
+                    Invite Member
+                  </Button>
+                )}
+              </div>
             </div>
 
             {/* Tab bar */}
@@ -504,6 +520,13 @@ export default function TeamPage() {
                 onOpenChange={(open: boolean) => setIsInviteModalOpen(open)}
                 teamId={activeTeam.id}
                 canInviteOwner={user?.is_staff || isOwner}
+              />
+            )}
+
+            {isCreateTeamModalOpen && (
+              <CreateTeamModal
+                open={isCreateTeamModalOpen}
+                onOpenChange={setIsCreateTeamModalOpen}
               />
             )}
           </div>

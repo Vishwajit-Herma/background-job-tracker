@@ -41,6 +41,8 @@ class TeamViewSet(viewsets.ModelViewSet):
         ).distinct()
 
     def perform_create(self, serializer):
+        if not self.request.user.is_staff:
+            raise PermissionDenied("Only staff members can create teams.")
         serializer.save(owner=self.request.user)
 
     def perform_destroy(self, instance):
