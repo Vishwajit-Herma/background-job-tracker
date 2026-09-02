@@ -20,6 +20,7 @@ import {
 } from "@/lib/api/projects";
 import { JobsPanel } from "@/components/bjt/jobs/jobs-panel";
 import { ProjectReliabilitySummary } from "@/components/bjt/projects/project-reliability-summary";
+import { CreateTeamModal } from "@/components/bjt/create-team-modal";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -1004,6 +1005,7 @@ function ProjectsPageContent() {
   const targetProjectId = searchParams?.get("project_id");
   const { teams, activeTeam, isLoading: isTeamLoading } = useTeam();
   const [createOpen, setCreateOpen] = useState(false);
+  const [createTeamOpen, setCreateTeamOpen] = useState(false);
   const [teamFilter, setTeamFilter] = useState<string>("all");
   const [healthFilter, setHealthFilter] = useState<string>("all");
 
@@ -1053,12 +1055,36 @@ function ProjectsPageContent() {
   if (teams.length === 0) {
     return (
       <div className="flex-1 space-y-4 p-8 pt-6">
-        <h2 className="text-3xl font-bold tracking-tight">Projects</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-3xl font-bold tracking-tight">Projects</h2>
+          {isGlobalStaff && (
+            <Button onClick={() => setCreateTeamOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" /> Create Team
+            </Button>
+          )}
+        </div>
         <EmptyState
           title="No teams yet"
-          description="Join or create a team first to manage projects."
+          description={
+            isGlobalStaff
+              ? "You must create a team first before you can create and manage projects."
+              : "Join or create a team first to manage projects."
+          }
           icon={<FolderOpen className="h-10 w-10 text-muted-foreground" />}
+          action={
+            isGlobalStaff ? (
+              <Button onClick={() => setCreateTeamOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" /> Create Team
+              </Button>
+            ) : undefined
+          }
         />
+        {createTeamOpen && (
+          <CreateTeamModal
+            open={createTeamOpen}
+            onOpenChange={setCreateTeamOpen}
+          />
+        )}
       </div>
     );
   }
@@ -1079,11 +1105,18 @@ function ProjectsPageContent() {
             active projects
           </p>
         </div>
-        {manageableTeams.length > 0 && (
-          <Button onClick={() => setCreateOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" /> New Project
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {isGlobalStaff && (
+            <Button variant="outline" onClick={() => setCreateTeamOpen(true)}>
+              <Users className="mr-2 h-4 w-4" /> New Team
+            </Button>
+          )}
+          {manageableTeams.length > 0 && (
+            <Button onClick={() => setCreateOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" /> New Project
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Filters & Actions */}
@@ -1208,6 +1241,13 @@ function ProjectsPageContent() {
           defaultTeamId={
             typeof teamFilter === "number" ? teamFilter : activeTeam?.id
           }
+        />
+      )}
+
+      {createTeamOpen && (
+        <CreateTeamModal
+          open={createTeamOpen}
+          onOpenChange={setCreateTeamOpen}
         />
       )}
     </div>

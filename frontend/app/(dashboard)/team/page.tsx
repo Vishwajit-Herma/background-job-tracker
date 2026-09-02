@@ -248,9 +248,27 @@ export default function TeamPage() {
 
         <EmptyState 
           title="No team yet"
-          description="You don't belong to any team yet. Accept an invitation above, or ask an admin to create one for you."
+          description={
+            user?.is_staff
+              ? "You do not belong to any team yet. Create your first team to get started."
+              : "You don't belong to any team yet. Accept an invitation above, or ask an admin to create one for you."
+          }
           icon={<Users className="h-10 w-10 text-muted-foreground" />}
+          action={
+            user?.is_staff ? (
+              <Button onClick={() => setIsCreateTeamModalOpen(true)}>
+                <UserPlus className="mr-2 h-4 w-4" /> Create Team
+              </Button>
+            ) : undefined
+          }
         />
+
+        {isCreateTeamModalOpen && (
+          <CreateTeamModal
+            open={isCreateTeamModalOpen}
+            onOpenChange={setIsCreateTeamModalOpen}
+          />
+        )}
       </div>
     );
   }
@@ -522,13 +540,6 @@ export default function TeamPage() {
                 canInviteOwner={user?.is_staff || isOwner}
               />
             )}
-
-            {isCreateTeamModalOpen && (
-              <CreateTeamModal
-                open={isCreateTeamModalOpen}
-                onOpenChange={setIsCreateTeamModalOpen}
-              />
-            )}
           </div>
         ) : (
           <div className="flex items-center justify-center h-48 rounded-xl border border-dashed text-muted-foreground text-sm">
@@ -536,6 +547,13 @@ export default function TeamPage() {
           </div>
         )}
       </div>
+
+      {isCreateTeamModalOpen && (
+        <CreateTeamModal
+          open={isCreateTeamModalOpen}
+          onOpenChange={setIsCreateTeamModalOpen}
+        />
+      )}
     </div>
   );
 }
