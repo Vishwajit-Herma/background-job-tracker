@@ -1,1 +1,5 @@
-export default function DashboardIndex() { return <div className="p-8">Dashboard Overview Stub</div>; }
+import { redirect } from "next/navigation";
+
+export default function DashboardIndex() {
+  redirect("/projects");
+}
