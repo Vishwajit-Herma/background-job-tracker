@@ -14,16 +14,22 @@ export function proxy(request: NextRequest) {
     url.pathname.startsWith("/reset-password") ||
     url.pathname.startsWith("/verify-email");
   
-  // UX route guard: if no session cookie, redirect to /login
+  // UX route guard: if no session cookie, redirect to /login for protected routes
   // NOTE: This is UX-only. Django must STILL protect the API!
   if (!sessionId && !isAuthRoute && !url.pathname.startsWith("/_next") && !url.pathname.startsWith("/api")) {
     url.pathname = "/login";
     return NextResponse.redirect(url);
   }
 
-  // Optional: Redirect logged-in users away from /login back to dashboard
-  if (sessionId && isAuthRoute) {
-    url.pathname = "/projects"; // Or wherever the default dashboard is
+  // Only redirect logged-in users away from login/register/forgot-password (guest-only routes)
+  // NEVER redirect away from /verify-email or /reset-password!
+  const isGuestOnlyRoute =
+    url.pathname === "/login" ||
+    url.pathname === "/register" ||
+    url.pathname === "/forgot-password";
+
+  if (sessionId && isGuestOnlyRoute) {
+    url.pathname = "/projects";
     return NextResponse.redirect(url);
   }
 

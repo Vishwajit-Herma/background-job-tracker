@@ -77,7 +77,11 @@ if EMAIL_HOST:
     EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="")  # noqa: F405
     EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=True)  # noqa: F405
 else:
-    EMAIL_BACKEND = env("EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend")  # noqa: F405
+    EMAIL_BACKEND = env("EMAIL_BACKEND", default="apps.users.mail_backends.LoggingEmailBackend")  # noqa: F405
+
+# Frontend & Site URLs
+FRONTEND_URL = env("FRONTEND_URL", default="https://background-job-tracker-wine.vercel.app")  # noqa: F405
+SITE_URL = env("SITE_URL", default=FRONTEND_URL)  # noqa: F405
 
 # Admin
 ADMINS = [

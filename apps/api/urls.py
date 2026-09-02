@@ -1,6 +1,7 @@
 """API URLs."""
 
 from django.urls import include, path
+from . import views
 from drf_spectacular.views import (
     SpectacularAPIView,
     SpectacularRedocView,
@@ -22,6 +23,16 @@ urlpatterns = [
     path("incidents/", include("apps.ai.urls")),
     path("notifications/", include("apps.notifications.urls")),
     path("reliability/", include("apps.reliability.urls")),
+    path(
+        "auth/registration/resend-email/",
+        views.CustomResendEmailVerificationView.as_view(),
+        name="rest_resend_email",
+    ),
+    path(
+        "auth/registration/verify-email/",
+        views.CustomVerifyEmailView.as_view(),
+        name="rest_verify_email",
+    ),
     path("auth/registration/", include("dj_rest_auth.registration.urls")),
     path("auth/", include("dj_rest_auth.urls")),
     path("teams/", include("apps.teams.api.urls", namespace="teams_api")),
