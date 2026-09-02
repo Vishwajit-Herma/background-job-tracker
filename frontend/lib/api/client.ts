@@ -11,6 +11,8 @@ export type ApiError = {
 export const apiClient = axios.create({
   baseURL: "/api",
   withCredentials: true, // Crucial for sending Django session cookies
+  xsrfCookieName: "csrftoken",
+  xsrfHeaderName: "X-CSRFToken",
   headers: {
     "Content-Type": "application/json",
   },
@@ -18,22 +20,33 @@ export const apiClient = axios.create({
 
 // Helper to extract a cookie value by name
 function getCookie(name: string): string | null {
-  if (typeof document === "undefined") return null;
-  const value = `; ${document.cookie}`;
-  const parts = value.split(`; ${name}=`);
-  if (parts.length === 2) return parts.pop()?.split(";")?.shift() || null;
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  const cookies = document.cookie.split("; ");
+  for (const cookie of cookies) {
+    const [key, ...valueParts] = cookie.split("=");
+    if (key.trim() === name) {
+      return decodeURIComponent(valueParts.join("="));
+    }
+  }
+
   return null;
 }
 
 // Request Interceptor: Attach CSRF Token for unsafe methods
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    // Methods that require CSRF protection in Django
-    const unsafeMethods = ["post", "put", "patch", "delete"];
-    if (config.method && unsafeMethods.includes(config.method.toLowerCase())) {
+    const method = config.method?.toUpperCase();
+    if (method && ["POST", "PUT", "PATCH", "DELETE"].includes(method)) {
       const csrfToken = getCookie("csrftoken");
       if (csrfToken) {
-        config.headers.set("X-CSRFToken", csrfToken);
+        if (config.headers && typeof config.headers.set === "function") {
+          config.headers.set("X-CSRFToken", csrfToken);
+        } else if (config.headers) {
+          (config.headers as Record<string, string>)["X-CSRFToken"] = csrfToken;
+        }
       }
     }
     return config;
