@@ -1,53 +1,49 @@
 # syntax=docker/dockerfile:1
-FROM python:3.14-slim as base
 
-# Set environment variables
+FROM python:3.14-slim
+
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy
 
-# Create app user
-RUN groupadd -r appuser && useradd -r -g appuser appuser
-
-# Install system dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpq-dev \
-    curl \
-    gcc \
-    python3-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install just
-RUN curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to /usr/local/bin
+# Create non-root user with home directory
+RUN groupadd -r appuser && useradd -r -m -g appuser appuser
 
 WORKDIR /app
 
 # Install uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-# Copy dependency files and README (required by hatchling)
-COPY pyproject.toml ./
-COPY uv.lock* ./
-COPY README.md ./
+# 1. Dependency files first for Docker layer caching
+COPY pyproject.toml uv.lock README.md ./
 
-# Copy package directories needed for editable install
-COPY apps/ ./apps/
-COPY config/ ./config/
+# Install dependencies into .venv (excluding root project package to cache dependencies)
+RUN uv sync --frozen --no-dev --no-install-project
 
-# Install dependencies
-RUN uv sync --no-dev
-
-# Copy rest of application
+# 2. Copy application code
 COPY . .
 
-# Change ownership
-RUN chown -R appuser:appuser /app
+# Install root project package and compile bytecode
+RUN uv sync --frozen --no-dev
+
+ENV PATH="/app/.venv/bin:$PATH" \
+    UV_NO_CACHE=1
+
+# Collect static assets during build
+RUN DJANGO_SETTINGS_MODULE=config.settings.prod \
+    DJANGO_SECRET_KEY=dummy-build-key \
+    python manage.py collectstatic --noinput
+
+# Add Render startup script
+COPY start-render.sh /app/start-render.sh
+RUN chmod +x /app/start-render.sh
+
+# Set ownership
+RUN chown -R appuser:appuser /app /home/appuser
 
 USER appuser
 
-# Expose port
-EXPOSE 8000
+EXPOSE 10000
 
-# Run application
-CMD ["uv", "run", "gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "2", "--timeout", "120"]
+CMD ["/app/start-render.sh"]

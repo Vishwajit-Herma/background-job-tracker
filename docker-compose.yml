@@ -135,18 +135,6 @@ services:
       - "8025:8025"
 
 
-
-
-
-  jaeger:
-    image: jaegertracing/all-in-one:latest
-    ports:
-      - "16686:16686"  # UI
-      - "4318:4318"    # OTLP gRPC
-    environment:
-      COLLECTOR_OTLP_ENABLED: "true"
-
-
 volumes:
   postgres_data:
 
