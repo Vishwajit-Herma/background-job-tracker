@@ -60,20 +60,28 @@ export default function ResetPasswordPage() {
     } catch (err: unknown) {
       const apiError = err as ApiError;
       if (apiError.status === 400 && apiError.errors) {
+        let hasMappedField = false;
         Object.keys(apiError.errors).forEach((key) => {
-          if (key === "non_field_errors" || key === "token" || key === "uid" || key === "detail") {
-            setGlobalError((apiError.errors as any)[key].join(", "));
-          } else {
-            setError(key as keyof ResetPasswordFormValues, {
-              type: "server",
-              message: Array.isArray((apiError.errors as any)[key]) 
-                ? (apiError.errors as any)[key].join(", ") 
-                : String((apiError.errors as any)[key]),
-            });
+          const rawVal = (apiError.errors as any)[key];
+          const errorMsg = Array.isArray(rawVal) ? rawVal.join(", ") : String(rawVal);
+
+          if (key === "new_password1" || key === "password") {
+            setError("password", { type: "server", message: errorMsg });
+            hasMappedField = true;
+          } else if (key === "new_password2" || key === "confirmPassword") {
+            setError("confirmPassword", { type: "server", message: errorMsg });
+            hasMappedField = true;
+          } else if (key === "non_field_errors" || key === "token" || key === "uid" || key === "detail") {
+            setGlobalError(errorMsg);
+            hasMappedField = true;
           }
         });
+
+        if (!hasMappedField) {
+          setGlobalError(apiError.message || "Failed to reset password.");
+        }
       } else {
-        setGlobalError("Failed to reset password. The link may have expired.");
+        setGlobalError(apiError.message || "Failed to reset password. The link may have expired.");
       }
     } finally {
       setIsSubmitting(false);

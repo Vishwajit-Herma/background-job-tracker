@@ -1,0 +1,7 @@
+Hello from BJT Team!
+
+You're receiving this email because user {{ user.email }} has given your email address to register an account on BJT.
+
+To confirm this is correct, go to {{ activate_url }}
+
+Thank you for using BJT!
