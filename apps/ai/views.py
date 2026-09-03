@@ -91,8 +91,8 @@ class IncidentAIInvestigateView(CustomBaseAPIView):
         except AIProviderError as err:
             logger.error("AI provider error for INC-%s: %s", incident_id, err)
             return CustomResponse.error(
-                message="Failed to generate AI investigation for this incident.",
-                errors={"code": "AI_PROVIDER_ERROR"},
+                message=str(err) or "Failed to generate AI investigation for this incident.",
+                errors={"code": "AI_PROVIDER_ERROR", "detail": str(err)},
                 code=status.HTTP_502_BAD_GATEWAY,
                 error_code="AI_PROVIDER_ERROR",
             )

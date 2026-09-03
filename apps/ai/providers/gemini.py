@@ -2,6 +2,7 @@
 
 import json
 import logging
+import time
 from typing import Any
 
 from django.conf import settings
@@ -94,7 +95,7 @@ class GeminiProvider(AIProvider):
         timeout: int | None = None,
     ) -> None:
         self.api_key = api_key or getattr(settings, "GEMINI_API_KEY", "")
-        self.model = model or getattr(settings, "GEMINI_MODEL", "gemini-2.5-flash")
+        self.model = model or getattr(settings, "GEMINI_MODEL", "gemini-3.6-flash")
         # Fall back to settings, then to a safe default for thinking-capable models.
         if timeout is not None:
             self.timeout = timeout
@@ -126,26 +127,54 @@ class GeminiProvider(AIProvider):
         if system_instruction:
             payload["systemInstruction"] = {"parts": [{"text": system_instruction}]}
 
-        try:
-            response = requests.post(
-                url,
-                json=payload,
-                headers={"Content-Type": "application/json"},
-                timeout=self.timeout,
-            )
-        except requests.Timeout as err:
-            logger.warning("Gemini API request timed out after %ss", self.timeout)
-            raise AIProviderTimeoutError(
-                f"AI service request timed out after {self.timeout} seconds. Please try again."
-            ) from err
-        except requests.RequestException as err:
-            logger.error("Gemini API network error: %s", err)
-            raise AIProviderError(f"Network error communicating with AI service: {err}") from err
+        max_retries = 3
+        response = None
 
-        if response.status_code != 200:
-            logger.error("Gemini API error (%s): %s", response.status_code, response.text)
+        for attempt in range(max_retries):
+            try:
+                response = requests.post(
+                    url,
+                    json=payload,
+                    headers={"Content-Type": "application/json"},
+                    timeout=self.timeout,
+                )
+            except requests.Timeout as err:
+                logger.warning("Gemini API request timed out (attempt %s/%s)", attempt + 1, max_retries)
+                if attempt == max_retries - 1:
+                    raise AIProviderTimeoutError(
+                        f"AI service request timed out after {self.timeout} seconds. Please try again."
+                    ) from err
+            except requests.RequestException as err:
+                logger.error("Gemini API network error: %s", err)
+                if attempt == max_retries - 1:
+                    raise AIProviderError(f"Network error communicating with AI service: {err}") from err
+
+            if response is not None:
+                if response.status_code == 200:
+                    break
+                elif response.status_code in [429, 503] and attempt < max_retries - 1:
+                    sleep_sec = 2 * (attempt + 1)
+                    logger.warning(
+                        "Gemini API returned status %s (high demand). Retrying in %ss (attempt %s/%s)...",
+                        response.status_code,
+                        sleep_sec,
+                        attempt + 1,
+                        max_retries,
+                    )
+                    time.sleep(sleep_sec)
+                    continue
+                else:
+                    break
+
+        if response is None or response.status_code != 200:
+            status_code = response.status_code if response is not None else 500
+            if status_code in [429, 503]:
+                raise AIProviderError(
+                    "High Model Usage: The AI provider is currently experiencing high demand. Please try again in a few moments."
+                )
+            logger.error("Gemini API error (%s): %s", status_code, response.text if response else "No response")
             raise AIProviderError(
-                f"AI provider returned status {response.status_code}: {response.text[:200]}"
+                f"AI provider returned status {status_code}: {response.text[:200] if response else ''}"
             )
 
         try:

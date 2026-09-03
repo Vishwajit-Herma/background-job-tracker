@@ -285,6 +285,19 @@ export function AskAIPanel({ incidentId, open, onOpenChange, onSelectTab }: AskA
             </div>
           )}
 
+          {/* Error Banner for High Model Demand */}
+          {mutation.isError && !mutation.isPending && (
+            <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-950 dark:text-amber-200 text-xs space-y-1.5 animate-in fade-in duration-300">
+              <div className="flex items-center gap-2 font-semibold text-sm text-amber-800 dark:text-amber-300">
+                <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+                High Model Usage
+              </div>
+              <p className="leading-relaxed text-xs">
+                The AI provider is currently experiencing high demand. Automatic retries were attempted, but the service remains busy. Please try again in a few moments.
+              </p>
+            </div>
+          )}
+
           {/* Response Container */}
           {response && !mutation.isPending && (
             <div className="space-y-6 animate-in fade-in duration-300">
