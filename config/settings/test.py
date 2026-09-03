@@ -9,8 +9,11 @@ CACHES = {
     }
 }
 
-# Use database sessions for tests (since cache is dummy)
 SESSION_ENGINE = "django.contrib.sessions.backends.db"
+
+# SQLite timeout for multi-threaded live_server tests
+if DATABASES["default"]["ENGINE"] == "django.db.backends.sqlite3":  # noqa: F405
+    DATABASES["default"].setdefault("OPTIONS", {})["timeout"] = 30  # noqa: F405
 
 # Faster password hashing for tests
 PASSWORD_HASHERS = [

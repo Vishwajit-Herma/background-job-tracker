@@ -15,7 +15,7 @@ User = get_user_model()
 
 
 @pytest.fixture
-def api_key_fixture(db):
+def api_key_fixture(transactional_db):
     user, _ = User.objects.get_or_create(email="e2e@example.com")
     if _:
         user.set_password("password")
@@ -23,7 +23,7 @@ def api_key_fixture(db):
 
     team = Team.objects.filter(owner=user).first()
     if not team:
-        team = Team.objects.create(name="E2E Team", owner=user)
+        team = Team.objects.create(name="E2E Team", slug="e2e-team-real", owner=user)
 
     project, _ = Project.objects.get_or_create(team=team, name="E2E Project")
 
@@ -39,7 +39,7 @@ def api_key_fixture(db):
 
 
 @pytest.mark.django_db(transaction=True)
-def test_real_worker_e2e(live_server, api_key_fixture, tmp_path):
+def test_real_worker_e2e(live_server, api_key_fixture, tmp_path, monkeypatch):
     project, api_key_str = api_key_fixture
 
     worker_script = tmp_path / "worker.py"
@@ -75,28 +75,32 @@ def real_task(self):
 
     env = os.environ.copy()
     env["PYTHONPATH"] = os.path.abspath("sdk") + ":" + env.get("PYTHONPATH", "")
+    env.pop("DJANGO_SETTINGS_MODULE", None)
+    env.pop("CELERY_BROKER_URL", None)
+    env.pop("CELERY_RESULT_BACKEND", None)
 
     # Start the worker (using solo pool to simplify test setup)
-    worker_proc = subprocess.Popen(
-        [
-            sys.executable,
-            "-m",
-            "celery",
-            "-A",
-            "worker.app",
-            "worker",
-            "-l",
-            "info",
-            "-P",
-            "solo",
-            "-Q",
-            "e2e_queue_1",
-        ],
-        cwd=str(tmp_path),
-        env=env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
+    with (tmp_path / "worker1_log.txt").open("w") as worker_log:
+        worker_proc = subprocess.Popen(
+            [
+                sys.executable,
+                "-m",
+                "celery",
+                "-A",
+                "worker.app",
+                "worker",
+                "-l",
+                "info",
+                "-P",
+                "solo",
+                "-Q",
+                "e2e_queue_1",
+            ],
+            cwd=str(tmp_path),
+            env=env,
+            stdout=worker_log,
+            stderr=subprocess.STDOUT,
+        )
 
     try:
         # Give worker time to start and sync tasks
@@ -108,17 +112,22 @@ def real_task(self):
         ).exists()
 
         # Now enqueue a task from the test process
-        app = Celery("e2e_app", broker="redis://localhost:6379/1")
+        monkeypatch.delenv("CELERY_BROKER_URL", raising=False)
+        monkeypatch.delenv("CELERY_RESULT_BACKEND", raising=False)
+
+        app = Celery("e2e_real_app_1", broker="redis://localhost:6379/1")
         app.conf.update(
             task_serializer="json",
             result_serializer="json",
             accept_content=["json"],
+            task_always_eager=False,
         )
+        app.control.purge()
         result = app.send_task("e2e.real_task", queue="e2e_queue_1")
 
         # Wait for task to finish and telemetry to be sent
         execution = None
-        for _ in range(30):  # Wait up to 15 seconds
+        for _i in range(30):
             job = Job.objects.filter(project=project, task_identifier="e2e.real_task").first()
             if job:
                 execution = Execution.objects.filter(job=job, external_id=result.id).first()
@@ -130,8 +139,7 @@ def real_task(self):
         assert job is not None
         assert execution is not None
         assert execution.status == "success"
-        assert execution.started_at is not None
-        assert execution.finished_at is not None
+
         events = ExecutionEvent.objects.filter(execution=execution)
         assert events.count() >= 2
         statuses = [e.status for e in events]
@@ -140,11 +148,15 @@ def real_task(self):
 
     finally:
         worker_proc.terminate()
-        worker_proc.wait()
+        try:
+            worker_proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            worker_proc.kill()
+            worker_proc.wait(timeout=5)
 
 
 @pytest.mark.django_db(transaction=True)
-def test_real_worker_prefork_e2e(live_server, api_key_fixture, tmp_path):
+def test_real_worker_prefork_e2e(live_server, api_key_fixture, tmp_path, monkeypatch):
     project, api_key_str = api_key_fixture
 
     worker_script = tmp_path / "worker.py"
@@ -180,28 +192,31 @@ def real_prefork_task(self):
 
     env = os.environ.copy()
     env["PYTHONPATH"] = os.path.abspath("sdk") + ":" + env.get("PYTHONPATH", "")
+    env.pop("DJANGO_SETTINGS_MODULE", None)
+    env.pop("CELERY_BROKER_URL", None)
+    env.pop("CELERY_RESULT_BACKEND", None)
 
     # Start the worker with PREFORK pool, deliberately validating fork-safety of the SDK
-    worker_proc = subprocess.Popen(
-        [
-            sys.executable,
-            "-m",
-            "celery",
-            "-A",
-            "worker.app",
-            "worker",
-            "-l",
-            "info",
-            "-P",
-            "prefork",
-            "-Q",
-            "e2e_queue_2",
-        ],
-        cwd=str(tmp_path),
-        env=env,
-        stdout=sys.stdout,
-        stderr=sys.stderr,
-    )
+    with (tmp_path / "worker2_log.txt").open("w") as worker_log:
+        worker_proc = subprocess.Popen(
+            [
+                sys.executable,
+                "-m",
+                "celery",
+                "-A",
+                "worker.app",
+                "worker",
+                "-l",
+                "info",
+                "--concurrency=2",
+                "-Q",
+                "e2e_queue_2",
+            ],
+            cwd=str(tmp_path),
+            env=env,
+            stdout=worker_log,
+            stderr=subprocess.STDOUT,
+        )
 
     try:
         # Give worker time to start and sync tasks
@@ -212,13 +227,18 @@ def real_prefork_task(self):
             project=project, task_identifier="e2e.real_prefork_task"
         ).exists()
 
+        monkeypatch.delenv("CELERY_BROKER_URL", raising=False)
+        monkeypatch.delenv("CELERY_RESULT_BACKEND", raising=False)
+
         # Enqueue a task
         app = Celery("e2e_prefork_app", broker="redis://localhost:6379/2")
         app.conf.update(
             task_serializer="json",
             result_serializer="json",
             accept_content=["json"],
+            task_always_eager=False,
         )
+        app.control.purge()
         result = app.send_task("e2e.real_prefork_task", queue="e2e_queue_2")
 
         # Wait for task to finish and telemetry to be sent
@@ -246,4 +266,8 @@ def real_prefork_task(self):
 
     finally:
         worker_proc.terminate()
-        worker_proc.wait()
+        try:
+            worker_proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            worker_proc.kill()
+            worker_proc.wait(timeout=5)

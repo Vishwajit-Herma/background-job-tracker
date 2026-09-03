@@ -256,9 +256,12 @@ CSRF_TRUSTED_ORIGINS = env.list(
 from celery.schedules import crontab
 
 CELERY_BROKER_URL = env("CELERY_BROKER_URL", default="redis://localhost:6379/1")
-CELERY_BROKER_USE_SSL = {
-    "ssl_cert_reqs": ssl.CERT_REQUIRED,
-}
+if CELERY_BROKER_URL.startswith("rediss://"):
+    CELERY_BROKER_USE_SSL = {
+        "ssl_cert_reqs": ssl.CERT_REQUIRED,
+    }
+else:
+    CELERY_BROKER_USE_SSL = None
 CELERY_RESULT_BACKEND = "django-db"
 CELERY_CACHE_BACKEND = "django-cache"
 CELERY_TASK_TRACK_STARTED = True

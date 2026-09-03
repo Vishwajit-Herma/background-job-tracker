@@ -1,5 +1,4 @@
 import os
-import sys
 import time
 import pytest
 import subprocess
@@ -17,13 +16,18 @@ User = get_user_model()
 
 
 @pytest.fixture
-def e2e_setup(db):
+def e2e_setup(transactional_db):
     user, _ = User.objects.get_or_create(email="e2e_full@example.com")
     if _:
         user.set_password("password")
         user.save()
 
-    team, _ = Team.objects.get_or_create(name="E2E Full Team", owner=user)
+    team, _ = Team.objects.get_or_create(
+        name="E2E Full Team", defaults={"slug": "e2e-full-team", "owner": user}
+    )
+    if not team.owner:
+        team.owner = user
+        team.save()
     project, _ = Project.objects.get_or_create(team=team, name="E2E Full Project")
 
     # Ensure an alert rule exists so failures generate an incident
@@ -83,34 +87,51 @@ def failing_task(self):
 
     env = os.environ.copy()
     env["PYTHONPATH"] = os.path.abspath("sdk") + ":" + env.get("PYTHONPATH", "")
+    # Remove DJANGO_SETTINGS_MODULE so the worker doesn't auto-load the platform's Django settings!
+    # This simulates a truly external customer application worker.
+    env.pop("DJANGO_SETTINGS_MODULE", None)
+    # Also remove CELERY_BROKER_URL which might be inherited from pytest-dotenv,
+    # forcing the worker to respect the broker defined in worker.py
+    env.pop("CELERY_BROKER_URL", None)
+    env.pop("CELERY_RESULT_BACKEND", None)
 
     # Start the worker
-    worker_proc = subprocess.Popen(
-        [
-            sys.executable,
-            "-m",
-            "celery",
-            "-A",
-            "worker.app",
-            "worker",
-            "-l",
-            "info",
-            "-P",
-            "solo",
-            "-Q",
-            "e2e_full_queue",
-        ],
-        cwd=str(tmp_path),
-        env=env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
+    with (tmp_path / "worker_log.txt").open("w") as worker_log:
+        worker_proc = subprocess.Popen(
+            [
+                "celery",
+                "-A",
+                "worker.app",
+                "worker",
+                "-l",
+                "info",
+                "-P",
+                "solo",
+                "-Q",
+                "e2e_full_queue",
+            ],
+            cwd=str(tmp_path),
+            env=env,
+            stdout=worker_log,
+            stderr=subprocess.STDOUT,
+        )
 
     try:
+        monkeypatch.delenv("CELERY_BROKER_URL", raising=False)
+        monkeypatch.delenv("CELERY_RESULT_BACKEND", raising=False)
+
         time.sleep(4)
 
         app = Celery("e2e_full_app", broker="redis://localhost:6379/3")
-        app.conf.update(task_serializer="json", result_serializer="json", accept_content=["json"])
+        app.conf.update(
+            task_serializer="json",
+            result_serializer="json",
+            accept_content=["json"],
+            task_always_eager=False,
+        )
+
+        # Purge any leftover tasks from previous failed test runs
+        app.control.purge()
 
         # Enqueue the failing task
         result = app.send_task("e2e.failing_task", queue="e2e_full_queue")
@@ -256,4 +277,8 @@ def failing_task(self):
 
     finally:
         worker_proc.terminate()
-        worker_proc.wait()
+        try:
+            worker_proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            worker_proc.kill()
+            worker_proc.wait(timeout=5)

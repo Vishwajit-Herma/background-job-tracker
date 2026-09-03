@@ -21,7 +21,7 @@ def project(db):
 
     User = get_user_model()
     user = User.objects.create(email="test_e2e@example.com")
-    team = Team.objects.create(name="E2E Team", owner=user)
+    team = Team.objects.create(name="E2E Team", slug="e2e-team-sdk", owner=user)
     return Project.objects.create(team=team, name="E2E Project")
 
 

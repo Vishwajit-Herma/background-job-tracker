@@ -138,7 +138,8 @@ def test_filter_active_users(multiple_users):
     multiple_users[0].is_active = False
     multiple_users[0].save()
 
-    active_users = User.objects.filter(is_active=True)
+    user_ids = [u.id for u in multiple_users]
+    active_users = User.objects.filter(id__in=user_ids, is_active=True)
     assert active_users.count() == 2
 
 
