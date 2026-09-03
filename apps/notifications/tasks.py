@@ -232,9 +232,14 @@ Timestamp: {event.event_time.strftime("%Y-%m-%d %H:%M:%S UTC")}
             delivery.save(update_fields=["status", "error"])
 
     except Exception as e:
-        # Categorize email exceptions
         error_msg = str(e)
-        if isinstance(
+        logger.error(f"Email delivery task {delivery_id} failed: {error_msg}", exc_info=True)
+
+        delivery.error = f"Error: {error_msg}"
+        delivery.save(update_fields=["error"])
+
+        # Check for permanent API / SMTP errors
+        is_permanent = isinstance(
             e,
             (
                 smtplib.SMTPAuthenticationError,
@@ -242,19 +247,33 @@ Timestamp: {event.event_time.strftime("%Y-%m-%d %H:%M:%S UTC")}
                 smtplib.SMTPDataError,
                 smtplib.SMTPSenderRefused,
             ),
-        ):
+        )
+
+        try:
+            from anymail.exceptions import AnymailAPIError, AnymailSerializationError
+            if isinstance(e, AnymailSerializationError) or (
+                isinstance(e, AnymailAPIError)
+                and hasattr(e, "status_code")
+                and e.status_code
+                and 400 <= e.status_code < 500
+            ):
+                is_permanent = True
+        except ImportError:
+            pass
+
+        if is_permanent:
             delivery.status = NotificationDelivery.DeliveryStatus.FAILED
             delivery.error = f"Permanent Error: {error_msg}"
             delivery.save(update_fields=["status", "error"])
             return
 
-        # Temporary failure, let's assume SMTP connection issues are retryable
+        # Temporary failure, retry
         countdown = 2**self.request.retries
         try:
             self.retry(exc=e, countdown=countdown)
         except self.MaxRetriesExceededError:
             delivery.status = NotificationDelivery.DeliveryStatus.FAILED
-            delivery.error = f"Max retries exceeded. Last error: {str(e)}"
+            delivery.error = f"Max retries exceeded. Last error: {error_msg}"
             delivery.save(update_fields=["status", "error"])
 
 
