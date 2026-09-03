@@ -24,25 +24,31 @@ def dispatch_incident_event(incident_event_id):
 
     incident = incident_event.incident
 
-    if incident.severity == Incident.Severity.CRITICAL:
-        # A CRITICAL incident triggers both CRITICAL and DEGRADED policies
-        matched_severities = [Incident.Severity.CRITICAL, Incident.Severity.DEGRADED]
-    else:
-        # A DEGRADED incident triggers only DEGRADED policies
-        matched_severities = [Incident.Severity.DEGRADED]
-
-    # Find matching active policies
+    # Fetch active policies for the project with active channels
     policies = NotificationPolicy.objects.filter(
         project_id=incident.project_id,
         is_active=True,
-        severity__in=matched_severities,
-        event_types__contains=[incident_event.event_type],
+        channel__is_active=True,
     ).select_related("channel")
 
-    # Deduplicate unique channels
     unique_channels = {}
     for policy in policies:
-        if policy.channel.is_active:
+        # Severity matching:
+        # A CRITICAL incident triggers both CRITICAL and DEGRADED policies.
+        # A DEGRADED incident triggers DEGRADED policies.
+        if incident.severity == Incident.Severity.DEGRADED and policy.severity == Incident.Severity.CRITICAL:
+            continue
+
+        # Event type matching:
+        event_types = policy.event_types or []
+        if isinstance(event_types, str):
+            try:
+                import json
+                event_types = json.loads(event_types)
+            except Exception:
+                event_types = [event_types]
+
+        if incident_event.event_type in event_types:
             unique_channels[policy.channel.id] = policy.channel
 
     for channel in unique_channels.values():

@@ -138,3 +138,27 @@ def test_deliver_webhook_500_retry(mock_retry, mock_post, project, incident):
 
     mock_retry.assert_called_once()
     assert mock_retry.call_args.kwargs["countdown"] > 0
+
+
+@patch("apps.notifications.tasks.send_mail")
+def test_deliver_email_task_dynamic_recipients(mock_send_mail, project, incident, user):
+    from apps.notifications.tasks import deliver_email_task
+
+    channel = NotificationChannel.objects.create(
+        project=project,
+        type=NotificationChannel.ChannelType.EMAIL,
+        name="Email Channel",
+        config={"recipient_target": "ALL", "recipients": []},
+    )
+    event = IncidentEvent.objects.create(
+        incident=incident, event_type=IncidentEvent.EventType.CREATED
+    )
+    delivery = NotificationDelivery.objects.create(incident_event=event, channel=channel)
+
+    deliver_email_task(delivery.id)
+
+    delivery.refresh_from_db()
+    assert delivery.status == NotificationDelivery.DeliveryStatus.SENT
+    mock_send_mail.assert_called_once()
+    assert user.email in mock_send_mail.call_args.kwargs["recipient_list"]
+

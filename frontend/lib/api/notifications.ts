@@ -3,7 +3,7 @@ import { apiClient } from "./client";
 export interface NotificationChannel {
   id: number;
   project: number;
-  type: "WEBHOOK" | "EMAIL";
+  type: "WEBHOOK" | "EMAIL" | "IN_APP";
   name: string;
   config: Record<string, any>;
   is_active: boolean;

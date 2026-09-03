@@ -2,17 +2,16 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Search, Loader2, Edit, Trash2, Mail, Webhook, ShieldAlert } from "lucide-react";
+import { Plus, Search, Loader2, Edit, Trash2, Mail, Webhook, Bell } from "lucide-react";
 import { toastError, toastSuccess } from "@/lib/toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useAuth } from "@/hooks/use-auth";
-import { useRouter } from "next/navigation";
 import { getPaginatedNotificationChannels, createNotificationChannel, updateNotificationChannel, deleteNotificationChannel, NotificationChannel } from "@/lib/api/notifications";
 import { getProjects } from "@/lib/api/projects";
 import { useForm } from "react-hook-form";
@@ -22,7 +21,7 @@ import * as z from "zod";
 const channelSchema = z.object({
   project: z.coerce.number().min(1, "Project is required"),
   name: z.string().min(1, "Name is required"),
-  type: z.enum(["WEBHOOK", "EMAIL"]),
+  type: z.enum(["WEBHOOK", "EMAIL", "IN_APP"]),
   is_active: z.boolean().default(true),
   config: z.any()
 });
@@ -31,9 +30,6 @@ type ChannelFormValues = z.infer<typeof channelSchema>;
 
 export default function AdminChannelsPage() {
   const { user } = useAuth();
-  const router = useRouter();
-
-
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
@@ -56,7 +52,6 @@ export default function AdminChannelsPage() {
   });
 
   const channels = paginatedData?.data || [];
-  const totalPages = paginatedData?.totalPages || 1;
 
   const deleteMutation = useMutation({
     mutationFn: deleteNotificationChannel,
@@ -65,31 +60,61 @@ export default function AdminChannelsPage() {
     },
   });
 
-  const { register, handleSubmit, reset, watch, setValue, formState: { errors, isSubmitting } } = useForm<ChannelFormValues>({
+  const { register, handleSubmit, reset, watch, setValue, formState: { isSubmitting } } = useForm<ChannelFormValues>({
     resolver: zodResolver(channelSchema) as any,
     defaultValues: { type: "WEBHOOK", is_active: true }
   });
 
   const selectedType = watch("type");
   const selectedProject = watch("project");
+  const recipientTarget = watch("config.recipient_target");
 
   const openCreateModal = () => {
     setEditingChannel(null);
-    reset({ project: projects[0]?.id || 0, type: "WEBHOOK", is_active: true, config: { url: "", secret: "", allow_insecure_http: false } });
+    reset({
+      project: projects[0]?.id || 0,
+      name: "",
+      type: "WEBHOOK",
+      is_active: true,
+      config: { url: "", secret: "", allow_insecure_http: false, recipient_target: "ALL", recipients: "" }
+    });
     setIsModalOpen(true);
   };
 
   const openEditModal = (c: NotificationChannel) => {
     setEditingChannel(c);
-    reset({ project: c.project, name: c.name, type: c.type, is_active: c.is_active, config: { ...c.config, secret: c.config.secret ? "********" : "" } });
+    const target = c.config.recipient_target || (Array.isArray(c.config.recipients) && c.config.recipients.length > 0 ? "CUSTOM" : "ALL");
+    const recipientsStr = Array.isArray(c.config.recipients) ? c.config.recipients.join(", ") : (c.config.recipients || "");
+
+    reset({
+      project: c.project,
+      name: c.name,
+      type: c.type,
+      is_active: c.is_active,
+      config: {
+        ...c.config,
+        recipient_target: target,
+        recipients: recipientsStr,
+        secret: c.config.secret ? "********" : ""
+      }
+    });
     setIsModalOpen(true);
   };
 
   const onSubmit = async (values: ChannelFormValues) => {
     try {
-      if (values.type === "EMAIL" && typeof values.config?.recipients === "string") {
-        values.config.recipients = values.config.recipients.split(",").map((s: string) => s.trim()).filter(Boolean);
+      if (values.type === "EMAIL") {
+        const target = values.config?.recipient_target || "ALL";
+        values.config.recipient_target = target;
+        if (target === "CUSTOM" && typeof values.config?.recipients === "string") {
+          values.config.recipients = values.config.recipients.split(",").map((s: string) => s.trim()).filter(Boolean);
+        } else if (target !== "CUSTOM") {
+          values.config.recipients = [];
+        }
+      } else if (values.type === "IN_APP") {
+        values.config = {};
       }
+
       if (editingChannel) {
         await updateNotificationChannel(editingChannel.id, values);
         toastSuccess("Channel updated successfully");
@@ -103,7 +128,6 @@ export default function AdminChannelsPage() {
       toastError("Failed to save channel", e);
     }
   };
-
 
   return (
     <div className="flex-1 space-y-6 p-8 pt-6">
@@ -147,15 +171,16 @@ export default function AdminChannelsPage() {
               <TableHead>Project</TableHead>
               <TableHead>Name</TableHead>
               <TableHead>Type</TableHead>
+              <TableHead>Target / Config</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="w-[100px]"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow><TableCell colSpan={5} className="h-24 text-center"><Loader2 className="h-4 w-4 animate-spin mx-auto" /></TableCell></TableRow>
+              <TableRow><TableCell colSpan={6} className="h-24 text-center"><Loader2 className="h-4 w-4 animate-spin mx-auto" /></TableCell></TableRow>
             ) : channels.length === 0 ? (
-              <TableRow><TableCell colSpan={5} className="h-24 text-center">No channels found.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={6} className="h-24 text-center">No channels found.</TableCell></TableRow>
             ) : (
               channels.map((c) => (
                 <TableRow key={c.id}>
@@ -165,9 +190,21 @@ export default function AdminChannelsPage() {
                   <TableCell>{c.name}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1.5">
-                      {c.type === "WEBHOOK" ? <Webhook className="h-4 w-4 text-blue-500" /> : <Mail className="h-4 w-4 text-green-500" />}
+                      {c.type === "WEBHOOK" ? <Webhook className="h-4 w-4 text-blue-500" /> : c.type === "EMAIL" ? <Mail className="h-4 w-4 text-green-500" /> : <Bell className="h-4 w-4 text-purple-500" />}
                       {c.type}
                     </div>
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {c.type === "EMAIL" ? (
+                      c.config.recipient_target === "ALL" ? "All Team Members" :
+                      c.config.recipient_target === "ADMINS" ? "Admins & Owners Only" :
+                      c.config.recipient_target === "OWNERS" ? "Owners Only" :
+                      Array.isArray(c.config.recipients) ? c.config.recipients.join(", ") : "Custom"
+                    ) : c.type === "IN_APP" ? (
+                      "Dashboard Notifications"
+                    ) : (
+                      c.config.url || "-"
+                    )}
                   </TableCell>
                   <TableCell>
                     <Badge variant={c.is_active ? "default" : "secondary"}>
@@ -226,6 +263,7 @@ export default function AdminChannelsPage() {
                 <SelectContent>
                   <SelectItem value="WEBHOOK">Webhook</SelectItem>
                   <SelectItem value="EMAIL">Email</SelectItem>
+                  <SelectItem value="IN_APP">In-App</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -244,10 +282,41 @@ export default function AdminChannelsPage() {
             )}
 
             {selectedType === "EMAIL" && (
-              <div className="space-y-1">
-                <label className="text-sm font-medium">Recipients (comma separated)</label>
-                <Input {...register("config.recipients")} placeholder="user@example.com, admin@example.com" />
-              </div>
+              <>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Recipient Target</label>
+                  <Select
+                    value={recipientTarget || "ALL"}
+                    onValueChange={(val) => setValue("config.recipient_target", val)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select target" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL">All Team Members</SelectItem>
+                      <SelectItem value="ADMINS">Admins & Owners Only</SelectItem>
+                      <SelectItem value="OWNERS">Team Owners Only</SelectItem>
+                      <SelectItem value="CUSTOM">Custom Email Addresses</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {recipientTarget === "CUSTOM" && (
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium">Recipients (comma separated)</label>
+                    <Input
+                      {...register("config.recipients")}
+                      placeholder="user@example.com, admin@example.com"
+                    />
+                  </div>
+                )}
+              </>
+            )}
+
+            {selectedType === "IN_APP" && (
+              <p className="text-xs text-muted-foreground bg-muted p-2 rounded">
+                In-App channels automatically deliver alert notifications directly to the dashboard bell icon of all active team members for this project.
+              </p>
             )}
 
             <DialogFooter>

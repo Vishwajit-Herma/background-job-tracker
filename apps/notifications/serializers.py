@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError as DRFValidationError
 from .models import NotificationChannel, NotificationPolicy, InAppNotification
+from apps.teams.models import TeamMember
 
 
 class NotificationChannelSerializer(serializers.ModelSerializer):
@@ -25,6 +26,7 @@ class NotificationChannelSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         type_ = attrs.get("type") or (self.instance.type if self.instance else None)
         config = attrs.get("config") or (self.instance.config if self.instance else {})
+        project = attrs.get("project") or (self.instance.project if self.instance else None)
 
         if type_ == NotificationChannel.ChannelType.WEBHOOK:
             if "url" not in config:
@@ -59,8 +61,40 @@ class NotificationChannelSerializer(serializers.ModelSerializer):
             if not url.startswith("http://") and not url.startswith("https://"):
                 raise DRFValidationError({"config": "Webhook URL must start with http or https."})
         elif type_ == NotificationChannel.ChannelType.EMAIL:
-            if "recipients" not in config or not isinstance(config["recipients"], list):
-                raise DRFValidationError({"config": "Email config must contain 'recipients' list."})
+            target = config.get("recipient_target", "").upper()
+            recipients = config.get("recipients", [])
+
+            if not target:
+                if isinstance(recipients, list) and recipients:
+                    target = "CUSTOM"
+                    config["recipient_target"] = "CUSTOM"
+                else:
+                    target = "ALL"
+                    config["recipient_target"] = "ALL"
+
+            if target not in ["ALL", "ADMINS", "OWNERS", "CUSTOM"]:
+                raise DRFValidationError(
+                    {"config": "Email config 'recipient_target' must be 'ALL', 'ADMINS', 'OWNERS', or 'CUSTOM'."}
+                )
+
+            if target == "CUSTOM" and (not isinstance(recipients, list) or not recipients):
+                raise DRFValidationError(
+                    {"config": "Email config with 'CUSTOM' target must contain 'recipients' list."}
+                )
+
+            if project and target in ["ALL", "ADMINS", "OWNERS"]:
+                members_qs = TeamMember.objects.filter(
+                    team=project.team, is_active=True, user__is_active=True
+                )
+                if target == "ADMINS":
+                    members_qs = members_qs.filter(role__in=["owner", "admin"])
+                elif target == "OWNERS":
+                    members_qs = members_qs.filter(role="owner")
+
+                if not members_qs.exists():
+                    raise DRFValidationError(
+                        {"config": f"No active team members with role target '{target}' exist for this project."}
+                    )
 
         project = attrs.get("project") or (self.instance.project if self.instance else None)
         name = attrs.get("name") or (self.instance.name if self.instance else None)

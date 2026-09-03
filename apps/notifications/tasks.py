@@ -13,6 +13,7 @@ from django.db.models import Q
 from django.db import transaction
 
 from apps.notifications.models import NotificationDelivery, NotificationChannel, InAppNotification
+from apps.teams.models import TeamMember
 
 logger = logging.getLogger(__name__)
 
@@ -164,11 +165,25 @@ def deliver_email_task(self, delivery_id):
 
     event = delivery.incident_event
     incident = event.incident
+    target = (delivery.channel.config.get("recipient_target") or "").upper()
     recipients = delivery.channel.config.get("recipients", [])
+
+    if target in ["ALL", "ADMINS", "OWNERS"]:
+        team = incident.project.team
+        members_qs = TeamMember.objects.filter(team=team, is_active=True, user__is_active=True)
+
+        if target == "ADMINS":
+            members_qs = members_qs.filter(role__in=["owner", "admin"])
+        elif target == "OWNERS":
+            members_qs = members_qs.filter(role="owner")
+
+        dynamic_recipients = list(members_qs.values_list("user__email", flat=True))
+        if dynamic_recipients:
+            recipients = dynamic_recipients
 
     if not recipients:
         delivery.status = NotificationDelivery.DeliveryStatus.FAILED
-        delivery.error = "Permanent Error: No recipients configured."
+        delivery.error = "Permanent Error: No recipients configured or resolved."
         delivery.save(update_fields=["status", "error"])
         return
 

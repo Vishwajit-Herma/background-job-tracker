@@ -84,7 +84,7 @@ export default function AdminPoliciesPage() {
 
   const { register, handleSubmit, reset, watch, setValue, formState: { errors, isSubmitting } } = useForm<PolicyFormValues>({
     resolver: zodResolver(policySchema) as any,
-    defaultValues: { severity: "CRITICAL", is_active: true, event_types: ["INCIDENT_CREATED"] }
+    defaultValues: { severity: "DEGRADED", is_active: true, event_types: EVENT_TYPES }
   });
 
   const selectedProject = watch("project");
@@ -104,7 +104,7 @@ export default function AdminPoliciesPage() {
 
   const openCreateModal = () => {
     setEditingPolicy(null);
-    reset({ project: projects[0]?.id || 0, channel: channels[0]?.id || 0, severity: "CRITICAL", event_types: EVENT_TYPES, is_active: true });
+    reset({ project: projects[0]?.id || 0, channel: channels[0]?.id || 0, severity: "DEGRADED", event_types: EVENT_TYPES, is_active: true });
     setIsModalOpen(true);
   };
 
