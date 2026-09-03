@@ -327,7 +327,11 @@ def find_recommended_runbooks(incident_id):
     incident = Incident.objects.select_related("alert_rule").get(id=incident_id)
     project_id = incident.project_id
     job_id = incident.job_id
-    trigger_type = incident.alert_rule.metric if incident.alert_rule else None
+    trigger_type = None
+    if incident.alert_rule:
+        trigger_type = incident.alert_rule.metric
+    elif incident.trigger_metadata and isinstance(incident.trigger_metadata, dict):
+        trigger_type = incident.trigger_metadata.get("metric_type") or incident.trigger_metadata.get("condition_type")
 
     # Base queryset for active runbooks in the project
     qs = Runbook.objects.filter(project_id=project_id, is_active=True)

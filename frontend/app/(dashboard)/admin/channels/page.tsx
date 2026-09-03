@@ -3,13 +3,14 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Search, Loader2, Edit, Trash2, Mail, Webhook, Bell } from "lucide-react";
-import { toastError, toastSuccess } from "@/lib/toast";
+import { toastError, toastSuccess, getErrorMessage } from "@/lib/toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useAuth } from "@/hooks/use-auth";
 import { getPaginatedNotificationChannels, createNotificationChannel, updateNotificationChannel, deleteNotificationChannel, NotificationChannel } from "@/lib/api/notifications";
@@ -38,8 +39,10 @@ export default function AdminChannelsPage() {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingChannel, setEditingChannel] = useState<NotificationChannel | null>(null);
+  const [deletingChannel, setDeletingChannel] = useState<NotificationChannel | null>(null);
+  const [modalError, setModalError] = useState<string | null>(null);
 
-  const { data: paginatedData, isLoading } = useQuery({
+  const { data: paginatedData, isLoading, isError, error } = useQuery({
     queryKey: ["admin-channels", page, debouncedSearch, ordering],
     queryFn: () => getPaginatedNotificationChannels(page, { search: debouncedSearch, ordering }),
     enabled: !!user,
@@ -57,7 +60,24 @@ export default function AdminChannelsPage() {
     mutationFn: deleteNotificationChannel,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-channels"] });
+      toastSuccess("Channel deleted permanently");
+      setDeletingChannel(null);
     },
+    onError: (e: any) => {
+      toastError("Failed to delete channel", e);
+    }
+  });
+
+  const toggleStatusMutation = useMutation({
+    mutationFn: ({ id, is_active }: { id: number; is_active: boolean }) =>
+      updateNotificationChannel(id, { is_active }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-channels"] });
+      toastSuccess("Channel status updated");
+    },
+    onError: (e: any) => {
+      toastError("Failed to update status", e);
+    }
   });
 
   const { register, handleSubmit, reset, watch, setValue, formState: { isSubmitting } } = useForm<ChannelFormValues>({
@@ -68,9 +88,11 @@ export default function AdminChannelsPage() {
   const selectedType = watch("type");
   const selectedProject = watch("project");
   const recipientTarget = watch("config.recipient_target");
+  const isActiveValue = watch("is_active");
 
   const openCreateModal = () => {
     setEditingChannel(null);
+    setModalError(null);
     reset({
       project: projects[0]?.id || 0,
       name: "",
@@ -83,6 +105,7 @@ export default function AdminChannelsPage() {
 
   const openEditModal = (c: NotificationChannel) => {
     setEditingChannel(c);
+    setModalError(null);
     const target = c.config.recipient_target || (Array.isArray(c.config.recipients) && c.config.recipients.length > 0 ? "CUSTOM" : "ALL");
     const recipientsStr = Array.isArray(c.config.recipients) ? c.config.recipients.join(", ") : (c.config.recipients || "");
 
@@ -102,6 +125,7 @@ export default function AdminChannelsPage() {
   };
 
   const onSubmit = async (values: ChannelFormValues) => {
+    setModalError(null);
     try {
       if (values.type === "EMAIL") {
         const target = values.config?.recipient_target || "ALL";
@@ -125,9 +149,23 @@ export default function AdminChannelsPage() {
       queryClient.invalidateQueries({ queryKey: ["admin-channels"] });
       setIsModalOpen(false);
     } catch (e: any) {
-      toastError("Failed to save channel", e);
+      const errMsg = getErrorMessage(e, "Failed to save channel");
+      setModalError(errMsg);
     }
   };
+
+  if (isError) {
+    return (
+      <div className="flex-1 p-8">
+        <Alert variant="destructive">
+          <AlertTitle>Access Restricted</AlertTitle>
+          <AlertDescription>
+            {getErrorMessage(error, "Failed to load notification channels. Ensure you have admin permissions.")}
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 space-y-6 p-8 pt-6">
@@ -196,25 +234,29 @@ export default function AdminChannelsPage() {
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {c.type === "EMAIL" ? (
-                      c.config.recipient_target === "ALL" ? "All Team Members" :
-                      c.config.recipient_target === "ADMINS" ? "Admins & Owners Only" :
-                      c.config.recipient_target === "OWNERS" ? "Owners Only" :
-                      Array.isArray(c.config.recipients) ? c.config.recipients.join(", ") : "Custom"
+                      c.config?.recipient_target === "ALL" ? "All Team Members" :
+                      c.config?.recipient_target === "ADMINS" ? "Admins & Owners Only" :
+                      c.config?.recipient_target === "OWNERS" ? "Owners Only" :
+                      Array.isArray(c.config?.recipients) ? c.config.recipients.join(", ") : "Custom"
                     ) : c.type === "IN_APP" ? (
                       "Dashboard Notifications"
                     ) : (
-                      c.config.url || "-"
+                      c.config?.url || "-"
                     )}
                   </TableCell>
                   <TableCell>
-                    <Badge variant={c.is_active ? "default" : "secondary"}>
+                    <Badge 
+                      variant={c.is_active ? "default" : "secondary"}
+                      className="cursor-pointer hover:opacity-80 transition-opacity select-none"
+                      onClick={() => toggleStatusMutation.mutate({ id: c.id, is_active: !c.is_active })}
+                    >
                       {c.is_active ? "Active" : "Inactive"}
                     </Badge>
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <Button variant="ghost" size="icon" onClick={() => openEditModal(c)}><Edit className="h-4 w-4" /></Button>
-                      <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(c.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                      <Button variant="ghost" size="icon" onClick={() => setDeletingChannel(c)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -224,11 +266,19 @@ export default function AdminChannelsPage() {
         </Table>
       </div>
 
+      {/* Create / Edit Channel Modal */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{editingChannel ? "Edit Channel" : "Create Channel"}</DialogTitle>
           </DialogHeader>
+
+          {modalError && (
+            <div className="p-3 rounded-md bg-destructive/15 text-destructive border border-destructive/30 text-sm font-medium">
+              {modalError}
+            </div>
+          )}
+
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div className="space-y-1">
               <label className="text-sm font-medium">Project</label>
@@ -236,7 +286,7 @@ export default function AdminChannelsPage() {
                 value={selectedProject ? selectedProject.toString() : undefined} 
                 onValueChange={(val) => { if (val) setValue("project", parseInt(val)); }}
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <span data-slot="select-value" className="flex flex-1 text-left line-clamp-1">
                     {selectedProject ? projects.find((proj: any) => proj.id === selectedProject)?.name : "Select a project"}
                   </span>
@@ -257,7 +307,7 @@ export default function AdminChannelsPage() {
             <div className="space-y-1">
               <label className="text-sm font-medium">Type</label>
               <Select value={selectedType} onValueChange={(val) => setValue("type", val as any)}>
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select type" />
                 </SelectTrigger>
                 <SelectContent>
@@ -289,7 +339,7 @@ export default function AdminChannelsPage() {
                     value={recipientTarget || "ALL"}
                     onValueChange={(val) => setValue("config.recipient_target", val)}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="w-full">
                       <SelectValue placeholder="Select target" />
                     </SelectTrigger>
                     <SelectContent>
@@ -319,10 +369,46 @@ export default function AdminChannelsPage() {
               </p>
             )}
 
+            <div className="flex items-center space-x-2 pt-2 border-t">
+              <input
+                type="checkbox"
+                id="channel_is_active"
+                checked={isActiveValue ?? true}
+                onChange={(e) => setValue("is_active", e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+              />
+              <label htmlFor="channel_is_active" className="text-sm font-medium cursor-pointer select-none">
+                Active (Enable channel for notifications)
+              </label>
+            </div>
+
             <DialogFooter>
               <Button type="submit" disabled={isSubmitting}>Save</Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Modal */}
+      <Dialog open={!!deletingChannel} onOpenChange={(open) => { if (!open) setDeletingChannel(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Channel</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to permanently delete channel <span className="font-semibold text-foreground">"{deletingChannel?.name}"</span>? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setDeletingChannel(null)}>Cancel</Button>
+            <Button 
+              variant="destructive" 
+              disabled={deleteMutation.isPending}
+              onClick={() => { if (deletingChannel) deleteMutation.mutate(deletingChannel.id); }}
+            >
+              {deleteMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Delete Channel
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

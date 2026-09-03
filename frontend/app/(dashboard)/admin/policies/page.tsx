@@ -2,17 +2,17 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Search, Loader2, Edit, Trash2, ShieldCheck } from "lucide-react";
-import { toastError, toastSuccess } from "@/lib/toast";
+import { Plus, Search, Loader2, Edit, Trash2 } from "lucide-react";
+import { toastError, toastSuccess, getErrorMessage } from "@/lib/toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useAuth } from "@/hooks/use-auth";
-import { useRouter } from "next/navigation";
 import { getPaginatedNotificationPolicies, createNotificationPolicy, updateNotificationPolicy, deleteNotificationPolicy, NotificationPolicy, getPaginatedNotificationChannels } from "@/lib/api/notifications";
 import { getProjects } from "@/lib/api/projects";
 import { useForm } from "react-hook-form";
@@ -42,8 +42,6 @@ type PolicyFormValues = z.infer<typeof policySchema>;
 
 export default function AdminPoliciesPage() {
   const { user } = useAuth();
-  const router = useRouter();
-
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
@@ -52,8 +50,10 @@ export default function AdminPoliciesPage() {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPolicy, setEditingPolicy] = useState<NotificationPolicy | null>(null);
+  const [deletingPolicy, setDeletingPolicy] = useState<NotificationPolicy | null>(null);
+  const [modalError, setModalError] = useState<string | null>(null);
 
-  const { data: paginatedData, isLoading } = useQuery({
+  const { data: paginatedData, isLoading, isError, error } = useQuery({
     queryKey: ["admin-policies", page, debouncedSearch, ordering],
     queryFn: () => getPaginatedNotificationPolicies(page, { search: debouncedSearch, ordering }),
     enabled: !!user,
@@ -73,13 +73,29 @@ export default function AdminPoliciesPage() {
   const channels = channelsData?.data || [];
 
   const policies = paginatedData?.data || [];
-  const totalPages = paginatedData?.totalPages || 1;
 
   const deleteMutation = useMutation({
     mutationFn: deleteNotificationPolicy,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-policies"] });
+      toastSuccess("Policy deleted permanently");
+      setDeletingPolicy(null);
     },
+    onError: (e: any) => {
+      toastError("Failed to delete policy", e);
+    }
+  });
+
+  const toggleStatusMutation = useMutation({
+    mutationFn: ({ id, is_active }: { id: number; is_active: boolean }) =>
+      updateNotificationPolicy(id, { is_active }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-policies"] });
+      toastSuccess("Policy status updated");
+    },
+    onError: (e: any) => {
+      toastError("Failed to update policy status", e);
+    }
   });
 
   const { register, handleSubmit, reset, watch, setValue, formState: { errors, isSubmitting } } = useForm<PolicyFormValues>({
@@ -91,8 +107,10 @@ export default function AdminPoliciesPage() {
   const selectedChannel = watch("channel");
   const selectedSeverity = watch("severity");
   const selectedEventTypes = watch("event_types") || [];
+  const isActiveValue = watch("is_active");
 
-  const filteredChannels = channels.filter((c: any) => c.project === selectedProject);
+  // Only show active channels belonging to the selected project in dropdown
+  const filteredChannels = channels.filter((c: any) => c.project === selectedProject && c.is_active);
 
   const toggleEventType = (et: string) => {
     if (selectedEventTypes.includes(et)) {
@@ -104,7 +122,9 @@ export default function AdminPoliciesPage() {
 
   const openCreateModal = () => {
     setEditingPolicy(null);
-    reset({ project: projects[0]?.id || 0, channel: channels[0]?.id || 0, severity: "DEGRADED", event_types: EVENT_TYPES, is_active: true });
+    setModalError(null);
+    const initialChannel = filteredChannels[0]?.id || channels.find(c => c.project === projects[0]?.id && c.is_active)?.id || 0;
+    reset({ project: projects[0]?.id || 0, channel: initialChannel, severity: "DEGRADED", event_types: EVENT_TYPES, is_active: true });
     setIsModalOpen(true);
   };
 
@@ -118,11 +138,13 @@ export default function AdminPoliciesPage() {
     if (!Array.isArray(initialEventTypes)) initialEventTypes = [];
 
     setEditingPolicy(p);
+    setModalError(null);
     reset({ project: p.project, channel: p.channel, severity: p.severity, event_types: initialEventTypes, is_active: p.is_active });
     setIsModalOpen(true);
   };
 
   const onSubmit = async (values: PolicyFormValues) => {
+    setModalError(null);
     try {
       if (editingPolicy) {
         await updateNotificationPolicy(editingPolicy.id, values);
@@ -134,10 +156,23 @@ export default function AdminPoliciesPage() {
       queryClient.invalidateQueries({ queryKey: ["admin-policies"] });
       setIsModalOpen(false);
     } catch (e: any) {
-      toastError("Failed to save policy", e);
+      const errMsg = getErrorMessage(e, "Failed to save policy");
+      setModalError(errMsg);
     }
   };
 
+  if (isError) {
+    return (
+      <div className="flex-1 p-8">
+        <Alert variant="destructive">
+          <AlertTitle>Access Restricted</AlertTitle>
+          <AlertDescription>
+            {getErrorMessage(error, "Failed to load notification policies. Ensure you have admin permissions.")}
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 space-y-6 p-8 pt-6">
@@ -177,62 +212,97 @@ export default function AdminPoliciesPage() {
           <TableHeader>
             <TableRow>
               <TableHead>Project</TableHead>
-              <TableHead>Channel ID</TableHead>
+              <TableHead>Channel</TableHead>
               <TableHead>Severity</TableHead>
+              <TableHead>Event Types</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="w-[100px]"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow><TableCell colSpan={5} className="h-24 text-center"><Loader2 className="h-4 w-4 animate-spin mx-auto" /></TableCell></TableRow>
+              <TableRow><TableCell colSpan={6} className="h-24 text-center"><Loader2 className="h-4 w-4 animate-spin mx-auto" /></TableCell></TableRow>
             ) : policies.length === 0 ? (
-              <TableRow><TableCell colSpan={5} className="h-24 text-center">No policies found.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={6} className="h-24 text-center">No policies found.</TableCell></TableRow>
             ) : (
-              policies.map((p) => (
-                <TableRow key={p.id}>
-                  <TableCell className="font-medium">
-                    {projects.find((proj: any) => proj.id === p.project)?.name || `Project #${p.project}`}
-                  </TableCell>
-                  <TableCell>
-                    {channels.find((c: any) => c.id === p.channel)?.name || `Channel #${p.channel}`}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={p.severity === "CRITICAL" ? "destructive" : "default"}>{p.severity}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={p.is_active ? "default" : "secondary"}>
-                      {p.is_active ? "Active" : "Inactive"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Button variant="ghost" size="icon" onClick={() => openEditModal(p)}><Edit className="h-4 w-4" /></Button>
-                      <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(p.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
+              policies.map((p) => {
+                let ets: string[] = [];
+                if (Array.isArray(p.event_types)) ets = p.event_types;
+                else if (typeof p.event_types === "string") {
+                  try { ets = JSON.parse(p.event_types); } catch(e){}
+                }
+
+                return (
+                  <TableRow key={p.id}>
+                    <TableCell className="font-medium">
+                      {projects.find((proj: any) => proj.id === p.project)?.name || `Project #${p.project}`}
+                    </TableCell>
+                    <TableCell>
+                      {channels.find((c: any) => c.id === p.channel)?.name || `Channel #${p.channel}`}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={p.severity === "CRITICAL" ? "destructive" : "secondary"}>
+                        {p.severity}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground max-w-xs truncate">
+                      {ets.join(", ") || "All"}
+                    </TableCell>
+                    <TableCell>
+                      <Badge 
+                        variant={p.is_active ? "default" : "secondary"}
+                        className="cursor-pointer hover:opacity-80 transition-opacity select-none"
+                        onClick={() => toggleStatusMutation.mutate({ id: p.id, is_active: !p.is_active })}
+                      >
+                        {p.is_active ? "Active" : "Inactive"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Button variant="ghost" size="icon" onClick={() => openEditModal(p)}><Edit className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" onClick={() => setDeletingPolicy(p)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
             )}
           </TableBody>
         </Table>
       </div>
 
+      {/* Create / Edit Policy Modal */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{editingPolicy ? "Edit Policy" : "Create Policy"}</DialogTitle>
           </DialogHeader>
+
+          {modalError && (
+            <div className="p-3 rounded-md bg-destructive/15 text-destructive border border-destructive/30 text-sm font-medium">
+              {modalError}
+            </div>
+          )}
+
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div className="space-y-1">
               <label className="text-sm font-medium">Project</label>
               <Select 
                 value={selectedProject ? selectedProject.toString() : undefined} 
-                onValueChange={(val) => { if (val) setValue("project", parseInt(val)); }}
+                onValueChange={(val) => { 
+                  if (val) {
+                    const projId = parseInt(val);
+                    setValue("project", projId);
+                    const activeChans = channels.filter((c: any) => c.project === projId && c.is_active);
+                    if (activeChans.length > 0) {
+                      setValue("channel", activeChans[0].id);
+                    }
+                  }
+                }}
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <span data-slot="select-value" className="flex flex-1 text-left line-clamp-1">
-                    {selectedProject ? projects.find((p: any) => p.id === selectedProject)?.name : "Select a project"}
+                    {selectedProject ? projects.find((proj: any) => proj.id === selectedProject)?.name : "Select a project"}
                   </span>
                 </SelectTrigger>
                 <SelectContent>
@@ -242,22 +312,26 @@ export default function AdminPoliciesPage() {
                 </SelectContent>
               </Select>
             </div>
-            
+
             <div className="space-y-1">
-              <label className="text-sm font-medium">Channel</label>
+              <label className="text-sm font-medium">Channel (Active channels only)</label>
               <Select 
                 value={selectedChannel ? selectedChannel.toString() : undefined} 
-                onValueChange={(val) => { if (val) setValue("channel", parseInt(val)); }}
+                onValueChange={(val) => { if (val && val !== "0") setValue("channel", parseInt(val)); }}
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <span data-slot="select-value" className="flex flex-1 text-left line-clamp-1">
-                    {selectedChannel ? filteredChannels.find((c: any) => c.id === selectedChannel)?.name : "Select a channel"}
+                    {selectedChannel ? channels.find((c: any) => c.id === selectedChannel)?.name : "Select an active channel"}
                   </span>
                 </SelectTrigger>
                 <SelectContent>
-                  {filteredChannels.map((c: any) => (
-                    <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>
-                  ))}
+                  {filteredChannels.length === 0 ? (
+                    <SelectItem value="0" disabled>No active channels found for project</SelectItem>
+                  ) : (
+                    filteredChannels.map((c: any) => (
+                      <SelectItem key={c.id} value={c.id.toString()}>{c.name} ({c.type})</SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -265,40 +339,78 @@ export default function AdminPoliciesPage() {
             <div className="space-y-1">
               <label className="text-sm font-medium">Severity</label>
               <Select value={selectedSeverity} onValueChange={(val) => setValue("severity", val as any)}>
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select severity" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="CRITICAL">Critical</SelectItem>
-                  <SelectItem value="DEGRADED">Degraded</SelectItem>
+                  <SelectItem value="DEGRADED">Degraded (Applies to both Degraded & Critical)</SelectItem>
+                  <SelectItem value="CRITICAL">Critical Only</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">Event Types</label>
-              <div className="flex flex-col space-y-3">
-                {EVENT_TYPES.map((et) => (
-                  <div key={et} className="flex items-start space-x-2">
-                    <input 
-                      type="checkbox"
-                      id={et} 
-                      className="h-4 w-4 rounded border-gray-300 mt-0.5 flex-shrink-0"
-                      checked={selectedEventTypes.includes(et)} 
-                      onChange={() => toggleEventType(et)} 
-                    />
-                    <label htmlFor={et} className="text-sm font-medium leading-tight peer-disabled:cursor-not-allowed peer-disabled:opacity-70 break-words">
+              <label className="text-sm font-medium">Trigger Event Types</label>
+              <div className="flex flex-wrap gap-2 pt-1">
+                {EVENT_TYPES.map((et) => {
+                  const isChecked = selectedEventTypes.includes(et);
+                  return (
+                    <Badge
+                      key={et}
+                      variant={isChecked ? "default" : "outline"}
+                      className="cursor-pointer select-none py-1 px-2.5 text-xs transition-colors"
+                      onClick={() => toggleEventType(et)}
+                    >
                       {et}
-                    </label>
-                  </div>
-                ))}
+                    </Badge>
+                  );
+                })}
               </div>
+              {errors.event_types && (
+                <p className="text-xs text-destructive">{errors.event_types.message}</p>
+              )}
+            </div>
+
+            <div className="flex items-center space-x-2 pt-2 border-t">
+              <input
+                type="checkbox"
+                id="policy_is_active"
+                checked={isActiveValue ?? true}
+                onChange={(e) => setValue("is_active", e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+              />
+              <label htmlFor="policy_is_active" className="text-sm font-medium cursor-pointer select-none">
+                Active (Enable policy for notifications)
+              </label>
             </div>
 
             <DialogFooter>
               <Button type="submit" disabled={isSubmitting}>Save</Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Modal */}
+      <Dialog open={!!deletingPolicy} onOpenChange={(open) => { if (!open) setDeletingPolicy(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Policy</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to permanently delete this notification policy? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setDeletingPolicy(null)}>Cancel</Button>
+            <Button 
+              variant="destructive" 
+              disabled={deleteMutation.isPending}
+              onClick={() => { if (deletingPolicy) deleteMutation.mutate(deletingPolicy.id); }}
+            >
+              {deleteMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Delete Policy
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

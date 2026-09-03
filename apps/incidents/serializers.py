@@ -171,6 +171,12 @@ class RunbookSerializer(serializers.ModelSerializer):
 
     created_by_name = serializers.CharField(source="created_by.get_full_name", read_only=True)
     updated_by_name = serializers.CharField(source="updated_by.get_full_name", read_only=True)
+    trigger_type = serializers.ChoiceField(
+        choices=Runbook.TriggerType.choices,
+        allow_null=True,
+        allow_blank=True,
+        required=False,
+    )
     match_priority = serializers.IntegerField(read_only=True, required=False)
     match_reason = serializers.CharField(read_only=True, required=False)
 

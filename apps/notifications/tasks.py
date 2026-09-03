@@ -180,6 +180,8 @@ def deliver_email_task(self, delivery_id):
         dynamic_recipients = list(members_qs.values_list("user__email", flat=True))
         if dynamic_recipients:
             recipients = dynamic_recipients
+        elif team.owner and team.owner.email:
+            recipients = [team.owner.email]
 
     if not recipients:
         delivery.status = NotificationDelivery.DeliveryStatus.FAILED

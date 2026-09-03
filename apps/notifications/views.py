@@ -62,8 +62,9 @@ class NotificationChannelViewSet(CustomBaseViewSet):
 
     def perform_destroy(self, instance):
         self.check_admin_or_owner(instance.project)
-        instance.is_active = False
-        instance.save(update_fields=["is_active", "updated_at"])
+        instance.deliveries.all().delete()
+        instance.policies.all().delete()
+        instance.delete()
 
 
 class NotificationPolicyViewSet(CustomBaseViewSet):

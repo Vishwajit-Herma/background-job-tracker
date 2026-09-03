@@ -37,5 +37,5 @@ REST_FRAMEWORK["DEFAULT_RENDERER_CLASSES"].append(  # noqa: F405
 
 
 # Celery - eager mode for development
-CELERY_TASK_ALWAYS_EAGER = env.bool("CELERY_TASK_ALWAYS_EAGER", default=False)  # noqa: F405
+CELERY_TASK_ALWAYS_EAGER = env.bool("CELERY_TASK_ALWAYS_EAGER", default=True)  # noqa: F405
 CELERY_TASK_EAGER_PROPAGATES = True

@@ -27,7 +27,9 @@ import { Plus, Trash2, ArrowUp, ArrowDown, Loader2, BookOpen } from "lucide-reac
 
 const TRIGGER_TYPES: { value: RunbookTriggerType | ""; label: string }[] = [
   { value: "", label: "Any Incident / Manual Only" },
+  { value: "FAILURE_RATE", label: "Failure Rate" },
   { value: "FAILURE_RATE_ANOMALY", label: "Failure Rate Anomaly" },
+  { value: "RETRY_RATE", label: "Retry Rate" },
   { value: "RETRY_RATE_ANOMALY", label: "Retry Rate Anomaly" },
   { value: "DURATION_ANOMALY", label: "Duration Anomaly" },
   { value: "EXECUTION_VOLUME_ANOMALY", label: "Execution Volume Anomaly" },
