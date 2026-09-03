@@ -68,9 +68,16 @@ LOGGING = {  # noqa: F405
 }
 
 
-# Email - SMTP when EMAIL_HOST is set, console backend fallback otherwise
+# Email configuration - Resend (Anymail) if RESEND_API_KEY is present, SMTP fallback if EMAIL_HOST set, else Logging backend
+RESEND_API_KEY = env("RESEND_API_KEY", default="")  # noqa: F405
 EMAIL_HOST = env("EMAIL_HOST", default="")  # noqa: F405
-if EMAIL_HOST:
+
+if RESEND_API_KEY:
+    EMAIL_BACKEND = env("EMAIL_BACKEND", default="anymail.backends.resend.EmailBackend")  # noqa: F405
+    ANYMAIL = {
+        "RESEND_API_KEY": RESEND_API_KEY,
+    }
+elif EMAIL_HOST:
     EMAIL_BACKEND = env("EMAIL_BACKEND", default="django.core.mail.backends.smtp.EmailBackend")  # noqa: F405
     EMAIL_PORT = env.int("EMAIL_PORT", default=587)  # noqa: F405
     EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="")  # noqa: F405

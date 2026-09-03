@@ -4,10 +4,14 @@ from .base import *  # noqa: F403, F401
 
 DEBUG = True
 
-# Email - SMTP when EMAIL_HOST is set (docker compose points it at Mailpit),
-# console backend otherwise
+RESEND_API_KEY = env("RESEND_API_KEY", default="")  # noqa: F405
 EMAIL_HOST = env("EMAIL_HOST", default="")  # noqa: F405
-if EMAIL_HOST:
+if RESEND_API_KEY:
+    EMAIL_BACKEND = env("EMAIL_BACKEND", default="anymail.backends.resend.EmailBackend")  # noqa: F405
+    ANYMAIL = {
+        "RESEND_API_KEY": RESEND_API_KEY,
+    }
+elif EMAIL_HOST:
     EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
     EMAIL_PORT = env.int("EMAIL_PORT", default=1025)  # noqa: F405
 else:

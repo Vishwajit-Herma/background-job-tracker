@@ -58,6 +58,7 @@ THIRD_PARTY_APPS = [
     "waffle",
     "django_extensions",
     "django_alive",
+    "anymail",
 ]
 
 LOCAL_APPS = [

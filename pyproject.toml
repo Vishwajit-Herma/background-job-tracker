@@ -33,6 +33,7 @@ dependencies = [
     "django-alive>=1.3.0",
     "drf-nested-routers>=0.95.3",
     "dj-rest-auth==7.2.0",
+    "django-anymail[resend]>=15.1",
 ]
 
 [project.optional-dependencies]
