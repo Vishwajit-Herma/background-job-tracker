@@ -124,7 +124,10 @@ class InAppNotificationViewSet(
     ordering_fields = ["created_at", "read_at", "title"]
 
     def get_queryset(self):
-        return InAppNotification.objects.filter(recipient=self.request.user)
+        return InAppNotification.objects.filter(recipient=self.request.user).select_related(
+            "incident_event__incident__project",
+            "incident_event__incident__job",
+        )
 
     @action(detail=False, methods=["get"], url_path="unread-count")
     def unread_count(self, request):

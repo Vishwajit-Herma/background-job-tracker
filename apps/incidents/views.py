@@ -196,7 +196,7 @@ class IncidentViewSet(BaseViewSetConfig, CustomResponseMixin, viewsets.ReadOnlyM
         incident = self.get_object()
 
         if request.method == "GET":
-            notes = incident.notes.all().order_by("created_at")
+            notes = incident.notes.select_related("author").order_by("created_at")
             serializer = IncidentNoteSerializer(notes, many=True)
             return Response(serializer.data)
 
@@ -220,7 +220,7 @@ class IncidentViewSet(BaseViewSetConfig, CustomResponseMixin, viewsets.ReadOnlyM
             - Chronological list of events (creation, assignment, acknowledgment, notes, runbooks, postmortem).
         """
         incident = self.get_object()
-        events = incident.events.order_by("event_time", "id")
+        events = incident.events.select_related("actor").order_by("event_time", "id")
         serializer = IncidentEventSerializer(events, many=True)
         return Response(serializer.data)
 
@@ -450,7 +450,7 @@ class IncidentViewSet(BaseViewSetConfig, CustomResponseMixin, viewsets.ReadOnlyM
         if request.method == "GET":
             if not postmortem:
                 return Response([])
-            items = postmortem.action_items.all()
+            items = postmortem.action_items.select_related("owner__user").all()
             return Response(PostmortemActionItemSerializer(items, many=True).data)
 
         elif request.method == "POST":

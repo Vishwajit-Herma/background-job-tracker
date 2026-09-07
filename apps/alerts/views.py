@@ -28,4 +28,4 @@ class AlertRuleViewSet(CustomBaseViewSet):
             project__team__members__user=self.request.user,
             project__team__members__is_active=True,
             project__is_deleted=False,
-        ).distinct()
+        ).select_related("project", "job").distinct()

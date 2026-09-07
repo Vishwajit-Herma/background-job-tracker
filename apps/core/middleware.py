@@ -11,8 +11,11 @@ class RequestTimingMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        start = time.perf_counter()
+        # Skip timing instrumentation for health checks and readiness pings
+        if request.path.startswith(("/health", "/alive", "/ready")) or request.path.rstrip("/").endswith("health"):
+            return self.get_response(request)
 
+        start = time.perf_counter()
         sql_total = 0.0
         sql_count = 0
 
