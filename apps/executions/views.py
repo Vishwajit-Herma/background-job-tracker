@@ -128,12 +128,16 @@ class ExecutionViewSet(CustomBaseViewSet):
         Enforce strict tenant isolation: only return executions belonging to
         projects that the user is an active member of.
         """
-        qs = Execution.objects.filter(
-            job__is_deleted=False,
-            job__project__is_deleted=False,
-            job__project__team__is_active=True,
-            job__project__team__members__user=self.request.user,
-            job__project__team__members__is_active=True,
+        qs = (
+            Execution.objects.filter(
+                job__is_deleted=False,
+                job__project__is_deleted=False,
+                job__project__team__is_active=True,
+                job__project__team__members__user=self.request.user,
+                job__project__team__members__is_active=True,
+            )
+            .select_related("job", "job__project")
+            .distinct()
         )
         return qs
 

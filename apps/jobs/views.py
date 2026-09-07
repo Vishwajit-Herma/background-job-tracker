@@ -12,7 +12,8 @@ from apps.executions.serializers import (
 )
 from apps.projects.models import Project
 from apps.incidents.models import Incident
-from django.db.models import Count, Q, Exists, OuterRef
+from django.db.models import Count, Q, Exists, OuterRef, Subquery, IntegerField
+from django.db.models.functions import Coalesce
 from .models import Job
 from .permissions import JobPermission
 from .serializers import (
@@ -48,6 +49,9 @@ class JobViewSet(CustomBaseViewSet):
         """
         Enforce strict tenant isolation: only return jobs belonging to
         projects that the user is an active member of (via team membership).
+
+        success_count uses a correlated Subquery instead of a joined COUNT
+        to avoid Cartesian product inflation from multiple COUNT joins.
         """
         base_qs = Job.all_objects if getattr(self, "action", None) == "restore" else Job.objects
 
@@ -57,12 +61,21 @@ class JobViewSet(CustomBaseViewSet):
             severity="CRITICAL",
         )
 
-        base_qs = base_qs.annotate(
+        success_subquery = (
+            Execution.objects.filter(
+                job=OuterRef("pk"),
+                status="success",
+            )
+            .order_by()
+            .values("job")
+            .annotate(cnt=Count("id"))
+            .values("cnt")
+        )
+
+        base_qs = base_qs.select_related("project", "created_by", "modified_by").annotate(
             executions_count=Count("executions", distinct=True),
-            success_count=Count(
-                "executions",
-                filter=Q(executions__status="success"),
-                distinct=True,
+            success_count=Coalesce(
+                Subquery(success_subquery, output_field=IntegerField()), 0
             ),
             active_incidents_count=Count(
                 "incidents",
@@ -72,12 +85,12 @@ class JobViewSet(CustomBaseViewSet):
             has_critical_incident=Exists(critical_incidents),
         )
 
-        qs = base_qs.select_related("project", "created_by", "modified_by").filter(
+        qs = base_qs.filter(
             project__is_deleted=False,
             project__team__is_active=True,
             project__team__members__user=self.request.user,
             project__team__members__is_active=True,
-        )
+        ).distinct()
         return qs
 
     @action(detail=True, methods=["post"])

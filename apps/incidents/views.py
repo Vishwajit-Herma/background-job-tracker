@@ -73,10 +73,22 @@ class IncidentViewSet(BaseViewSetConfig, CustomResponseMixin, viewsets.ReadOnlyM
         Enforce tenant isolation. User can only see incidents for projects
         owned by teams they are active members of.
         """
-        return Incident.objects.filter(
-            project__team__members__user=self.request.user,
-            project__team__members__is_active=True,
-        ).distinct()
+        return (
+            Incident.objects.filter(
+                project__team__members__user=self.request.user,
+                project__team__members__is_active=True,
+            )
+            .select_related(
+                "project",
+                "job",
+                "alert_rule",
+                "assigned_to__user",
+                "assigned_by",
+                "acknowledged_by",
+                "resolved_by",
+            )
+            .distinct()
+        )
 
     @action(detail=True, methods=["post"])
     def assign(self, request, pk=None):
@@ -539,10 +551,19 @@ class RunbookViewSet(BaseViewSetConfig, viewsets.ModelViewSet):
         Enforce tenant isolation. User can only see runbooks for projects
         owned by teams they are active members of.
         """
-        return Runbook.objects.filter(
-            project__team__members__user=self.request.user,
-            project__team__members__is_active=True,
-        ).distinct()
+        return (
+            Runbook.objects.filter(
+                project__team__members__user=self.request.user,
+                project__team__members__is_active=True,
+            )
+            .select_related(
+                "project",
+                "job",
+                "created_by",
+                "updated_by",
+            )
+            .distinct()
+        )
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user, updated_by=self.request.user)

@@ -26,6 +26,12 @@ CSRF_COOKIE_SAMESITE = "Lax"
 
 
 # Database connection pooling
+# ATOMIC_REQUESTS is disabled in production: it wraps every request in a
+# transaction which prevents CONN_MAX_AGE from reusing persistent connections.
+# Django cannot return a connection mid-transaction, so every request would pay
+# the full TCP + TLS + Postgres auth overhead. Individual services use
+# @transaction.atomic() explicitly where needed.
+DATABASES["default"]["ATOMIC_REQUESTS"] = False  # noqa: F405
 DATABASES["default"]["CONN_MAX_AGE"] = env.int("CONN_MAX_AGE", default=600)  # noqa: F405
 
 # Logging - JSON format for production

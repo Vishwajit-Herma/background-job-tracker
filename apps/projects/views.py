@@ -14,7 +14,8 @@ from apps.incidents.models import Incident
 from .models import APIKey, Project
 from .permissions import APIKeyPermission, ProjectPermission
 from .serializers import APIKeyCreateSerializer, APIKeySerializer, ProjectSerializer
-from django.db.models import Count, Q, Exists, OuterRef
+from django.db.models import Count, Q, Exists, OuterRef, Subquery, IntegerField
+from django.db.models.functions import Coalesce
 
 
 class ProjectViewSet(CustomBaseViewSet):
@@ -29,10 +30,29 @@ class ProjectViewSet(CustomBaseViewSet):
     ordering = ["name"]
     filterset_fields = ["team", "status"]
 
+    def _get_base_tenant_qs(self):
+        """Minimal queryset for tenant isolation — no expensive annotations."""
+        base = Project.all_objects if getattr(self, "action", None) == "restore" else Project.objects
+        if self.request.user.is_staff:
+            return base.all()
+        return base.filter(
+            team__is_active=True,
+            team__members__user=self.request.user,
+            team__members__is_active=True,
+        ).distinct()
+
     def get_queryset(self):
         """
         Enforce strict tenant isolation: only return projects
         belonging to teams the user is an active member of.
+
+        Annotations are computed carefully to avoid the Cartesian product
+        problem that arises from multiple COUNT joins on the same queryset.
+        success_count uses a correlated Subquery instead of a joined COUNT
+        to keep the SQL clean and fast.
+
+        NOTE: the heavy annotation is skipped for analytics/trend/reliability
+        actions via get_object() override — those actions only need the project pk.
         """
         # Use all_objects if the action is 'restore' to allow finding deleted records
         base_qs = (
@@ -45,15 +65,28 @@ class ProjectViewSet(CustomBaseViewSet):
             severity="CRITICAL",
         ).filter(Q(job__isnull=True) | Q(job__is_deleted=False))
 
-        base_qs = base_qs.annotate(
+        # Use a correlated subquery for success_count to avoid COUNT join
+        # conflicts (which produce inflated numbers when multiple COUNT
+        # annotations are combined on a single queryset with JOINs).
+        success_subquery = (
+            Execution.objects.filter(
+                job__project=OuterRef("pk"),
+                job__is_deleted=False,
+                status="success",
+            )
+            .order_by()
+            .values("job__project")
+            .annotate(cnt=Count("id"))
+            .values("cnt")
+        )
+
+        base_qs = base_qs.select_related("team").annotate(
             jobs_count=Count("jobs", filter=Q(jobs__is_deleted=False), distinct=True),
             executions_count=Count(
                 "jobs__executions", filter=Q(jobs__is_deleted=False), distinct=True
             ),
-            success_count=Count(
-                "jobs__executions",
-                filter=Q(jobs__executions__status="success", jobs__is_deleted=False),
-                distinct=True,
+            success_count=Coalesce(
+                Subquery(success_subquery, output_field=IntegerField()), 0
             ),
             active_incidents_count=Count(
                 "incidents",
@@ -73,6 +106,22 @@ class ProjectViewSet(CustomBaseViewSet):
             team__members__is_active=True,
         ).distinct()
         return qs
+
+    def get_object(self):
+        """
+        Use a lightweight queryset (no annotations) for detail actions that
+        don't render project KPI cards — only need pk for their own queries.
+        """
+        lightweight_actions = {"analytics", "analytics_trend", "reliability_report"}
+        if getattr(self, "action", None) in lightweight_actions:
+            # Temporarily swap the queryset to avoid heavy annotation overhead.
+            original_get_queryset = self.get_queryset
+            self.get_queryset = self._get_base_tenant_qs  # type: ignore[method-assign]
+            try:
+                return super().get_object()
+            finally:
+                self.get_queryset = original_get_queryset  # type: ignore[method-assign]
+        return super().get_object()
 
     @action(detail=True, methods=["post"])
     def restore(self, request, pk=None):
