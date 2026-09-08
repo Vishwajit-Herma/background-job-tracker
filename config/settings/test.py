@@ -2,11 +2,22 @@
 
 from .base import *  # noqa: F403, F401
 
-# Use dummy cache for tests (no Redis required)
+# Use in-memory cache for tests (no Redis required)
 CACHES = {
     "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+    },
+    "dummy": {
         "BACKEND": "django.core.cache.backends.dummy.DummyCache",
-    }
+    },
+}
+
+WAFFLE_CACHE_NAME = "dummy"
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels.layers.InMemoryChannelLayer",
+    },
 }
 
 SESSION_ENGINE = "django.contrib.sessions.backends.db"

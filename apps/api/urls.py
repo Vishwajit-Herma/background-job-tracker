@@ -2,6 +2,7 @@
 
 from django.urls import include, path
 from . import views
+from apps.core.realtime import views as views_realtime
 from drf_spectacular.views import (
     SpectacularAPIView,
     SpectacularRedocView,
@@ -36,5 +37,6 @@ urlpatterns = [
     path("auth/registration/", include("dj_rest_auth.registration.urls")),
     path("auth/", include("dj_rest_auth.urls")),
     path("teams/", include("apps.teams.api.urls", namespace="teams_api")),
+    path("realtime/ticket/", views_realtime.WebSocketTicketView.as_view(), name="realtime_ticket"),
     path("", include("apps.executions.urls")),
 ]

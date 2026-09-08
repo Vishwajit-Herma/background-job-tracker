@@ -4,11 +4,11 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { 
   getInAppNotifications, 
-  getUnreadNotificationCount, 
   markNotificationAsRead, 
   markAllNotificationsAsRead, 
   InAppNotification 
 } from "@/lib/api/notifications";
+import { useUnreadNotificationCount } from "@/hooks/use-notifications";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -54,13 +54,11 @@ export default function NotificationsPage() {
       ordering, 
       is_read: isReadParam 
     }),
+    refetchInterval: false,
+    staleTime: Infinity,
   });
 
-  const { data: unreadCount = 0 } = useQuery({
-    queryKey: ["notifications-unread-count"],
-    queryFn: getUnreadNotificationCount,
-    refetchInterval: 30000,
-  });
+  const { data: unreadCount = 0 } = useUnreadNotificationCount();
 
   const notifications = notificationsData?.data || [];
   const totalPages = notificationsData?.totalPages || 1;
@@ -68,20 +66,90 @@ export default function NotificationsPage() {
 
   const readMutation = useMutation({
     mutationFn: markNotificationAsRead,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["notifications"] });
-      queryClient.invalidateQueries({ queryKey: ["notifications-preview"] });
-      queryClient.invalidateQueries({ queryKey: ["notifications-unread-count"] });
-    }
+    onMutate: async (id: number) => {
+      await queryClient.cancelQueries({ queryKey: ["notifications"] });
+      await queryClient.cancelQueries({ queryKey: ["notifications-preview"] });
+      await queryClient.cancelQueries({ queryKey: ["notifications-unread-count"] });
+
+      const previousUnread = queryClient.getQueryData<number>(["notifications-unread-count"]);
+
+      queryClient.setQueryData<number>(["notifications-unread-count"], (old = 0) => Math.max(0, old - 1));
+
+      queryClient.setQueriesData({ queryKey: ["notifications"] }, (old: any) => {
+        if (!old) return old;
+        if (Array.isArray(old)) {
+          return old.map((n: InAppNotification) => (n.id === id ? { ...n, is_read: true } : n));
+        }
+        if (old.data && Array.isArray(old.data)) {
+          return {
+            ...old,
+            data: old.data.map((n: InAppNotification) => (n.id === id ? { ...n, is_read: true } : n)),
+          };
+        }
+        return old;
+      });
+
+      queryClient.setQueryData(["notifications-preview"], (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          data: (old.data || []).map((n: InAppNotification) => (n.id === id ? { ...n, is_read: true } : n)),
+        };
+      });
+
+      return { previousUnread };
+    },
+    onError: (_err, _id, context) => {
+      if (context?.previousUnread !== undefined) {
+        queryClient.setQueryData(["notifications-unread-count"], context.previousUnread);
+      }
+    },
+    // No onSettled invalidation: optimistic cache is correct and WebSocket
+    // notification.updated event drives cache sync from the server.
   });
 
   const readAllMutation = useMutation({
     mutationFn: markAllNotificationsAsRead,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["notifications"] });
-      queryClient.invalidateQueries({ queryKey: ["notifications-preview"] });
-      queryClient.invalidateQueries({ queryKey: ["notifications-unread-count"] });
-    }
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: ["notifications"] });
+      await queryClient.cancelQueries({ queryKey: ["notifications-preview"] });
+      await queryClient.cancelQueries({ queryKey: ["notifications-unread-count"] });
+
+      const previousUnread = queryClient.getQueryData<number>(["notifications-unread-count"]);
+
+      queryClient.setQueryData<number>(["notifications-unread-count"], 0);
+
+      queryClient.setQueriesData({ queryKey: ["notifications"] }, (old: any) => {
+        if (!old) return old;
+        if (Array.isArray(old)) {
+          return old.map((n: InAppNotification) => ({ ...n, is_read: true }));
+        }
+        if (old.data && Array.isArray(old.data)) {
+          return {
+            ...old,
+            data: old.data.map((n: InAppNotification) => ({ ...n, is_read: true })),
+          };
+        }
+        return old;
+      });
+
+      queryClient.setQueryData(["notifications-preview"], (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          data: (old.data || []).map((n: InAppNotification) => ({ ...n, is_read: true })),
+        };
+      });
+
+      return { previousUnread };
+    },
+    onError: (_err, _variables, context) => {
+      if (context?.previousUnread !== undefined) {
+        queryClient.setQueryData(["notifications-unread-count"], context.previousUnread);
+      }
+    },
+    // No onSettled invalidation: optimistic cache is correct and WebSocket
+    // notification.updated event drives cache sync from the server.
   });
 
   const handleNotificationClick = (notif: InAppNotification) => {

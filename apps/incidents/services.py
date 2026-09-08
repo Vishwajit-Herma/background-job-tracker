@@ -1,3 +1,7 @@
+import logging
+import time
+
+from django.conf import settings
 from django.core.cache import cache
 from django.db import transaction
 from django.db.models import (
@@ -18,7 +22,9 @@ from django.db.models import (
 )
 from django.utils import timezone
 
-from apps.notifications.services import dispatch_incident_event
+from apps.core.realtime import publish_realtime_event
+from apps.core.realtime.publisher import _REALTIME_THREAD_POOL
+from apps.notifications.tasks import dispatch_incident_event_task
 from apps.teams.models import TeamMember
 from .models import (
     Incident,
@@ -37,6 +43,19 @@ from .serializers import (
     IncidentSerializer,
 )
 from .tasks import calculate_incident_intelligence_task
+
+logger = logging.getLogger(__name__)
+
+
+def _async_task_delay(task, *args, **kwargs):
+    """
+    Offload task enqueuing to background thread pool in production to prevent
+    Redis connection / task submission latency from blocking HTTP response threads.
+    """
+    if getattr(settings, "CELERY_TASK_ALWAYS_EAGER", False):
+        task.delay(*args, **kwargs)
+    else:
+        _REALTIME_THREAD_POOL.submit(task.delay, *args, **kwargs)
 
 
 NOTIFIABLE_EVENTS = {
@@ -63,7 +82,48 @@ def _log_incident_event(incident, event_type, actor=None, metadata=None):
     )
 
     if event_type in NOTIFIABLE_EVENTS:
-        transaction.on_commit(lambda: dispatch_incident_event(event.id))
+        transaction.on_commit(lambda: _async_task_delay(dispatch_incident_event_task, event.id))
+
+    # Realtime event publication with strict event deduplication
+    if event_type == IncidentEvent.EventType.NOTE_ADDED:
+        publish_realtime_event(
+            "incident.note.created",
+            project_id=incident.project_id,
+            payload={"incident_id": incident.id, "event_id": event.id},
+        )
+    elif event_type in (
+        IncidentEvent.EventType.RUNBOOK_STARTED,
+        IncidentEvent.EventType.RUNBOOK_COMPLETED,
+        IncidentEvent.EventType.RUNBOOK_CANCELLED,
+    ):
+        publish_realtime_event(
+            "runbook.execution.updated",
+            project_id=incident.project_id,
+            payload={
+                "incident_id": incident.id,
+                "execution_id": (metadata or {}).get("execution_id"),
+                "event_type": event_type,
+            },
+        )
+    elif event_type in (
+        IncidentEvent.EventType.POSTMORTEM_SUBMITTED,
+        IncidentEvent.EventType.POSTMORTEM_COMPLETED,
+    ):
+        publish_realtime_event(
+            "postmortem.updated",
+            project_id=incident.project_id,
+            payload={"incident_id": incident.id, "event_type": event_type},
+        )
+    else:
+        publish_realtime_event(
+            "incident.updated",
+            project_id=incident.project_id,
+            payload={
+                "incident_id": incident.id,
+                "status": incident.status,
+                "event_type": event_type,
+            },
+        )
 
 
 def create_incident(project, severity, alert_rule=None, job=None, trigger_metadata=None):
@@ -84,7 +144,9 @@ def create_incident(project, severity, alert_rule=None, job=None, trigger_metada
             actor=None,
             metadata={"trigger_metadata": trigger_metadata or {}},
         )
-        transaction.on_commit(lambda: calculate_incident_intelligence_task.delay(incident.id))
+        transaction.on_commit(
+            lambda: _async_task_delay(calculate_incident_intelligence_task, incident.id)
+        )
         return incident
 
 
@@ -184,6 +246,7 @@ def resolve_incident(incident_id, actor):
     """
     Manually resolves an incident.
     """
+    start_db = time.perf_counter()
     with transaction.atomic():
         incident = Incident.objects.select_for_update().get(id=incident_id)
 
@@ -212,7 +275,15 @@ def resolve_incident(incident_id, actor):
                 "previous_status": previous_status,
             },
         )
-        transaction.on_commit(lambda: calculate_incident_intelligence_task.delay(incident.id))
+        transaction.on_commit(
+            lambda: _async_task_delay(calculate_incident_intelligence_task, incident.id)
+        )
+        db_duration_ms = (time.perf_counter() - start_db) * 1000
+        logger.info(
+            "TIMING incident_resolve_db_tx_ms=%.2fms incident_id=%s",
+            db_duration_ms,
+            incident_id,
+        )
         return incident
 
 
@@ -220,6 +291,7 @@ def reopen_incident(incident_id, actor):
     """
     Reopens a resolved incident.
     """
+    start_db = time.perf_counter()
     with transaction.atomic():
         incident = Incident.objects.select_for_update().get(id=incident_id)
 
@@ -254,7 +326,15 @@ def reopen_incident(incident_id, actor):
                 "reopened_by_name": actor_name,
             },
         )
-        transaction.on_commit(lambda: calculate_incident_intelligence_task.delay(incident.id))
+        transaction.on_commit(
+            lambda: _async_task_delay(calculate_incident_intelligence_task, incident.id)
+        )
+        db_duration_ms = (time.perf_counter() - start_db) * 1000
+        logger.info(
+            "TIMING incident_reopen_db_tx_ms=%.2fms incident_id=%s",
+            db_duration_ms,
+            incident_id,
+        )
         return incident
 
 
@@ -331,7 +411,9 @@ def find_recommended_runbooks(incident_id):
     if incident.alert_rule:
         trigger_type = incident.alert_rule.metric
     elif incident.trigger_metadata and isinstance(incident.trigger_metadata, dict):
-        trigger_type = incident.trigger_metadata.get("metric_type") or incident.trigger_metadata.get("condition_type")
+        trigger_type = incident.trigger_metadata.get(
+            "metric_type"
+        ) or incident.trigger_metadata.get("condition_type")
 
     # Base queryset for active runbooks in the project
     qs = Runbook.objects.filter(project_id=project_id, is_active=True)
@@ -809,6 +891,15 @@ def add_postmortem_action_item(postmortem_id, data, actor):
             due_date=data.get("due_date"),
             completed_at=completed_at,
         )
+        publish_realtime_event(
+            "postmortem.action_item.updated",
+            project_id=postmortem.incident.project_id,
+            payload={
+                "incident_id": postmortem.incident_id,
+                "item_id": item.id,
+                "action": "created",
+            },
+        )
         return item
 
 
@@ -857,6 +948,15 @@ def update_postmortem_action_item(item_id, data, actor):
             item.status = new_status
 
         item.save()
+        publish_realtime_event(
+            "postmortem.action_item.updated",
+            project_id=item.postmortem.incident.project_id,
+            payload={
+                "incident_id": item.postmortem.incident_id,
+                "item_id": item.id,
+                "action": "updated",
+            },
+        )
         return item
 
 

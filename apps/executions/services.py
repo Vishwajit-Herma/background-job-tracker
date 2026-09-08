@@ -1,6 +1,7 @@
 from django.db import transaction
 from django.utils import timezone
 
+from apps.core.realtime import publish_execution_batch
 from apps.jobs.models import Job
 from .models import Execution, ExecutionEvent
 
@@ -323,5 +324,13 @@ def ingest_executions_batch(project, executions_data):
             Job.objects.filter(
                 id__in=verified_job_ids, verification_status=Job.VerificationStatus.UNVERIFIED
             ).update(verification_status=Job.VerificationStatus.VERIFIED, last_verified_at=now)
+
+        if accepted > 0:
+            affected_job_ids = list(job_ids)
+            publish_execution_batch(
+                project_id=project.id,
+                count=accepted,
+                job_ids=affected_job_ids,
+            )
 
     return {"accepted": accepted, "duplicates": duplicates, "rejected": rejected}

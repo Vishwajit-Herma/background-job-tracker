@@ -4,6 +4,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
+from apps.core.realtime import publish_realtime_event
 from django.contrib.auth import get_user_model
 from apps.teams.models import Team, TeamMember, TeamInvitation
 from .serializers import (
@@ -48,8 +49,14 @@ class TeamViewSet(viewsets.ModelViewSet):
     def perform_destroy(self, instance):
         if instance.owner != self.request.user and not self.request.user.is_staff:
             raise PermissionDenied("Only the team owner or a staff member can delete the team.")
+        team_id = instance.id
         instance.is_active = False
         instance.save()
+        publish_realtime_event("team.updated", team_id=team_id, payload={"action": "deleted"})
+
+    def perform_update(self, serializer):
+        team = serializer.save()
+        publish_realtime_event("team.updated", team_id=team.id, payload={"action": "updated"})
 
 
 class TeamMemberViewSet(viewsets.ModelViewSet):
@@ -97,8 +104,15 @@ class TeamMemberViewSet(viewsets.ModelViewSet):
                 if not current_member or not current_member.can_manage_members():
                     raise PermissionDenied("You do not have permission to remove members.")
 
+        team_id = instance.team_id
+        member_id = instance.id
         instance.is_active = False
         instance.save()
+        publish_realtime_event(
+            "team.member.updated",
+            team_id=team_id,
+            payload={"member_id": member_id, "action": "removed"},
+        )
 
     def perform_update(self, serializer):
         instance = self.get_object()
@@ -122,7 +136,12 @@ class TeamMemberViewSet(viewsets.ModelViewSet):
             and not self.request.user.is_staff
         ):
             raise ValidationError("Cannot change the role of the team owner.")
-        serializer.save()
+        member = serializer.save()
+        publish_realtime_event(
+            "team.member.updated",
+            team_id=member.team_id,
+            payload={"member_id": member.id, "action": "updated"},
+        )
 
 
 class TeamInvitationViewSet(viewsets.ModelViewSet):

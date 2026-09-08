@@ -4,6 +4,7 @@ from django.db import transaction, IntegrityError
 from django.utils import timezone
 from django.db.models import F
 
+from apps.core.realtime import publish_realtime_event
 from apps.jobs.models import Job
 from apps.executions.models import Execution
 from apps.alerts.models import AlertRule
@@ -379,6 +380,17 @@ def _link_or_create_incident(finding, metric_type, details):
             finding.incident = active_incident
             finding.save(update_fields=["incident"])
 
+    publish_realtime_event(
+        "reliability.finding.updated",
+        project_id=finding.job.project_id,
+        payload={
+            "finding_id": finding.id,
+            "job_id": finding.job_id,
+            "status": finding.status,
+            "condition_type": finding.condition_type,
+        },
+    )
+
 
 def _recover_finding(finding, recovery_metadata):
     """
@@ -390,6 +402,17 @@ def _recover_finding(finding, recovery_metadata):
     finding.recovered_at = now
     finding.last_evaluated_at = now
     finding.save(update_fields=["status", "recovered_at", "last_evaluated_at"])
+
+    publish_realtime_event(
+        "reliability.finding.updated",
+        project_id=finding.job.project_id,
+        payload={
+            "finding_id": finding.id,
+            "job_id": finding.job_id,
+            "status": finding.status,
+            "condition_type": finding.condition_type,
+        },
+    )
 
     if finding.incident_id:
         try:

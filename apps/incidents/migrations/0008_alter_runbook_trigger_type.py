@@ -4,7 +4,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("incidents", "0007_incidentrunbookexecution_started_by_and_more"),
     ]

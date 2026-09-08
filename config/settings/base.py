@@ -59,6 +59,7 @@ THIRD_PARTY_APPS = [
     "django_extensions",
     "django_alive",
     "anymail",
+    "channels",
 ]
 
 LOCAL_APPS = [
@@ -118,6 +119,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = "config.wsgi.application"
+ASGI_APPLICATION = "config.asgi.application"
 
 
 # Database
@@ -162,6 +164,17 @@ CACHES = {
 # Session
 SESSION_ENGINE = "django.contrib.sessions.backends.cache"
 SESSION_CACHE_ALIAS = "default"
+
+# Channel Layers (Django Channels)
+REDIS_URL = env("REDIS_URL", default="redis://127.0.0.1:6379/0")
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [REDIS_URL],
+        },
+    },
+}
 
 
 # Internationalization

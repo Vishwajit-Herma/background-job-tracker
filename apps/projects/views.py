@@ -4,6 +4,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from apps.config_management.views import CustomBaseViewSet
+from apps.core.realtime import publish_realtime_event
 from apps.executions.analytics import get_project_analytics, get_trend, parse_analytics_query
 from apps.executions.models import Execution
 from apps.executions.serializers import (
@@ -32,7 +33,9 @@ class ProjectViewSet(CustomBaseViewSet):
 
     def _get_base_tenant_qs(self):
         """Minimal queryset for tenant isolation — no expensive annotations."""
-        base = Project.all_objects if getattr(self, "action", None) == "restore" else Project.objects
+        base = (
+            Project.all_objects if getattr(self, "action", None) == "restore" else Project.objects
+        )
         if self.request.user.is_staff:
             return base.all()
         return base.filter(
@@ -85,9 +88,7 @@ class ProjectViewSet(CustomBaseViewSet):
             executions_count=Count(
                 "jobs__executions", filter=Q(jobs__is_deleted=False), distinct=True
             ),
-            success_count=Coalesce(
-                Subquery(success_subquery, output_field=IntegerField()), 0
-            ),
+            success_count=Coalesce(Subquery(success_subquery, output_field=IntegerField()), 0),
             active_incidents_count=Count(
                 "incidents",
                 filter=Q(incidents__status__in=["OPEN", "ACKNOWLEDGED"])
@@ -123,6 +124,37 @@ class ProjectViewSet(CustomBaseViewSet):
                 self.get_queryset = original_get_queryset  # type: ignore[method-assign]
         return super().get_object()
 
+    def perform_create(self, serializer):
+        super().perform_create(serializer)
+        project = serializer.instance
+        publish_realtime_event(
+            "project.updated",
+            project_id=project.id,
+            team_id=project.team_id,
+            payload={"action": "created"},
+        )
+
+    def perform_update(self, serializer):
+        super().perform_update(serializer)
+        project = serializer.instance
+        publish_realtime_event(
+            "project.updated",
+            project_id=project.id,
+            team_id=project.team_id,
+            payload={"action": "updated"},
+        )
+
+    def perform_destroy(self, instance):
+        project_id = instance.id
+        team_id = instance.team_id
+        super().perform_destroy(instance)
+        publish_realtime_event(
+            "project.updated",
+            project_id=project_id,
+            team_id=team_id,
+            payload={"action": "deleted"},
+        )
+
     @action(detail=True, methods=["post"])
     def restore(self, request, pk=None):
         """
@@ -146,6 +178,12 @@ class ProjectViewSet(CustomBaseViewSet):
             )
 
         project.restore(user=request.user)
+        publish_realtime_event(
+            "project.updated",
+            project_id=project.id,
+            team_id=project.team_id,
+            payload={"action": "restored"},
+        )
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=True, methods=["get"])

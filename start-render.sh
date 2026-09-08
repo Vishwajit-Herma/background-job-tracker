@@ -23,12 +23,11 @@ cleanup() {
 
 trap cleanup SIGTERM SIGINT
 
-echo "Starting Gunicorn..."
-gunicorn config.wsgi:application \
+echo "Starting Gunicorn (ASGI with UvicornWorker)..."
+gunicorn config.asgi:application \
     --bind "0.0.0.0:${PORT:-10000}" \
-    --workers 1 \
-    --worker-class gthread \
-    --threads 4 \
+    --workers 2 \
+    --worker-class uvicorn.workers.UvicornWorker \
     --timeout 120 \
     --keep-alive 5 \
     --max-requests 1000 \

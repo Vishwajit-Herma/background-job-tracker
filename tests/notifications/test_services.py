@@ -90,8 +90,8 @@ def test_dispatch_inactive_policy_or_channel(mock_webhook, project, incident, te
     assert not NotificationDelivery.objects.filter(incident_event=event).exists()
 
 
-@patch("apps.notifications.services.dispatch_incident_event")
-def test_transaction_rollback_no_dispatch(mock_dispatch, project, incident, user):
+@patch("apps.incidents.services.dispatch_incident_event_task.delay")
+def test_transaction_rollback_no_dispatch(mock_dispatch_task, project, incident, user):
     from apps.incidents.services import acknowledge_incident
 
     NotificationChannel.objects.create(
@@ -107,7 +107,15 @@ def test_transaction_rollback_no_dispatch(mock_dispatch, project, incident, user
         pass
 
     assert IncidentEvent.objects.count() == 0
-    mock_dispatch.assert_not_called()
+    mock_dispatch_task.assert_not_called()
+
+
+@patch("apps.notifications.services.dispatch_incident_event")
+def test_dispatch_incident_event_task(mock_dispatch):
+    from apps.notifications.tasks import dispatch_incident_event_task
+
+    dispatch_incident_event_task(42)
+    mock_dispatch.assert_called_once_with(42)
 
 
 @patch("apps.notifications.services.deliver_webhook_task.delay")

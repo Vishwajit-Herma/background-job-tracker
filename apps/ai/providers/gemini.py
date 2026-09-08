@@ -139,7 +139,9 @@ class GeminiProvider(AIProvider):
                     timeout=self.timeout,
                 )
             except requests.Timeout as err:
-                logger.warning("Gemini API request timed out (attempt %s/%s)", attempt + 1, max_retries)
+                logger.warning(
+                    "Gemini API request timed out (attempt %s/%s)", attempt + 1, max_retries
+                )
                 if attempt == max_retries - 1:
                     raise AIProviderTimeoutError(
                         f"AI service request timed out after {self.timeout} seconds. Please try again."
@@ -147,7 +149,9 @@ class GeminiProvider(AIProvider):
             except requests.RequestException as err:
                 logger.error("Gemini API network error: %s", err)
                 if attempt == max_retries - 1:
-                    raise AIProviderError(f"Network error communicating with AI service: {err}") from err
+                    raise AIProviderError(
+                        f"Network error communicating with AI service: {err}"
+                    ) from err
 
             if response is not None:
                 if response.status_code == 200:
@@ -172,7 +176,11 @@ class GeminiProvider(AIProvider):
                 raise AIProviderError(
                     "High Model Usage: The AI provider is currently experiencing high demand. Please try again in a few moments."
                 )
-            logger.error("Gemini API error (%s): %s", status_code, response.text if response else "No response")
+            logger.error(
+                "Gemini API error (%s): %s",
+                status_code,
+                response.text if response else "No response",
+            )
             raise AIProviderError(
                 f"AI provider returned status {status_code}: {response.text[:200] if response else ''}"
             )

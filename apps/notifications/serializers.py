@@ -74,7 +74,9 @@ class NotificationChannelSerializer(serializers.ModelSerializer):
 
             if target not in ["ALL", "ADMINS", "OWNERS", "CUSTOM"]:
                 raise DRFValidationError(
-                    {"config": "Email config 'recipient_target' must be 'ALL', 'ADMINS', 'OWNERS', or 'CUSTOM'."}
+                    {
+                        "config": "Email config 'recipient_target' must be 'ALL', 'ADMINS', 'OWNERS', or 'CUSTOM'."
+                    }
                 )
 
             if target == "CUSTOM" and (not isinstance(recipients, list) or not recipients):
@@ -93,7 +95,9 @@ class NotificationChannelSerializer(serializers.ModelSerializer):
 
                 if not members_qs.exists():
                     raise DRFValidationError(
-                        {"config": f"No active team members with role target '{target}' exist for this project."}
+                        {
+                            "config": f"No active team members with role target '{target}' exist for this project."
+                        }
                     )
 
         project = attrs.get("project") or (self.instance.project if self.instance else None)

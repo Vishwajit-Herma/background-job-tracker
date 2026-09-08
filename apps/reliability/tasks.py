@@ -1,6 +1,7 @@
 import logging
 from celery import shared_task
 
+from apps.core.realtime import publish_realtime_event
 from apps.jobs.models import Job
 from apps.reliability.evaluators import evaluate_all_jobs_reliability, evaluate_job_reliability
 from apps.reliability.services import calculate_job_baseline
@@ -34,8 +35,13 @@ def recalculate_single_job_baseline(job_id, sample_window_days=7):
     Asynchronously recalculates baseline for a single job.
     """
     try:
-        job = Job.objects.get(id=job_id, is_deleted=False)
+        job = Job.objects.select_related("project").get(id=job_id, is_deleted=False)
         calculate_job_baseline(job, sample_window_days=sample_window_days)
+        publish_realtime_event(
+            "baseline.updated",
+            project_id=job.project_id,
+            payload={"job_id": job.id},
+        )
         evaluate_job_reliability(job.id)
     except Job.DoesNotExist:
         pass

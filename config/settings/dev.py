@@ -4,6 +4,8 @@ from .base import *  # noqa: F403, F401
 
 DEBUG = True
 
+INSTALLED_APPS = ["daphne"] + INSTALLED_APPS  # noqa: F405
+
 RESEND_API_KEY = env("RESEND_API_KEY", default="")  # noqa: F405
 EMAIL_HOST = env("EMAIL_HOST", default="")  # noqa: F405
 if RESEND_API_KEY:

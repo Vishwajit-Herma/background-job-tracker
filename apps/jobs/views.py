@@ -3,6 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from apps.config_management.views import CustomBaseViewSet
+from apps.core.realtime import publish_realtime_event
 from apps.executions.analytics import get_job_analytics, get_trend, parse_analytics_query
 from apps.executions.authentication import ProjectAPIKeyAuthentication
 from apps.executions.models import Execution
@@ -74,9 +75,7 @@ class JobViewSet(CustomBaseViewSet):
 
         base_qs = base_qs.select_related("project", "created_by", "modified_by").annotate(
             executions_count=Count("executions", distinct=True),
-            success_count=Coalesce(
-                Subquery(success_subquery, output_field=IntegerField()), 0
-            ),
+            success_count=Coalesce(Subquery(success_subquery, output_field=IntegerField()), 0),
             active_incidents_count=Count(
                 "incidents",
                 filter=Q(incidents__status__in=["OPEN", "ACKNOWLEDGED"]),
@@ -92,6 +91,34 @@ class JobViewSet(CustomBaseViewSet):
             project__team__members__is_active=True,
         ).distinct()
         return qs
+
+    def perform_create(self, serializer):
+        super().perform_create(serializer)
+        job = serializer.instance
+        publish_realtime_event(
+            "job.updated",
+            project_id=job.project_id,
+            payload={"job_id": job.id, "action": "created"},
+        )
+
+    def perform_update(self, serializer):
+        super().perform_update(serializer)
+        job = serializer.instance
+        publish_realtime_event(
+            "job.updated",
+            project_id=job.project_id,
+            payload={"job_id": job.id, "action": "updated"},
+        )
+
+    def perform_destroy(self, instance):
+        project_id = instance.project_id
+        job_id = instance.id
+        super().perform_destroy(instance)
+        publish_realtime_event(
+            "job.updated",
+            project_id=project_id,
+            payload={"job_id": job_id, "action": "deleted"},
+        )
 
     @action(detail=True, methods=["post"])
     def restore(self, request, pk=None):
@@ -113,6 +140,11 @@ class JobViewSet(CustomBaseViewSet):
             )
 
         job.restore(user=request.user)
+        publish_realtime_event(
+            "job.updated",
+            project_id=job.project_id,
+            payload={"job_id": job.id, "action": "restored"},
+        )
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(

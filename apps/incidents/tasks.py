@@ -5,6 +5,7 @@ from django.core.cache import cache
 from django.db.models import Q
 from django.utils import timezone
 
+from apps.core.realtime import publish_realtime_event
 from apps.incidents.intelligence import compute_and_save_incident_intelligence
 from apps.incidents.models import Incident
 
@@ -21,9 +22,17 @@ def calculate_incident_intelligence_task(incident_id):
     Asynchronously computes and persists IncidentIntelligence for an incident.
     Cleans up any pending in-flight lock key in cache.
     """
-    logger.info("Computing incident intelligence for Incident #%s", incident_id)
     try:
-        return bool(compute_and_save_incident_intelligence(incident_id))
+        intelligence = compute_and_save_incident_intelligence(incident_id)
+        if intelligence:
+            incident = Incident.objects.filter(id=incident_id).only("project_id").first()
+            if incident:
+                publish_realtime_event(
+                    "incident.intelligence.updated",
+                    project_id=incident.project_id,
+                    payload={"incident_id": incident_id},
+                )
+        return bool(intelligence)
     finally:
         cache.delete(f"intelligence_calculating_{incident_id}")
 

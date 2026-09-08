@@ -2,6 +2,7 @@ import hmac
 import hashlib
 import json
 import logging
+import time
 import requests
 import smtplib
 from requests.exceptions import RequestException
@@ -253,6 +254,7 @@ Timestamp: {event.event_time.strftime("%Y-%m-%d %H:%M:%S UTC")}
 
         try:
             from anymail.exceptions import AnymailAPIError, AnymailSerializationError
+
             if isinstance(e, AnymailSerializationError) or (
                 isinstance(e, AnymailAPIError)
                 and hasattr(e, "status_code")
@@ -333,3 +335,22 @@ def cleanup_old_notifications():
         f"and {deleted_in_app} in-app notifications."
     )
     return deleted_deliveries + deleted_in_app
+
+
+@shared_task(name="notifications.dispatch_incident_event", bind=True, max_retries=3)
+def dispatch_incident_event_task(self, incident_event_id: int):
+    """
+    Asynchronously dispatches notifications for an incident event.
+    Offloads policy evaluation, team member lookups, and in-app notification creation
+    from the synchronous HTTP response thread to a background Celery worker.
+    """
+    start_time = time.perf_counter()
+    from apps.notifications.services import dispatch_incident_event  # noqa: F401
+
+    dispatch_incident_event(incident_event_id)
+    duration_ms = (time.perf_counter() - start_time) * 1000
+    logger.info(
+        "TIMING notification_dispatch_ms=%.2fms event_id=%s",
+        duration_ms,
+        incident_event_id,
+    )

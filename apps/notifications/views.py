@@ -6,6 +6,7 @@ from django.utils import timezone
 from apps.teams.models import TeamMember
 from apps.config_management.views import CustomBaseViewSet, BaseViewSetConfig
 from apps.config_management.responses import CustomResponseMixin
+from apps.core.realtime import publish_realtime_event
 from .models import NotificationChannel, NotificationPolicy, InAppNotification
 from .serializers import (
     NotificationChannelSerializer,
@@ -147,6 +148,11 @@ class InAppNotificationViewSet(
             notification.is_read = True
             notification.read_at = timezone.now()
             notification.save(update_fields=["is_read", "read_at"])
+            publish_realtime_event(
+                "notification.updated",
+                user_id=request.user.id,
+                payload={"action": "read", "notification_id": notification.id},
+            )
         return Response({"message": "Notification marked as read"})
 
     @action(detail=False, methods=["post"], url_path="read-all")
@@ -154,5 +160,13 @@ class InAppNotificationViewSet(
         """
         Marks all unread notifications for the user as read.
         """
-        self.get_queryset().filter(is_read=False).update(is_read=True, read_at=timezone.now())
+        updated_count = (
+            self.get_queryset().filter(is_read=False).update(is_read=True, read_at=timezone.now())
+        )
+        if updated_count > 0:
+            publish_realtime_event(
+                "notification.updated",
+                user_id=request.user.id,
+                payload={"action": "read_all", "count": updated_count},
+            )
         return Response({"message": "All notifications marked as read"})

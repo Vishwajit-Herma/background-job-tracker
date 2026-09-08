@@ -2,6 +2,9 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   skipTrailingSlashRedirect: true,
+  env: {
+    NEXT_PUBLIC_DJANGO_API_URL: process.env.DJANGO_API_URL || "",
+  },
   async rewrites() {
     return [
       {

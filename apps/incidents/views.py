@@ -1,9 +1,11 @@
+import logging
+import time
+
 from django.core.cache import cache
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-
 from .models import (
     Incident,
     IncidentPostmortem,
@@ -47,6 +49,8 @@ from .services import (
     build_incident_knowledge,
 )
 from .tasks import calculate_incident_intelligence_task
+
+logger = logging.getLogger(__name__)
 
 
 class IncidentViewSet(BaseViewSetConfig, CustomResponseMixin, viewsets.ReadOnlyModelViewSet):
@@ -148,11 +152,27 @@ class IncidentViewSet(BaseViewSetConfig, CustomResponseMixin, viewsets.ReadOnlyM
             - Records resolved_by and resolved_at.
             - Logs a MANUALLY_RESOLVED event in timeline.
         """
+        start_action = time.perf_counter()
         incident = self.get_object()
 
         try:
+            start_svc = time.perf_counter()
             incident = resolve_incident(incident.id, request.user)
-            return Response(IncidentSerializer(incident).data)
+            svc_duration_ms = (time.perf_counter() - start_svc) * 1000
+
+            start_ser = time.perf_counter()
+            data = IncidentSerializer(incident).data
+            ser_duration_ms = (time.perf_counter() - start_ser) * 1000
+
+            total_duration_ms = (time.perf_counter() - start_action) * 1000
+            logger.info(
+                "TIMING incident_resolve_action_total_ms=%.2fms svc_ms=%.2fms ser_ms=%.2fms incident_id=%s",
+                total_duration_ms,
+                svc_duration_ms,
+                ser_duration_ms,
+                incident.id,
+            )
+            return Response(data)
         except ValueError as e:
             return Response(
                 {"error": str(e), "message": str(e)}, status=status.HTTP_400_BAD_REQUEST
@@ -168,11 +188,27 @@ class IncidentViewSet(BaseViewSetConfig, CustomResponseMixin, viewsets.ReadOnlyM
             - Clears resolution metadata.
             - Logs a REOPENED event in timeline.
         """
+        start_action = time.perf_counter()
         incident = self.get_object()
 
         try:
+            start_svc = time.perf_counter()
             incident = reopen_incident(incident.id, request.user)
-            return Response(IncidentSerializer(incident).data)
+            svc_duration_ms = (time.perf_counter() - start_svc) * 1000
+
+            start_ser = time.perf_counter()
+            data = IncidentSerializer(incident).data
+            ser_duration_ms = (time.perf_counter() - start_ser) * 1000
+
+            total_duration_ms = (time.perf_counter() - start_action) * 1000
+            logger.info(
+                "TIMING incident_reopen_action_total_ms=%.2fms svc_ms=%.2fms ser_ms=%.2fms incident_id=%s",
+                total_duration_ms,
+                svc_duration_ms,
+                ser_duration_ms,
+                incident.id,
+            )
+            return Response(data)
         except ValueError as e:
             return Response(
                 {"error": str(e), "message": str(e)}, status=status.HTTP_400_BAD_REQUEST

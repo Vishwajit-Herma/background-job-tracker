@@ -12,7 +12,9 @@ class RequestTimingMiddleware:
 
     def __call__(self, request):
         # Skip timing instrumentation for health checks and readiness pings
-        if request.path.startswith(("/health", "/alive", "/ready")) or request.path.rstrip("/").endswith("health"):
+        if request.path.startswith(("/health", "/alive", "/ready")) or request.path.rstrip(
+            "/"
+        ).endswith("health"):
             return self.get_response(request)
 
         start = time.perf_counter()
@@ -38,14 +40,16 @@ class RequestTimingMiddleware:
         django_ms = django_total * 1000
         sql_ms = sql_total * 1000
 
-        response["Server-Timing"] = (
-            f"django;dur={django_ms:.2f},"
-            f"sql;dur={sql_ms:.2f}"
-        )
+        # Node.js v24's llhttp HTTP parser rejects the Server-Timing header
+        # when it proxies responses through the Next.js dev server, raising
+        # HPE_INVALID_HEADER_TOKEN.  Skip the header on API responses (which
+        # are always proxied); it is still logged below for server-side
+        # observability.  Non-API paths (admin, debug toolbar) are unaffected.
+        if not request.path.startswith("/api/"):
+            response["Server-Timing"] = f"django;dur={django_ms:.2f},sql;dur={sql_ms:.2f}"
 
         logger.info(
-            "REQUEST_TIMING method=%s path=%s status=%s "
-            "django=%.2fms sql=%.2fms queries=%d",
+            "REQUEST_TIMING method=%s path=%s status=%s django=%.2fms sql=%.2fms queries=%d",
             request.method,
             request.path,
             response.status_code,

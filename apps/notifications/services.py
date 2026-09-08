@@ -1,5 +1,8 @@
+import json
 from django.db import IntegrityError
+from django.utils import timezone
 
+from apps.core.realtime import publish_realtime_event
 from apps.incidents.models import Incident, IncidentEvent
 from apps.teams.models import TeamMember
 from apps.notifications.models import (
@@ -36,14 +39,16 @@ def dispatch_incident_event(incident_event_id):
         # Severity matching:
         # A CRITICAL incident triggers both CRITICAL and DEGRADED policies.
         # A DEGRADED incident triggers DEGRADED policies.
-        if incident.severity == Incident.Severity.DEGRADED and policy.severity == Incident.Severity.CRITICAL:
+        if (
+            incident.severity == Incident.Severity.DEGRADED
+            and policy.severity == Incident.Severity.CRITICAL
+        ):
             continue
 
         # Event type matching:
         event_types = policy.event_types or []
         if isinstance(event_types, str):
             try:
-                import json
                 event_types = json.loads(event_types)
             except Exception:
                 event_types = [event_types]
@@ -147,7 +152,27 @@ def _dispatch_in_app(incident_event, channel):
         )
 
     if notifications:
-        InAppNotification.objects.bulk_create(notifications, ignore_conflicts=True)
+        created_notifs = InAppNotification.objects.bulk_create(notifications, ignore_conflicts=True)
+        now_iso = timezone.now().isoformat()
+        for notif in created_notifs:
+            publish_realtime_event(
+                "notification.created",
+                user_id=notif.recipient_id,
+                payload={
+                    "id": notif.id,
+                    "title": notif.title,
+                    "message": notif.message,
+                    "incident_id": incident.id,
+                    "event_type": incident_event.event_type,
+                    "incident_severity": incident.severity,
+                    "project_name": incident.project.name if incident.project else None,
+                    "job_name": incident.job.name if incident.job else None,
+                    "is_read": False,
+                    "created_at": notif.created_at.isoformat()
+                    if getattr(notif, "created_at", None)
+                    else now_iso,
+                },
+            )
 
 
 def _dispatch_external(incident_event, channel, celery_task):

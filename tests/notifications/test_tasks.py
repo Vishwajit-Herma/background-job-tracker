@@ -161,4 +161,3 @@ def test_deliver_email_task_dynamic_recipients(mock_send_mail, project, incident
     assert delivery.status == NotificationDelivery.DeliveryStatus.SENT
     mock_send_mail.assert_called_once()
     assert user.email in mock_send_mail.call_args.kwargs["recipient_list"]
-

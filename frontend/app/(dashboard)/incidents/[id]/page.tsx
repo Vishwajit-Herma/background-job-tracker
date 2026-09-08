@@ -220,22 +220,90 @@ export default function IncidentDetailsPage() {
 
   const ackMutation = useMutation({
     mutationFn: () => acknowledgeIncident(incidentId),
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: ["incident", incidentId] });
+      await queryClient.cancelQueries({ queryKey: ["incidents"] });
+
+      const previousIncident = queryClient.getQueryData(["incident", incidentId]);
+
+      queryClient.setQueryData(["incident", incidentId], (old: any) =>
+        old ? { ...old, status: "ACKNOWLEDGED" } : old
+      );
+
+      queryClient.setQueriesData({ queryKey: ["incidents"] }, (old: any) => {
+        if (!old) return old;
+        if (Array.isArray(old)) {
+          return old.map((inc: any) => (inc.id === incidentId ? { ...inc, status: "ACKNOWLEDGED" } : inc));
+        }
+        if (old.data && Array.isArray(old.data)) {
+          return {
+            ...old,
+            data: old.data.map((inc: any) => (inc.id === incidentId ? { ...inc, status: "ACKNOWLEDGED" } : inc)),
+          };
+        }
+        return old;
+      });
+
+      return { previousIncident };
+    },
+    onError: (err: any, _vars, context) => {
+      if (context?.previousIncident) {
+        queryClient.setQueryData(["incident", incidentId], context.previousIncident);
+      }
+      toastError("Failed to Acknowledge", err);
+    },
     onSuccess: () => {
       toastSuccess("Incident Acknowledged");
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["incident", incidentId] });
       queryClient.invalidateQueries({ queryKey: ["incident-events", incidentId] });
+      queryClient.invalidateQueries({ queryKey: ["incidents"] });
     },
-    onError: (err: any) => toastError("Failed to Acknowledge", err),
   });
 
   const resolveMutation = useMutation({
     mutationFn: () => resolveIncident(incidentId),
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: ["incident", incidentId] });
+      await queryClient.cancelQueries({ queryKey: ["incidents"] });
+
+      const previousIncident = queryClient.getQueryData(["incident", incidentId]);
+
+      queryClient.setQueryData(["incident", incidentId], (old: any) =>
+        old ? { ...old, status: "RESOLVED", resolution_type: "MANUAL" } : old
+      );
+
+      queryClient.setQueriesData({ queryKey: ["incidents"] }, (old: any) => {
+        if (!old) return old;
+        if (Array.isArray(old)) {
+          return old.map((inc: any) => (inc.id === incidentId ? { ...inc, status: "RESOLVED", resolution_type: "MANUAL" } : inc));
+        }
+        if (old.data && Array.isArray(old.data)) {
+          return {
+            ...old,
+            data: old.data.map((inc: any) => (inc.id === incidentId ? { ...inc, status: "RESOLVED", resolution_type: "MANUAL" } : inc)),
+          };
+        }
+        return old;
+      });
+
+      return { previousIncident };
+    },
+    onError: (err: any, _vars, context) => {
+      if (context?.previousIncident) {
+        queryClient.setQueryData(["incident", incidentId], context.previousIncident);
+      }
+      toastError("Failed to Resolve", err);
+    },
     onSuccess: () => {
       toastSuccess("Incident Resolved");
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["incident", incidentId] });
       queryClient.invalidateQueries({ queryKey: ["incident-events", incidentId] });
+      queryClient.invalidateQueries({ queryKey: ["incidents"] });
     },
-    onError: (err: any) => toastError("Failed to Resolve", err),
   });
 
   const noteMutation = useMutation({
@@ -251,12 +319,46 @@ export default function IncidentDetailsPage() {
 
   const reopenMutation = useMutation({
     mutationFn: () => reopenIncident(incidentId),
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: ["incident", incidentId] });
+      await queryClient.cancelQueries({ queryKey: ["incidents"] });
+
+      const previousIncident = queryClient.getQueryData(["incident", incidentId]);
+
+      queryClient.setQueryData(["incident", incidentId], (old: any) =>
+        old ? { ...old, status: "OPEN" } : old
+      );
+
+      queryClient.setQueriesData({ queryKey: ["incidents"] }, (old: any) => {
+        if (!old) return old;
+        if (Array.isArray(old)) {
+          return old.map((inc: any) => (inc.id === incidentId ? { ...inc, status: "OPEN" } : inc));
+        }
+        if (old.data && Array.isArray(old.data)) {
+          return {
+            ...old,
+            data: old.data.map((inc: any) => (inc.id === incidentId ? { ...inc, status: "OPEN" } : inc)),
+          };
+        }
+        return old;
+      });
+
+      return { previousIncident };
+    },
+    onError: (err: any, _vars, context) => {
+      if (context?.previousIncident) {
+        queryClient.setQueryData(["incident", incidentId], context.previousIncident);
+      }
+      toastError("Failed to Reopen", err);
+    },
     onSuccess: () => {
       toastSuccess("Incident Reopened");
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["incident", incidentId] });
       queryClient.invalidateQueries({ queryKey: ["incident-events", incidentId] });
+      queryClient.invalidateQueries({ queryKey: ["incidents"] });
     },
-    onError: (err: any) => toastError("Failed to Reopen", err),
   });
 
   const project = incident ? projects.find((p) => p.id === incident.project) : null;
@@ -279,12 +381,56 @@ export default function IncidentDetailsPage() {
   const assignMutation = useMutation({
     mutationFn: (memberId: number | null) =>
       import("@/lib/api/incidents").then((m) => m.assignIncident(incidentId, memberId)),
+    onMutate: async (memberId: number | null) => {
+      await queryClient.cancelQueries({ queryKey: ["incident", incidentId] });
+      await queryClient.cancelQueries({ queryKey: ["incidents"] });
+
+      const previousIncident = queryClient.getQueryData(["incident", incidentId]);
+      const member = teamMembers.find((m: any) => m.id === memberId);
+      const assigneeName = member
+        ? [member.user?.first_name, member.user?.last_name].filter(Boolean).join(" ") ||
+          member.user?.email ||
+          `Member #${member.id}`
+        : null;
+
+      queryClient.setQueryData(["incident", incidentId], (old: any) =>
+        old ? { ...old, assigned_to: memberId, assigned_to_name: assigneeName } : old
+      );
+
+      queryClient.setQueriesData({ queryKey: ["incidents"] }, (old: any) => {
+        if (!old) return old;
+        if (Array.isArray(old)) {
+          return old.map((inc: any) =>
+            inc.id === incidentId ? { ...inc, assigned_to: memberId, assigned_to_name: assigneeName } : inc
+          );
+        }
+        if (old.data && Array.isArray(old.data)) {
+          return {
+            ...old,
+            data: old.data.map((inc: any) =>
+              inc.id === incidentId ? { ...inc, assigned_to: memberId, assigned_to_name: assigneeName } : inc
+            ),
+          };
+        }
+        return old;
+      });
+
+      return { previousIncident };
+    },
+    onError: (err: any, _vars, context) => {
+      if (context?.previousIncident) {
+        queryClient.setQueryData(["incident", incidentId], context.previousIncident);
+      }
+      toastError("Assignment Failed", err);
+    },
     onSuccess: () => {
       toastSuccess("Incident Assignee Updated");
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["incident", incidentId] });
       queryClient.invalidateQueries({ queryKey: ["incident-events", incidentId] });
+      queryClient.invalidateQueries({ queryKey: ["incidents"] });
     },
-    onError: (err: any) => toastError("Assignment Failed", err),
   });
 
   if (isLoading)
@@ -390,7 +536,6 @@ export default function IncidentDetailsPage() {
                 <select
                   className="bg-background border border-input rounded px-2 py-0.5 text-xs focus:outline-none focus:border-primary font-medium cursor-pointer"
                   value={incident.assigned_to ?? ""}
-                  disabled={assignMutation.isPending}
                   onChange={(e) => {
                     const val = e.target.value ? Number(e.target.value) : null;
                     assignMutation.mutate(val);
