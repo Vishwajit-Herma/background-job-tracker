@@ -18,9 +18,13 @@ import { logout } from "@/lib/api/auth";
 import { useRouter, usePathname } from "next/navigation";
 import { NotificationsPopover } from "./notifications/notifications-popover";
 
+import { useAuth } from "@/hooks/use-auth";
+import { UserAvatar } from "./user-avatar";
+
 export function Topbar() {
   const router = useRouter();
   const { activeTeam } = useTeam();
+  const { user } = useAuth();
 
   const handleLogout = async () => {
     try {
@@ -52,13 +56,18 @@ export function Topbar() {
 
       {/* User menu */}
       <DropdownMenu>
-        <DropdownMenuTrigger render={<Button variant="secondary" size="icon" className="rounded-full" />}>
-          <UserCircle className="h-5 w-5" />
+        <DropdownMenuTrigger
+          render={<Button variant="ghost" size="icon" className="rounded-full h-8 w-8 p-0 overflow-hidden ring-1 ring-border/60 hover:ring-primary/50" />}
+        >
+          <UserAvatar user={user} size="sm" />
           <span className="sr-only">Toggle user menu</span>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuGroup>
-            <DropdownMenuLabel>My Account</DropdownMenuLabel>
+            <DropdownMenuLabel className="flex flex-col">
+              <span>{user?.first_name ? `${user.first_name} ${user.last_name || ""}`.trim() : "My Account"}</span>
+              {user?.email && <span className="text-xs font-normal text-muted-foreground">{user.email}</span>}
+            </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => router.push("/settings")}>Settings</DropdownMenuItem>
             <DropdownMenuItem onClick={() => router.push("/team")}>Team</DropdownMenuItem>

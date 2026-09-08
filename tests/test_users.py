@@ -50,6 +50,15 @@ def test_create_user_without_email_raises_error():
         User.objects.create_user(email="", password="test123")
 
 
+@pytest.mark.django_db
+def test_user_avatar_url(user):
+    """Test that avatar_url returns a valid Gravatar URL based on email MD5."""
+    import hashlib
+
+    expected_hash = hashlib.md5(user.email.strip().lower().encode("utf-8")).hexdigest()
+    assert user.avatar_url == f"https://www.gravatar.com/avatar/{expected_hash}?s=200&d=mp"
+
+
 # Authentication Tests
 
 

@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { UserCircle, CheckCircle2 } from "lucide-react";
+import { UserCircle, CheckCircle2, ExternalLink } from "lucide-react";
+import { UserAvatar } from "@/components/bjt/user-avatar";
 import { ApiError } from "@/lib/api/client";
 
 export default function SettingsPage() {
@@ -79,12 +80,20 @@ export default function SettingsPage() {
           <form onSubmit={handleUpdateProfile}>
             <CardContent className="space-y-4">
               <div className="flex items-center space-x-4 mb-6">
-                <div className="h-16 w-16 bg-muted rounded-full flex items-center justify-center">
-                  <UserCircle className="h-10 w-10 text-muted-foreground" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium leading-none mb-1">Avatar</p>
-                  <p className="text-sm text-muted-foreground">Gravatar is used for profile images.</p>
+                <UserAvatar user={user} size="xl" />
+                <div className="space-y-1">
+                  <p className="text-sm font-medium leading-none">Avatar</p>
+                  <p className="text-xs text-muted-foreground">
+                    Profile pictures are provided automatically via Gravatar linked to {user.email}.
+                  </p>
+                  <a
+                    href="https://gravatar.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-xs text-primary hover:underline font-medium pt-1"
+                  >
+                    Change avatar on Gravatar.com <ExternalLink className="h-3 w-3" />
+                  </a>
                 </div>
               </div>
               

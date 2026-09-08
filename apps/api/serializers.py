@@ -21,5 +21,7 @@ class DummyTokenSerializer(serializers.Serializer):
 
 
 class CustomUserDetailsSerializer(UserDetailsSerializer):
+    avatar_url = serializers.ReadOnlyField()
+
     class Meta(UserDetailsSerializer.Meta):
-        fields = UserDetailsSerializer.Meta.fields + ("is_staff",)
+        fields = UserDetailsSerializer.Meta.fields + ("is_staff", "avatar_url")

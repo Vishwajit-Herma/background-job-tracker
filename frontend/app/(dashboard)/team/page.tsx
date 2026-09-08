@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTeam } from "@/components/bjt/team-provider";
 import { useAuth } from "@/hooks/use-auth";
+import { UserAvatar } from "@/components/bjt/user-avatar";
 import { 
   getTeamMembers, 
   removeTeamMember, 
@@ -427,9 +428,7 @@ export default function TeamPage() {
                           <TableRow key={member.id}>
                             <TableCell className="font-medium">
                               <div className="flex items-center gap-2">
-                                <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-semibold text-primary">
-                                  {(member.user.first_name?.[0] || member.user.email[0]).toUpperCase()}
-                                </div>
+                                <UserAvatar user={member.user} size="sm" />
                                 <div>
                                   <div className="flex items-center gap-1">
                                     {member.user.first_name || member.user.last_name

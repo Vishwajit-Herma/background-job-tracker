@@ -1,5 +1,6 @@
 """User models."""
 
+import hashlib
 from typing import ClassVar
 
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
@@ -75,3 +76,10 @@ class User(AbstractBaseUser, PermissionsMixin):
     def get_short_name(self):
         """Return the short name for the user."""
         return self.first_name
+
+    @property
+    def avatar_url(self) -> str:
+        """Return the Gravatar URL computed from the user's email address."""
+        email_clean = (self.email or "").strip().lower()
+        email_hash = hashlib.md5(email_clean.encode("utf-8")).hexdigest()
+        return f"https://www.gravatar.com/avatar/{email_hash}?s=200&d=mp"
