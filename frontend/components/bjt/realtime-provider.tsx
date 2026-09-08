@@ -113,50 +113,69 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
 
         case "incident.updated": {
           const incidentId = event.incident_id as number | undefined;
-          const projectId = event.project_id as number | undefined;
           const newStatus = event.status as string | undefined;
 
-          // Optimistically update single incident cache
-          if (incidentId && newStatus) {
-            queryClient.setQueryData(["incident", incidentId], (old: any) =>
-              old ? { ...old, status: newStatus } : old
-            );
+          // Directly update single incident cache without REST refetch
+          if (incidentId) {
+            queryClient.setQueryData(["incident", incidentId], (old: any) => {
+              if (!old) return old;
+              return {
+                ...old,
+                ...(newStatus ? { status: newStatus } : {}),
+                ...(event.resolved_by ? { resolved_by: event.resolved_by } : {}),
+                ...(event.acknowledged_by ? { acknowledged_by: event.acknowledged_by } : {}),
+                ...(event.assigned_to ? { assigned_to: event.assigned_to } : {}),
+              };
+            });
           }
 
-          // Optimistically update incident lists in cache
-          if (incidentId && newStatus) {
+          // Directly update incident list caches without REST refetch
+          if (incidentId) {
             queryClient.setQueriesData({ queryKey: ["incidents"] }, (old: any) => {
               if (!old) return old;
+              const patchItem = (inc: any) =>
+                inc.id === incidentId
+                  ? {
+                      ...inc,
+                      ...(newStatus ? { status: newStatus } : {}),
+                      ...(event.assigned_to ? { assigned_to: event.assigned_to } : {}),
+                    }
+                  : inc;
+
               if (Array.isArray(old)) {
-                return old.map((inc: any) => (inc.id === incidentId ? { ...inc, status: newStatus } : inc));
+                return old.map(patchItem);
               }
               if (old.data && Array.isArray(old.data)) {
                 return {
                   ...old,
-                  data: old.data.map((inc: any) => (inc.id === incidentId ? { ...inc, status: newStatus } : inc)),
+                  data: old.data.map(patchItem),
                 };
               }
               return old;
             });
           }
 
-          if (incidentId) {
-            queryClient.invalidateQueries({ queryKey: ["incident", incidentId] });
-            queryClient.invalidateQueries({ queryKey: ["incident-events", incidentId] });
+          // Fallback invalidation only if incidentId is missing from payload
+          if (!incidentId) {
+            queryClient.invalidateQueries({ queryKey: ["incidents"] });
           }
-          if (projectId) {
-            queryClient.invalidateQueries({ queryKey: ["incidents", projectId] });
-          }
-          queryClient.invalidateQueries({ queryKey: ["incidents"] });
           break;
         }
 
         case "incident.note.created": {
-          // Strictly deduplicated: does NOT trigger general incident list refetches
+          // Strictly deduplicated: updates notes list directly if note object is available
           const incidentId = event.incident_id as number | undefined;
+          const noteObj = (event as any).note;
           if (incidentId) {
-            queryClient.invalidateQueries({ queryKey: ["incident-notes", incidentId] });
-            queryClient.invalidateQueries({ queryKey: ["incident-events", incidentId] });
+            if (noteObj) {
+              queryClient.setQueryData(["incident-notes", incidentId], (old: any) => {
+                if (!old || !Array.isArray(old)) return [noteObj];
+                if (old.some((n: any) => n.id === noteObj.id)) return old;
+                return [...old, noteObj];
+              });
+            } else {
+              queryClient.invalidateQueries({ queryKey: ["incident-notes", incidentId] });
+            }
           }
           break;
         }
@@ -164,8 +183,22 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
         case "incident.intelligence.updated": {
           const incidentId = event.incident_id as number | undefined;
           if (incidentId) {
-            queryClient.invalidateQueries({ queryKey: ["incident-intelligence", incidentId] });
-            queryClient.invalidateQueries({ queryKey: ["incident", incidentId] });
+            if (event.intelligence) {
+              queryClient.setQueryData(["incident-intelligence", incidentId], event.intelligence);
+            } else {
+              queryClient.invalidateQueries({ queryKey: ["incident-intelligence", incidentId] });
+            }
+            // Update incident cache only if event explicitly changes incident status/severity
+            if (event.status || event.severity) {
+              queryClient.setQueryData(["incident", incidentId], (old: any) => {
+                if (!old) return old;
+                return {
+                  ...old,
+                  ...(event.status ? { status: event.status } : {}),
+                  ...(event.severity ? { severity: event.severity } : {}),
+                };
+              });
+            }
           }
           break;
         }
@@ -238,10 +271,6 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
             });
           }
 
-          queryClient.invalidateQueries({ queryKey: ["notifications"] });
-          queryClient.invalidateQueries({ queryKey: ["notifications-preview"] });
-          queryClient.invalidateQueries({ queryKey: ["notifications-unread-count"] });
-
           if (event.title && typeof event.title === "string") {
             toastInfo("Notification", event.title);
           }
@@ -249,9 +278,31 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
         }
 
         case "notification.updated": {
-          queryClient.invalidateQueries({ queryKey: ["notifications"] });
-          queryClient.invalidateQueries({ queryKey: ["notifications-preview"] });
-          queryClient.invalidateQueries({ queryKey: ["notifications-unread-count"] });
+          const notifId = event.id as number | undefined;
+          const isRead = event.is_read as boolean | undefined;
+
+          if (notifId !== undefined && isRead !== undefined) {
+            queryClient.setQueriesData({ queryKey: ["notifications"] }, (old: any) => {
+              if (!old) return old;
+              const patchItem = (n: any) => (n.id === notifId ? { ...n, is_read: isRead } : n);
+              if (Array.isArray(old)) return old.map(patchItem);
+              if (old.data && Array.isArray(old.data)) {
+                return { ...old, data: old.data.map(patchItem) };
+              }
+              return old;
+            });
+            queryClient.setQueryData(["notifications-preview"], (old: any) => {
+              if (!old || !old.data) return old;
+              return {
+                ...old,
+                data: old.data.map((n: any) => (n.id === notifId ? { ...n, is_read: isRead } : n)),
+              };
+            });
+          } else {
+            queryClient.invalidateQueries({ queryKey: ["notifications"] });
+            queryClient.invalidateQueries({ queryKey: ["notifications-preview"] });
+            queryClient.invalidateQueries({ queryKey: ["notifications-unread-count"] });
+          }
           break;
         }
 

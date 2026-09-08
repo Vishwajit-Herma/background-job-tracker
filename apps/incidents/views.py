@@ -4,6 +4,7 @@ import time
 from django.core.cache import cache
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import NotFound
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from .models import (
@@ -94,6 +95,73 @@ class IncidentViewSet(BaseViewSetConfig, CustomResponseMixin, viewsets.ReadOnlyM
             .distinct()
         )
 
+    def finalize_response(self, request, response, *args, **kwargs):
+        django_req = getattr(request, "_request", request)
+        if hasattr(django_req, "_resolve_perf"):
+            t_fin = time.perf_counter()
+            res = super().finalize_response(request, response, *args, **kwargs)
+            finalize_ms = (time.perf_counter() - t_fin) * 1000
+            django_req._resolve_perf["finalize_ms"] = finalize_ms
+
+            t_render = time.perf_counter()
+            res.render()
+            render_ms = (time.perf_counter() - t_render) * 1000
+            django_req._resolve_perf["render_ms"] = render_ms
+            return res
+
+        return super().finalize_response(request, response, *args, **kwargs)
+
+    # ------------------------------------------------------------------
+    # Private helpers
+    # ------------------------------------------------------------------
+
+    def _check_incident_accessible(self, pk):
+        """
+        Authorize the current user for the incident identified by ``pk``.
+
+        Performs two checks in the minimum number of DB queries:
+        1. Fetches the incident with only ``project__team`` pre-loaded
+           (needed by IncidentPermission.has_object_permission) plus
+           ``assigned_to`` (needed for the assignee check on acknowledge/resolve).
+        2. Calls DRF's check_object_permissions so all RBAC rules in
+           IncidentPermission still fire exactly as before.
+
+        Raises NotFound (404) if the incident doesn't exist, or raises
+        PermissionDenied (403) if the user lacks access, without executing
+        the heavyweight get_queryset() JOIN.
+        """
+
+        try:
+            incident = Incident.objects.select_related(
+                "project__team",
+                "assigned_to",
+            ).get(pk=pk)
+        except Incident.DoesNotExist:
+            raise NotFound() from None
+
+        # Delegate all RBAC rules to the existing permission class.
+        self.check_object_permissions(self.request, incident)
+        return int(pk)
+
+    def _fetch_incident_for_response(self, incident_id):
+        """
+        Re-fetch the incident with all relations needed by IncidentSerializer
+        in a single query. Called after service mutations so the serializer
+        never hits the DB lazily for each FK field.
+        """
+        return (
+            Incident.objects.select_related(
+                "project",
+                "job",
+                "alert_rule",
+                "assigned_to__user",
+                "assigned_by",
+                "acknowledged_by",
+                "resolved_by",
+            )
+            .get(pk=incident_id)
+        )
+
     @action(detail=True, methods=["post"])
     def assign(self, request, pk=None):
         """
@@ -107,14 +175,15 @@ class IncidentViewSet(BaseViewSetConfig, CustomResponseMixin, viewsets.ReadOnlyM
             - Logs an ASSIGNED event in the incident timeline.
             - Rejects assignment for RESOLVED incidents.
         """
-        incident = self.get_object()
+        incident_id = self._check_incident_accessible(pk)
         serializer = IncidentAssignSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         member_id = serializer.validated_data["member_id"]
 
         try:
-            incident = assign_incident(incident.id, member_id, request.user)
+            assign_incident(incident_id, member_id, request.user)
+            incident = self._fetch_incident_for_response(incident_id)
             return Response(IncidentSerializer(incident).data)
         except ValueError as e:
             return Response(
@@ -131,10 +200,11 @@ class IncidentViewSet(BaseViewSetConfig, CustomResponseMixin, viewsets.ReadOnlyM
             - Records acknowledged_by and acknowledged_at.
             - Logs an ACKNOWLEDGED event in timeline.
         """
-        incident = self.get_object()
+        incident_id = self._check_incident_accessible(pk)
 
         try:
-            incident = acknowledge_incident(incident.id, request.user)
+            acknowledge_incident(incident_id, request.user)
+            incident = self._fetch_incident_for_response(incident_id)
             return Response(IncidentSerializer(incident).data)
         except ValueError as e:
             return Response(
@@ -153,26 +223,59 @@ class IncidentViewSet(BaseViewSetConfig, CustomResponseMixin, viewsets.ReadOnlyM
             - Logs a MANUALLY_RESOLVED event in timeline.
         """
         start_action = time.perf_counter()
-        incident = self.get_object()
+        t_access = time.perf_counter()
+        incident_id = self._check_incident_accessible(pk)
+        check_access_ms = (time.perf_counter() - t_access) * 1000
 
         try:
-            start_svc = time.perf_counter()
-            incident = resolve_incident(incident.id, request.user)
-            svc_duration_ms = (time.perf_counter() - start_svc) * 1000
+            t_svc = time.perf_counter()
+            incident = resolve_incident(incident_id, request.user)
+            service_total_ms = (time.perf_counter() - t_svc) * 1000
 
-            start_ser = time.perf_counter()
-            data = IncidentSerializer(incident).data
-            ser_duration_ms = (time.perf_counter() - start_ser) * 1000
+            svc_timings = getattr(incident, "_resolve_timings", {})
+            select_for_update_ms = svc_timings.get("select_for_update_ms", 0.0)
+            update_ms = svc_timings.get("update_ms", 0.0)
+            event_insert_ms = svc_timings.get("event_insert_ms", 0.0)
+            commit_on_commit_ms = svc_timings.get("commit_on_commit_ms", 0.0)
+
+            t_fetch = time.perf_counter()
+            incident_fetched = self._fetch_incident_for_response(incident_id)
+            response_fetch_ms = (time.perf_counter() - t_fetch) * 1000
+
+            t_ser = time.perf_counter()
+            data = IncidentSerializer(incident_fetched).data
+            serializer_ms = (time.perf_counter() - t_ser) * 1000
+
+            t_resp = time.perf_counter()
+            response = Response(data)
+            response_create_ms = (time.perf_counter() - t_resp) * 1000
 
             total_duration_ms = (time.perf_counter() - start_action) * 1000
+
+            django_req = getattr(request, "_request", request)
+            django_req._resolve_perf = {
+                "check_access_ms": check_access_ms,
+                "service_total_ms": service_total_ms,
+                "select_for_update_ms": select_for_update_ms,
+                "update_ms": update_ms,
+                "event_insert_ms": event_insert_ms,
+                "commit_on_commit_ms": commit_on_commit_ms,
+                "response_fetch_ms": response_fetch_ms,
+                "serializer_ms": serializer_ms,
+                "response_create_ms": response_create_ms,
+                "action_total_ms": total_duration_ms,
+            }
+
             logger.info(
-                "TIMING incident_resolve_action_total_ms=%.2fms svc_ms=%.2fms ser_ms=%.2fms incident_id=%s",
+                "TIMING incident_resolve_action_total_ms=%.2fms check_access_ms=%.2fms svc_ms=%.2fms response_fetch_ms=%.2fms ser_ms=%.2fms incident_id=%s",
                 total_duration_ms,
-                svc_duration_ms,
-                ser_duration_ms,
-                incident.id,
+                check_access_ms,
+                service_total_ms,
+                response_fetch_ms,
+                serializer_ms,
+                incident_id,
             )
-            return Response(data)
+            return response
         except ValueError as e:
             return Response(
                 {"error": str(e), "message": str(e)}, status=status.HTTP_400_BAD_REQUEST
@@ -189,14 +292,15 @@ class IncidentViewSet(BaseViewSetConfig, CustomResponseMixin, viewsets.ReadOnlyM
             - Logs a REOPENED event in timeline.
         """
         start_action = time.perf_counter()
-        incident = self.get_object()
+        incident_id = self._check_incident_accessible(pk)
 
         try:
             start_svc = time.perf_counter()
-            incident = reopen_incident(incident.id, request.user)
+            reopen_incident(incident_id, request.user)
             svc_duration_ms = (time.perf_counter() - start_svc) * 1000
 
             start_ser = time.perf_counter()
+            incident = self._fetch_incident_for_response(incident_id)
             data = IncidentSerializer(incident).data
             ser_duration_ms = (time.perf_counter() - start_ser) * 1000
 
@@ -206,7 +310,7 @@ class IncidentViewSet(BaseViewSetConfig, CustomResponseMixin, viewsets.ReadOnlyM
                 total_duration_ms,
                 svc_duration_ms,
                 ser_duration_ms,
-                incident.id,
+                incident_id,
             )
             return Response(data)
         except ValueError as e:

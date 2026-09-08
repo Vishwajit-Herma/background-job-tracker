@@ -252,13 +252,36 @@ export default function IncidentDetailsPage() {
       }
       toastError("Failed to Acknowledge", err);
     },
-    onSuccess: () => {
+    onSuccess: (updatedIncident: any) => {
       toastSuccess("Incident Acknowledged");
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["incident", incidentId] });
-      queryClient.invalidateQueries({ queryKey: ["incident-events", incidentId] });
-      queryClient.invalidateQueries({ queryKey: ["incidents"] });
+      if (updatedIncident) {
+        queryClient.setQueryData(["incident", incidentId], updatedIncident);
+        queryClient.setQueriesData({ queryKey: ["incidents"] }, (old: any) => {
+          if (!old) return old;
+          if (Array.isArray(old)) {
+            return old.map((inc: any) => (inc.id === incidentId ? updatedIncident : inc));
+          }
+          if (old.data && Array.isArray(old.data)) {
+            return {
+              ...old,
+              data: old.data.map((inc: any) => (inc.id === incidentId ? updatedIncident : inc)),
+            };
+          }
+          return old;
+        });
+      }
+      // Append event locally to avoid GET /api/incidents/:id/events/ refetch
+      const ackEvent: IncidentEvent = {
+        id: Date.now(),
+        event_type: "ACKNOWLEDGED",
+        actor: (user as any)?.pk || user?.id || null,
+        actor_name: (user as any)?.first_name ? `${(user as any).first_name} ${(user as any).last_name || ""}`.trim() : user?.email || "System",
+        event_time: new Date().toISOString(),
+        metadata: { acknowledged_by_name: user?.email },
+      };
+      queryClient.setQueryData(["incident-events", incidentId], (old: any) =>
+        Array.isArray(old) ? [...old, ackEvent] : [ackEvent]
+      );
     },
   });
 
@@ -296,22 +319,50 @@ export default function IncidentDetailsPage() {
       }
       toastError("Failed to Resolve", err);
     },
-    onSuccess: () => {
+    onSuccess: (updatedIncident: any) => {
       toastSuccess("Incident Resolved");
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["incident", incidentId] });
-      queryClient.invalidateQueries({ queryKey: ["incident-events", incidentId] });
-      queryClient.invalidateQueries({ queryKey: ["incidents"] });
+      if (updatedIncident) {
+        queryClient.setQueryData(["incident", incidentId], updatedIncident);
+        queryClient.setQueriesData({ queryKey: ["incidents"] }, (old: any) => {
+          if (!old) return old;
+          if (Array.isArray(old)) {
+            return old.map((inc: any) => (inc.id === incidentId ? updatedIncident : inc));
+          }
+          if (old.data && Array.isArray(old.data)) {
+            return {
+              ...old,
+              data: old.data.map((inc: any) => (inc.id === incidentId ? updatedIncident : inc)),
+            };
+          }
+          return old;
+        });
+      }
+      // Append event locally to avoid GET /api/incidents/:id/events/ refetch
+      const resolveEvent: IncidentEvent = {
+        id: Date.now(),
+        event_type: "MANUALLY_RESOLVED",
+        actor: (user as any)?.pk || user?.id || null,
+        actor_name: (user as any)?.first_name ? `${(user as any).first_name} ${(user as any).last_name || ""}`.trim() : user?.email || "System",
+        event_time: new Date().toISOString(),
+        metadata: { resolved_by_name: user?.email, resolution_type: "MANUAL" },
+      };
+      queryClient.setQueryData(["incident-events", incidentId], (old: any) =>
+        Array.isArray(old) ? [...old, resolveEvent] : [resolveEvent]
+      );
     },
   });
 
   const noteMutation = useMutation({
     mutationFn: (content: string) => addIncidentNote(incidentId, content),
-    onSuccess: () => {
+    onSuccess: (newNote: any) => {
       toastSuccess("Note Added");
-      queryClient.invalidateQueries({ queryKey: ["incident-notes", incidentId] });
-      queryClient.invalidateQueries({ queryKey: ["incident-events", incidentId] });
+      if (newNote) {
+        queryClient.setQueryData(["incident-notes", incidentId], (old: any) =>
+          Array.isArray(old) ? [...old, newNote] : [newNote]
+        );
+      } else {
+        queryClient.invalidateQueries({ queryKey: ["incident-notes", incidentId] });
+      }
       setNewNote("");
     },
     onError: (err: any) => toastError("Failed to Add Note", err),
@@ -351,13 +402,36 @@ export default function IncidentDetailsPage() {
       }
       toastError("Failed to Reopen", err);
     },
-    onSuccess: () => {
+    onSuccess: (updatedIncident: any) => {
       toastSuccess("Incident Reopened");
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["incident", incidentId] });
-      queryClient.invalidateQueries({ queryKey: ["incident-events", incidentId] });
-      queryClient.invalidateQueries({ queryKey: ["incidents"] });
+      if (updatedIncident) {
+        queryClient.setQueryData(["incident", incidentId], updatedIncident);
+        queryClient.setQueriesData({ queryKey: ["incidents"] }, (old: any) => {
+          if (!old) return old;
+          if (Array.isArray(old)) {
+            return old.map((inc: any) => (inc.id === incidentId ? updatedIncident : inc));
+          }
+          if (old.data && Array.isArray(old.data)) {
+            return {
+              ...old,
+              data: old.data.map((inc: any) => (inc.id === incidentId ? updatedIncident : inc)),
+            };
+          }
+          return old;
+        });
+      }
+      // Append event locally to avoid GET /api/incidents/:id/events/ refetch
+      const reopenEvent: IncidentEvent = {
+        id: Date.now(),
+        event_type: "REOPENED",
+        actor: (user as any)?.pk || user?.id || null,
+        actor_name: (user as any)?.first_name ? `${(user as any).first_name} ${(user as any).last_name || ""}`.trim() : user?.email || "System",
+        event_time: new Date().toISOString(),
+        metadata: { reopened_by_name: user?.email },
+      };
+      queryClient.setQueryData(["incident-events", incidentId], (old: any) =>
+        Array.isArray(old) ? [...old, reopenEvent] : [reopenEvent]
+      );
     },
   });
 
@@ -423,13 +497,24 @@ export default function IncidentDetailsPage() {
       }
       toastError("Assignment Failed", err);
     },
-    onSuccess: () => {
+    onSuccess: (updatedIncident: any) => {
       toastSuccess("Incident Assignee Updated");
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["incident", incidentId] });
-      queryClient.invalidateQueries({ queryKey: ["incident-events", incidentId] });
-      queryClient.invalidateQueries({ queryKey: ["incidents"] });
+      if (updatedIncident) {
+        queryClient.setQueryData(["incident", incidentId], updatedIncident);
+        queryClient.setQueriesData({ queryKey: ["incidents"] }, (old: any) => {
+          if (!old) return old;
+          if (Array.isArray(old)) {
+            return old.map((inc: any) => (inc.id === incidentId ? updatedIncident : inc));
+          }
+          if (old.data && Array.isArray(old.data)) {
+            return {
+              ...old,
+              data: old.data.map((inc: any) => (inc.id === incidentId ? updatedIncident : inc)),
+            };
+          }
+          return old;
+        });
+      }
     },
   });
 
