@@ -1,6 +1,7 @@
 import asyncio
 import logging
-import time
+import os
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
@@ -16,6 +17,40 @@ logger = logging.getLogger(__name__)
 _REALTIME_THREAD_POOL = ThreadPoolExecutor(
     max_workers=8, thread_name_prefix="bjt_realtime_publisher"
 )
+
+# Persistent background event loop for preserving channels_redis TLS/TCP connection pools
+_LOOP: asyncio.AbstractEventLoop | None = None
+_LOOP_THREAD: threading.Thread | None = None
+_LOOP_PID: int | None = None
+_LOOP_LOCK = threading.Lock()
+
+
+def _run_event_loop(loop: asyncio.AbstractEventLoop) -> None:
+    asyncio.set_event_loop(loop)
+    loop.run_forever()
+
+
+def _get_or_create_event_loop() -> asyncio.AbstractEventLoop:
+    global _LOOP, _LOOP_THREAD, _LOOP_PID
+    current_pid = os.getpid()
+    with _LOOP_LOCK:
+        if (
+            current_pid != _LOOP_PID
+            or _LOOP is None
+            or _LOOP.is_closed()
+            or _LOOP_THREAD is None
+            or not _LOOP_THREAD.is_alive()
+        ):
+            _LOOP_PID = current_pid
+            _LOOP = asyncio.new_event_loop()
+            _LOOP_THREAD = threading.Thread(
+                target=_run_event_loop,
+                args=(_LOOP,),
+                name=f"bjt_realtime_loop_{current_pid}",
+                daemon=True,
+            )
+            _LOOP_THREAD.start()
+        return _LOOP
 
 
 # ---------------------------------------------------------------------------
@@ -57,13 +92,11 @@ def _build_message(
 def _send_realtime_direct(message: dict[str, Any], groups: list[str]) -> None:
     """
     Directly publish channel-layer message to Redis channel groups concurrently.
-    Uses asyncio.gather so all groups are fanned-out in parallel, reducing total
-    latency from sum-of-groups to max-of-groups (typically ~100–200ms instead of
-    1–2s per user on Neon/Redis).
+    Uses a persistent background asyncio event loop to preserve channels_redis
+    connection pools and avoid TLS handshake overhead (~700ms -> <10ms).
     Executed in a background thread — never blocks HTTP response threads.
     """
 
-    start_realtime = time.perf_counter()
     try:
         channel_layer = get_channel_layer()
         if not channel_layer:
@@ -75,17 +108,9 @@ def _send_realtime_direct(message: dict[str, Any], groups: list[str]) -> None:
                 return_exceptions=True,
             )
 
-        asyncio.run(_send_all())
-
-        duration_ms = (time.perf_counter() - start_realtime) * 1000
-        payload = message.get("payload", {})
-        event_type = payload.get("type") if isinstance(payload, dict) else None
-        logger.info(
-            "TIMING realtime_publish_ms=%.2fms event_type=%s groups=%s",
-            duration_ms,
-            event_type,
-            groups,
-        )
+        loop = _get_or_create_event_loop()
+        future = asyncio.run_coroutine_threadsafe(_send_all(), loop)
+        future.result(timeout=5.0)
     except Exception as exc:
         # Redis/WebSocket failures must never propagate to business operations or task failure.
         logger.warning("Failed to publish realtime event: %s", exc)

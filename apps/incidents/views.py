@@ -1,5 +1,4 @@
 import logging
-import time
 
 from django.core.cache import cache
 from rest_framework import status, viewsets
@@ -95,22 +94,6 @@ class IncidentViewSet(BaseViewSetConfig, CustomResponseMixin, viewsets.ReadOnlyM
             .distinct()
         )
 
-    def finalize_response(self, request, response, *args, **kwargs):
-        django_req = getattr(request, "_request", request)
-        if hasattr(django_req, "_resolve_perf"):
-            t_fin = time.perf_counter()
-            res = super().finalize_response(request, response, *args, **kwargs)
-            finalize_ms = (time.perf_counter() - t_fin) * 1000
-            django_req._resolve_perf["finalize_ms"] = finalize_ms
-
-            t_render = time.perf_counter()
-            res.render()
-            render_ms = (time.perf_counter() - t_render) * 1000
-            django_req._resolve_perf["render_ms"] = render_ms
-            return res
-
-        return super().finalize_response(request, response, *args, **kwargs)
-
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
@@ -149,18 +132,15 @@ class IncidentViewSet(BaseViewSetConfig, CustomResponseMixin, viewsets.ReadOnlyM
         in a single query. Called after service mutations so the serializer
         never hits the DB lazily for each FK field.
         """
-        return (
-            Incident.objects.select_related(
-                "project",
-                "job",
-                "alert_rule",
-                "assigned_to__user",
-                "assigned_by",
-                "acknowledged_by",
-                "resolved_by",
-            )
-            .get(pk=incident_id)
-        )
+        return Incident.objects.select_related(
+            "project",
+            "job",
+            "alert_rule",
+            "assigned_to__user",
+            "assigned_by",
+            "acknowledged_by",
+            "resolved_by",
+        ).get(pk=incident_id)
 
     @action(detail=True, methods=["post"])
     def assign(self, request, pk=None):
@@ -222,60 +202,12 @@ class IncidentViewSet(BaseViewSetConfig, CustomResponseMixin, viewsets.ReadOnlyM
             - Records resolved_by and resolved_at.
             - Logs a MANUALLY_RESOLVED event in timeline.
         """
-        start_action = time.perf_counter()
-        t_access = time.perf_counter()
         incident_id = self._check_incident_accessible(pk)
-        check_access_ms = (time.perf_counter() - t_access) * 1000
 
         try:
-            t_svc = time.perf_counter()
-            incident = resolve_incident(incident_id, request.user)
-            service_total_ms = (time.perf_counter() - t_svc) * 1000
-
-            svc_timings = getattr(incident, "_resolve_timings", {})
-            select_for_update_ms = svc_timings.get("select_for_update_ms", 0.0)
-            update_ms = svc_timings.get("update_ms", 0.0)
-            event_insert_ms = svc_timings.get("event_insert_ms", 0.0)
-            commit_on_commit_ms = svc_timings.get("commit_on_commit_ms", 0.0)
-
-            t_fetch = time.perf_counter()
-            incident_fetched = self._fetch_incident_for_response(incident_id)
-            response_fetch_ms = (time.perf_counter() - t_fetch) * 1000
-
-            t_ser = time.perf_counter()
-            data = IncidentSerializer(incident_fetched).data
-            serializer_ms = (time.perf_counter() - t_ser) * 1000
-
-            t_resp = time.perf_counter()
-            response = Response(data)
-            response_create_ms = (time.perf_counter() - t_resp) * 1000
-
-            total_duration_ms = (time.perf_counter() - start_action) * 1000
-
-            django_req = getattr(request, "_request", request)
-            django_req._resolve_perf = {
-                "check_access_ms": check_access_ms,
-                "service_total_ms": service_total_ms,
-                "select_for_update_ms": select_for_update_ms,
-                "update_ms": update_ms,
-                "event_insert_ms": event_insert_ms,
-                "commit_on_commit_ms": commit_on_commit_ms,
-                "response_fetch_ms": response_fetch_ms,
-                "serializer_ms": serializer_ms,
-                "response_create_ms": response_create_ms,
-                "action_total_ms": total_duration_ms,
-            }
-
-            logger.info(
-                "TIMING incident_resolve_action_total_ms=%.2fms check_access_ms=%.2fms svc_ms=%.2fms response_fetch_ms=%.2fms ser_ms=%.2fms incident_id=%s",
-                total_duration_ms,
-                check_access_ms,
-                service_total_ms,
-                response_fetch_ms,
-                serializer_ms,
-                incident_id,
-            )
-            return response
+            resolve_incident(incident_id, request.user)
+            incident = self._fetch_incident_for_response(incident_id)
+            return Response(IncidentSerializer(incident).data)
         except ValueError as e:
             return Response(
                 {"error": str(e), "message": str(e)}, status=status.HTTP_400_BAD_REQUEST
@@ -291,28 +223,12 @@ class IncidentViewSet(BaseViewSetConfig, CustomResponseMixin, viewsets.ReadOnlyM
             - Clears resolution metadata.
             - Logs a REOPENED event in timeline.
         """
-        start_action = time.perf_counter()
         incident_id = self._check_incident_accessible(pk)
 
         try:
-            start_svc = time.perf_counter()
             reopen_incident(incident_id, request.user)
-            svc_duration_ms = (time.perf_counter() - start_svc) * 1000
-
-            start_ser = time.perf_counter()
             incident = self._fetch_incident_for_response(incident_id)
-            data = IncidentSerializer(incident).data
-            ser_duration_ms = (time.perf_counter() - start_ser) * 1000
-
-            total_duration_ms = (time.perf_counter() - start_action) * 1000
-            logger.info(
-                "TIMING incident_reopen_action_total_ms=%.2fms svc_ms=%.2fms ser_ms=%.2fms incident_id=%s",
-                total_duration_ms,
-                svc_duration_ms,
-                ser_duration_ms,
-                incident_id,
-            )
-            return Response(data)
+            return Response(IncidentSerializer(incident).data)
         except ValueError as e:
             return Response(
                 {"error": str(e), "message": str(e)}, status=status.HTTP_400_BAD_REQUEST

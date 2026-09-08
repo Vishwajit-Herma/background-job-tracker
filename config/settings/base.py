@@ -94,7 +94,7 @@ MIDDLEWARE = [
     "waffle.middleware.WaffleMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    "apps.core.middleware.RequestTimingMiddleware",
+    # "apps.core.middleware.RequestTimingMiddleware",
     "django_prometheus.middleware.PrometheusAfterMiddleware",
 ]
 

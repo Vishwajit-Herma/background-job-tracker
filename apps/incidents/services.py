@@ -1,5 +1,4 @@
 import logging
-import time
 
 from django.conf import settings
 from django.core.cache import cache
@@ -246,11 +245,8 @@ def resolve_incident(incident_id, actor):
     """
     Manually resolves an incident.
     """
-    start_svc = time.perf_counter()
     with transaction.atomic():
-        t0 = time.perf_counter()
         incident = Incident.objects.select_for_update().get(id=incident_id)
-        select_for_update_ms = (time.perf_counter() - t0) * 1000
 
         if incident.status == Incident.Status.RESOLVED:
             raise ValueError("Incident is already resolved.")
@@ -262,14 +258,11 @@ def resolve_incident(incident_id, actor):
         incident.resolved_at = timezone.now()
         incident.resolution_type = Incident.ResolutionType.MANUAL
 
-        t1 = time.perf_counter()
         incident.save(
             update_fields=["status", "resolved_by", "resolved_at", "resolution_type", "updated_at"]
         )
-        update_ms = (time.perf_counter() - t1) * 1000
 
         actor_name = (actor.get_full_name() or actor.email) if actor else "System"
-        t2 = time.perf_counter()
         _log_incident_event(
             incident,
             IncidentEvent.EventType.MANUALLY_RESOLVED,
@@ -281,34 +274,9 @@ def resolve_incident(incident_id, actor):
                 "previous_status": previous_status,
             },
         )
-        event_insert_ms = (time.perf_counter() - t2) * 1000
-
         transaction.on_commit(
             lambda: _async_task_delay(calculate_incident_intelligence_task, incident.id)
         )
-        t_before_commit = time.perf_counter()
-
-    t_after_commit = time.perf_counter()
-    commit_on_commit_ms = (t_after_commit - t_before_commit) * 1000
-    service_total_ms = (t_after_commit - start_svc) * 1000
-
-    incident._resolve_timings = {
-        "service_total_ms": service_total_ms,
-        "select_for_update_ms": select_for_update_ms,
-        "update_ms": update_ms,
-        "event_insert_ms": event_insert_ms,
-        "commit_on_commit_ms": commit_on_commit_ms,
-    }
-
-    logger.info(
-        "TIMING incident_resolve_db_tx_ms=%.2fms select_for_update_ms=%.2fms update_ms=%.2fms event_insert_ms=%.2fms commit_on_commit_ms=%.2fms incident_id=%s",
-        service_total_ms,
-        select_for_update_ms,
-        update_ms,
-        event_insert_ms,
-        commit_on_commit_ms,
-        incident_id,
-    )
     return incident
 
 
@@ -316,7 +284,6 @@ def reopen_incident(incident_id, actor):
     """
     Reopens a resolved incident.
     """
-    start_db = time.perf_counter()
     with transaction.atomic():
         incident = Incident.objects.select_for_update().get(id=incident_id)
 
@@ -353,12 +320,6 @@ def reopen_incident(incident_id, actor):
         )
         transaction.on_commit(
             lambda: _async_task_delay(calculate_incident_intelligence_task, incident.id)
-        )
-        db_duration_ms = (time.perf_counter() - start_db) * 1000
-        logger.info(
-            "TIMING incident_reopen_db_tx_ms=%.2fms incident_id=%s",
-            db_duration_ms,
-            incident_id,
         )
         return incident
 
