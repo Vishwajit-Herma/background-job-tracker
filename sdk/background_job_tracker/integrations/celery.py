@@ -45,7 +45,21 @@ class CeleryIntegration:
         self.app = app
         self.tracker = tracker
         self._connected = False
+        self._synced_tasks = None
         self.connect_signals()
+        self._sync_tasks_if_needed()
+
+    def _sync_tasks_if_needed(self):
+        """Sync tasks with tracker if tasks are available and have changed."""
+        try:
+            tasks = self._get_filtered_tasks()
+            if tasks and set(tasks) != self._synced_tasks:
+                self.tracker.sync_tasks(tasks)
+                self._synced_tasks = set(tasks)
+                if hasattr(self.tracker, "set_task_provider"):
+                    self.tracker.set_task_provider(self._get_filtered_tasks)
+        except Exception as e:
+            logger.debug(f"Task sync skipped: {e}")
 
     def connect_signals(self):
         """
@@ -393,14 +407,10 @@ class CeleryIntegration:
     def on_worker_ready(self, sender=None, **kwargs):
         """
         Celery signal handler that fires once the worker is fully initialized.
-        Initiates the first batch of task discovery and registers the periodic sync callback.
+        Initiates task discovery sync if tasks have changed.
         """
         try:
             if self.app:
-                tasks = self._get_filtered_tasks()
-                self.tracker.sync_tasks(tasks)
-
-                if hasattr(self.tracker, "set_task_provider"):
-                    self.tracker.set_task_provider(self._get_filtered_tasks)
+                self._sync_tasks_if_needed()
         except Exception as e:
             logger.error(f"Error in Celery on_worker_ready telemetry: {e}")

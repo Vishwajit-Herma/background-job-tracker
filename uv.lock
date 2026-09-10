@@ -201,6 +201,7 @@ name = "background-job-tracker"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "background-job-tracker-sdk" },
     { name = "celery", extra = ["redis"] },
     { name = "channels" },
     { name = "channels-redis" },
@@ -265,6 +266,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "background-job-tracker-sdk", editable = "sdk" },
     { name = "celery", extras = ["redis"], specifier = ">=5.4.0" },
     { name = "channels", specifier = ">=4.3.2" },
     { name = "channels-redis", specifier = ">=4.3.0" },
@@ -322,6 +324,21 @@ dev = [
     { name = "pytest-django", specifier = ">=4.14.0" },
     { name = "pytest-timeout", specifier = ">=2.4.0" },
     { name = "rq", specifier = ">=2.12.0" },
+]
+
+[[package]]
+name = "background-job-tracker-sdk"
+version = "0.1.0"
+source = { editable = "sdk" }
+dependencies = [
+    { name = "celery" },
+    { name = "requests" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "celery", specifier = ">=5.4" },
+    { name = "requests", specifier = ">=2.31" },
 ]
 
 [[package]]

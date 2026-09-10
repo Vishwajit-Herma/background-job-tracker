@@ -17,6 +17,7 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 # 1. Dependency files first for Docker layer caching
 COPY pyproject.toml uv.lock README.md ./
+COPY sdk ./sdk
 
 # Install dependencies into .venv (excluding root project package to cache dependencies)
 RUN uv sync --frozen --no-dev --no-install-project

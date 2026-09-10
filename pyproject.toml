@@ -37,7 +37,11 @@ dependencies = [
     "channels>=4.3.2",
     "channels-redis>=4.3.0",
     "uvicorn[standard]>=0.52.4",
+    "background-job-tracker-sdk",
 ]
+
+[tool.uv.sources]
+background-job-tracker-sdk = { path = "./sdk", editable = true }
 
 [project.optional-dependencies]
 dev = [
