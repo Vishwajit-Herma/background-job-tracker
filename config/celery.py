@@ -38,4 +38,3 @@ if bjt_api_key:
 def debug_task(self):
     """Debug task to test Celery is working."""
     print(f"Request: {self.request!r}")
-

@@ -752,7 +752,7 @@ export default function IncidentDetailsPage() {
                 <div>
                   <p className="text-xs text-muted-foreground font-medium uppercase mb-1">Metric</p>
                   <p className="text-sm font-medium">
-                    {tm.metric_type ? tm.metric_type.replace("_", " ") : "Unknown"}
+                    {(tm.metric_type || tm.condition_type || alertRule?.metric || "Unknown").replace(/_/g, " ")}
                   </p>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
@@ -765,6 +765,10 @@ export default function IncidentDetailsPage() {
                         ? tm.metric_value
                         : tm.actual_value !== undefined
                         ? tm.actual_value
+                        : tm.overdue_by_seconds !== undefined
+                        ? `${tm.overdue_by_seconds}s`
+                        : tm.runtime_seconds !== undefined
+                        ? `${tm.runtime_seconds}s`
                         : "–"}
                     </p>
                   </div>
@@ -772,7 +776,13 @@ export default function IncidentDetailsPage() {
                     <p className="text-xs text-muted-foreground font-medium uppercase mb-1">
                       Threshold
                     </p>
-                    <p className="text-xl font-mono">{tm.threshold !== undefined ? tm.threshold : "–"}</p>
+                    <p className="text-xl font-mono">
+                      {tm.threshold !== undefined
+                        ? tm.threshold
+                        : alertRule?.threshold !== undefined
+                        ? alertRule.threshold
+                        : "–"}
+                    </p>
                   </div>
                 </div>
                 <div>

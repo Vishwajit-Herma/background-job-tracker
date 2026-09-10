@@ -888,7 +888,7 @@ function ProjectRow({
         <div className="px-5 pb-5">
           {canManage ? (
             <div className="border-t mt-4 pt-4">
-              <div className="flex gap-2 border-b overflow-x-auto pb-1 mb-4 hide-scrollbar">
+              <div className="flex gap-2 border-b overflow-x-auto mb-4 hide-scrollbar [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 {navItems.map((item) => {
                   if (item.href) {
                     return (
@@ -905,7 +905,7 @@ function ProjectRow({
                     <button
                       key={item.id}
                       onClick={() => setActiveTab(item.id as any)}
-                      className={`px-3 py-1.5 text-sm font-medium transition-colors border-b-2 -mb-[5px] flex items-center gap-1.5 whitespace-nowrap ${
+                      className={`px-3 py-1.5 text-sm font-medium transition-colors border-b-2 -mb-px flex items-center gap-1.5 whitespace-nowrap ${
                         activeTab === item.id
                           ? "border-primary text-foreground"
                           : "border-transparent text-muted-foreground hover:text-foreground"

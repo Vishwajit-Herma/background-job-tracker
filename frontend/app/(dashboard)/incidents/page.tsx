@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getIncidents } from "@/lib/api/incidents";
 import { getProjects, Project } from "@/lib/api/projects";
 import { getJobs, Job } from "@/lib/api/jobs";
+import { getAlertRules, AlertRule } from "@/lib/api/alerts";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, AlertTriangle, ChevronRight, Activity, CalendarClock } from "lucide-react";
@@ -21,9 +22,11 @@ export default function IncidentsPage() {
 
   const { data: projects = [] } = useQuery<Project[]>({ queryKey: ["projects"], queryFn: () => getProjects() });
   const { data: jobs = [] } = useQuery({ queryKey: ["jobs"], queryFn: () => getJobs() });
+  const { data: alertRules = [] } = useQuery<AlertRule[]>({ queryKey: ["alertRules"], queryFn: () => getAlertRules() });
 
   const projectMap = new Map<number, Project>(projects.map(p => [p.id, p]));
   const jobMap = new Map<number, Job>(jobs.map(j => [j.id, j]));
+  const alertRuleMap = new Map<number, AlertRule>(alertRules.map(r => [r.id, r]));
 
   const [search, setSearch] = useState("");
   const [ordering, setOrdering] = useState("-created_at");
@@ -239,14 +242,35 @@ export default function IncidentsPage() {
                     </TableCell>
                     <TableCell>
                       <Link href={`/incidents/${incident.id}`} className="block max-w-[200px]">
-                        {tm.metric_type ? (
-                          <div className="text-xs text-muted-foreground flex flex-col gap-0.5">
-                            <span className="font-medium text-foreground">{tm.metric_type.replace("_", " ")}</span>
-                            <span>Actual: {tm.metric_value !== undefined ? tm.metric_value : (tm.actual_value !== undefined ? tm.actual_value : "-")} (Threshold: {tm.threshold})</span>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-muted-foreground italic">Rule triggered</span>
-                        )}
+                        {(() => {
+                          const rule = incident.alert_rule ? alertRuleMap.get(incident.alert_rule) : null;
+                          const metricType = tm.metric_type || tm.condition_type || rule?.metric;
+                          const actualVal =
+                            tm.metric_value !== undefined
+                              ? tm.metric_value
+                              : tm.actual_value !== undefined
+                              ? tm.actual_value
+                              : tm.overdue_by_seconds !== undefined
+                              ? `${tm.overdue_by_seconds}s`
+                              : tm.runtime_seconds !== undefined
+                              ? `${tm.runtime_seconds}s`
+                              : undefined;
+                          const thresholdVal = tm.threshold !== undefined ? tm.threshold : rule?.threshold;
+
+                          if (metricType) {
+                            return (
+                              <div className="text-xs text-muted-foreground flex flex-col gap-0.5">
+                                <span className="font-medium text-foreground">{metricType.replace(/_/g, " ")}</span>
+                                <span>
+                                  {actualVal !== undefined ? `Actual: ${actualVal}` : "Triggered"}
+                                  {thresholdVal !== undefined ? ` (Threshold: ${thresholdVal})` : ""}
+                                </span>
+                              </div>
+                            );
+                          }
+
+                          return <span className="text-xs text-muted-foreground italic">Rule triggered</span>;
+                        })()}
                       </Link>
                     </TableCell>
                     <TableCell>

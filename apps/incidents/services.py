@@ -343,7 +343,13 @@ def auto_resolve_incident(incident_id, recovery_metadata=None):
 
         update_fields = ["status", "resolved_by", "resolved_at", "resolution_type", "updated_at"]
         if recovery_metadata:
-            incident.trigger_metadata = recovery_metadata
+            existing_meta = incident.trigger_metadata or {}
+            merged_meta = dict(existing_meta)
+            merged_meta["recovery"] = recovery_metadata
+            for k, v in recovery_metadata.items():
+                if k not in merged_meta or merged_meta[k] is None:
+                    merged_meta[k] = v
+            incident.trigger_metadata = merged_meta
             update_fields.append("trigger_metadata")
 
         incident.save(update_fields=update_fields)
