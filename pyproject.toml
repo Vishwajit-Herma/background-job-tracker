@@ -1,5 +1,5 @@
 [project]
-name = "background_job_tracker"
+name = "background-job-tracker-server"
 version = "0.1.0"
 description = "A Django Project to track Background jobs."
 authors = [
@@ -37,11 +37,11 @@ dependencies = [
     "channels>=4.3.2",
     "channels-redis>=4.3.0",
     "uvicorn[standard]>=0.52.4",
-    "background-job-tracker-sdk",
+    "background-job-tracker",
 ]
 
 [tool.uv.sources]
-background-job-tracker-sdk = { path = "./sdk", editable = true }
+background-job-tracker = { path = "./sdk", editable = true }
 
 [project.optional-dependencies]
 dev = [

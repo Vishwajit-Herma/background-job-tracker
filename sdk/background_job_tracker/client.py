@@ -24,6 +24,8 @@ class Tracker:
     share the same background thread or queue instance.
     """
 
+    _instance = None
+
     def __init__(
         self,
         api_key=None,
@@ -37,8 +39,10 @@ class Tracker:
         Initialize the Tracker.
 
         Args:
-            api_key (str, optional): Project API Key for authentication. Defaults to env var `BACKGROUND_JOB_TRACKER_API_KEY`.
-            base_url (str, optional): Base URL of the SaaS platform. Defaults to env var `BACKGROUND_JOB_TRACKER_BASE_URL` or localhost.
+            api_key (str, optional): Project API Key for authentication.
+                Defaults to env var `BACKGROUND_JOB_TRACKER_API_KEY` or `BJT_SDK_API_KEY`.
+            base_url (str, optional): Base URL of the SaaS platform.
+                Defaults to env var `BACKGROUND_JOB_TRACKER_BASE_URL` or localhost.
             batch_size (int, optional): Maximum number of events to send in a single HTTP batch.
             flush_interval (float, optional): Maximum time in seconds to wait before flushing an incomplete batch.
             max_queue_size (int, optional): Maximum local queue size. Once full, new events are safely dropped.
@@ -46,9 +50,16 @@ class Tracker:
         """
         self._lock = threading.Lock()
 
-        self._api_key = api_key or os.environ.get("BACKGROUND_JOB_TRACKER_API_KEY")
+        self._api_key = (
+            api_key
+            or os.environ.get("BACKGROUND_JOB_TRACKER_API_KEY")
+            or os.environ.get("BJT_SDK_API_KEY")
+        )
         if not self._api_key:
-            raise ValueError("Background Job Tracker SDK requires a valid API key.")
+            raise ValueError(
+                "Background Job Tracker SDK requires a valid API key. "
+                "Provide it via Tracker(api_key='...') or set the BACKGROUND_JOB_TRACKER_API_KEY environment variable."
+            )
 
         self._base_url = (os.environ.get("BACKGROUND_JOB_TRACKER_BASE_URL") or base_url).rstrip("/")
         self.batch_size = batch_size
@@ -59,8 +70,25 @@ class Tracker:
         self._initialized = True
         self._pid = None
 
+        Tracker._instance = self
+
         # Ensure the queue and sender thread are initialized
         self._ensure_fork_safe()
+
+    @classmethod
+    def get_instance(cls):
+        """
+        Return the global default Tracker instance, or create one from environment variables if available.
+        """
+        if cls._instance is not None:
+            return cls._instance
+        api_key = os.environ.get("BACKGROUND_JOB_TRACKER_API_KEY") or os.environ.get(
+            "BJT_SDK_API_KEY"
+        )
+        if api_key:
+            cls._instance = cls(api_key=api_key)
+            return cls._instance
+        return None
 
     def set_task_provider(self, provider_func):
         """

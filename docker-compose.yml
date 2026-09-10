@@ -30,6 +30,7 @@ services:
       - EMAIL_PORT=1025
 
       - UV_NO_CACHE=1
+      - DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0,web
 
 
     env_file:
@@ -92,6 +93,7 @@ services:
       - EMAIL_PORT=1025
 
       - UV_NO_CACHE=1
+      - BACKGROUND_JOB_TRACKER_BASE_URL=http://web:8000
 
     env_file:
       - path: .env
@@ -122,6 +124,7 @@ services:
       - EMAIL_PORT=1025
 
       - UV_NO_CACHE=1
+      - BACKGROUND_JOB_TRACKER_BASE_URL=http://web:8000
 
     env_file:
       - path: .env

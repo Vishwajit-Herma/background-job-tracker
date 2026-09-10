@@ -13,15 +13,23 @@ import time
 import uuid
 from datetime import UTC, datetime
 
-from celery.signals import (
-    task_failure,
-    task_postrun,
-    task_prerun,
-    task_retry,
-    task_revoked,
-    task_success,
-    worker_ready,
-)
+try:
+    from celery.signals import (
+        task_failure,
+        task_postrun,
+        task_prerun,
+        task_retry,
+        task_revoked,
+        task_success,
+        worker_ready,
+    )
+
+    CELERY_AVAILABLE = True
+except ImportError:  # pragma: no cover
+    task_failure = task_postrun = task_prerun = task_retry = task_revoked = task_success = (
+        worker_ready
+    ) = None
+    CELERY_AVAILABLE = False
 
 logger = logging.getLogger("background_job_tracker.celery")
 
@@ -34,14 +42,31 @@ class CeleryIntegration:
     and registers signal handlers for the task execution lifecycle.
     """
 
-    def __init__(self, app, tracker):
+    def __init__(self, app, tracker=None):
         """
         Initialize the Celery integration.
 
         Args:
             app (celery.Celery): The Celery application instance.
-            tracker (Tracker): The Background Job Tracker client instance.
+            tracker (Tracker, optional): The Background Job Tracker client instance.
+                If None, uses `Tracker.get_instance()`.
         """
+        if not CELERY_AVAILABLE:
+            raise ImportError(
+                "Celery is required to use CeleryIntegration. "
+                "Install it with: pip install 'background-job-tracker[celery]'"
+            )
+
+        if tracker is None:
+            from ..client import Tracker
+
+            tracker = Tracker.get_instance()
+            if tracker is None:
+                raise ValueError(
+                    "No Tracker instance provided and none could be inferred from environment. "
+                    "Initialize a Tracker instance or set BACKGROUND_JOB_TRACKER_API_KEY."
+                )
+
         self.app = app
         self.tracker = tracker
         self._connected = False
