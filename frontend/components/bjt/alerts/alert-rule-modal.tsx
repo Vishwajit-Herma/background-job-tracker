@@ -278,7 +278,7 @@ export function AlertRuleModal({ open, onOpenChange, ruleToEdit }: AlertRuleModa
       const payload = {
         ...values,
         threshold: metricInfo.isAnomaly ? 0 : Number(values.threshold) || 0,
-        window_minutes: metricInfo.isAnomaly ? 60 : Number(values.window_minutes) || 60,
+        window_minutes: (metricInfo.isAnomaly || metricInfo.isSla) ? 60 : Number(values.window_minutes) || 60,
         job: values.job ? Number(values.job) : null,
       };
 
@@ -481,28 +481,97 @@ export function AlertRuleModal({ open, onOpenChange, ruleToEdit }: AlertRuleModa
           </div>
 
           {metricInfo.isAnomaly ? (
-            <div className="rounded-lg border border-purple-500/20 bg-purple-500/5 p-3 text-xs space-y-1">
+            <div className="rounded-lg border border-purple-500/20 bg-purple-500/5 p-3.5 text-xs space-y-2">
               <div className="flex items-center gap-1.5 font-semibold text-purple-900 dark:text-purple-300">
-                <Sparkles className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
+                <Sparkles className="h-4 w-4 text-purple-600 dark:text-purple-400" />
                 Adaptive Baseline Auto-Tuning Active
               </div>
               <p className="text-muted-foreground text-[11px] leading-relaxed">
-                This rule uses your job's <strong>7-day statistical baseline</strong>. No manual threshold configuration is needed.
+                This rule uses your job's <strong>7-day statistical baseline</strong>. Incident triggers are computed automatically based on historical median intervals and rates. No manual threshold configuration is required.
               </p>
+              <div className="flex items-center gap-2 pt-1">
+                <Badge variant="outline" className="text-[10px] bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/20">
+                  Dynamic Threshold
+                </Badge>
+                <Badge variant="outline" className="text-[10px] bg-muted text-muted-foreground">
+                  60m Sliding Window
+                </Badge>
+              </div>
+            </div>
+          ) : metricInfo.isSla ? (
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="threshold">
+                  {selectedMetric === "MISSED_EXECUTION"
+                    ? "Extra Grace Buffer (seconds, optional)"
+                    : selectedMetric === "STALLED_EXECUTION"
+                    ? "Extra Runtime Buffer (seconds, optional)"
+                    : "Extra Queue Delay Buffer (seconds, optional)"}
+                </Label>
+                <Input
+                  id="threshold"
+                  type="number"
+                  step="1"
+                  min="0"
+                  placeholder="0"
+                  {...register("threshold", { valueAsNumber: true })}
+                />
+                {errors.threshold && <p className="text-xs text-destructive">{errors.threshold.message}</p>}
+                <p className="text-[11px] text-muted-foreground">
+                  {selectedMetric === "MISSED_EXECUTION"
+                    ? "Additional grace time beyond the expected schedule interval and job grace period before triggering an incident (default: 0s)."
+                    : selectedMetric === "STALLED_EXECUTION"
+                    ? "Additional time allowed beyond the job's max runtime limit before flagging an execution as stalled (default: 0s)."
+                    : "Additional time allowed beyond the job's max queue delay before flagging an execution as overdue (default: 0s)."}
+                </p>
+              </div>
+              <div className="rounded-md border bg-muted/20 p-2.5 text-[11px] text-muted-foreground flex items-center gap-2">
+                <Clock className="h-3.5 w-3.5 text-orange-500 shrink-0" />
+                <span>
+                  Cadence and task execution states are evaluated continuously in real-time. No rolling window configuration is needed.
+                </span>
+              </div>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label htmlFor="threshold">
-                  {metricInfo.isSla ? "Extra Grace Buffer (seconds, optional)" : "Threshold"}
+                  {selectedMetric === "P95_DURATION"
+                    ? "P95 Duration Threshold (ms)"
+                    : selectedMetric === "RETRY_RATE"
+                    ? "Retry Rate Threshold (%)"
+                    : "Failure Rate Threshold (%)"}
                 </Label>
-                <Input id="threshold" type="number" step="0.1" {...register("threshold", { valueAsNumber: true })} />
+                <Input
+                  id="threshold"
+                  type="number"
+                  step={selectedMetric === "P95_DURATION" ? "10" : "0.1"}
+                  min="0"
+                  max={selectedMetric === "P95_DURATION" ? undefined : 100}
+                  placeholder={selectedMetric === "P95_DURATION" ? "1000" : "10"}
+                  {...register("threshold", { valueAsNumber: true })}
+                />
                 {errors.threshold && <p className="text-xs text-destructive">{errors.threshold.message}</p>}
+                <p className="text-[11px] text-muted-foreground">
+                  {selectedMetric === "P95_DURATION"
+                    ? "Triggers when the 95th percentile execution runtime exceeds this limit in milliseconds."
+                    : `Triggers when ${selectedMetric === "RETRY_RATE" ? "retry" : "failure"} rate is at or above this percentage.`}
+                </p>
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="window_minutes">Rolling Window (Minutes)</Label>
-                <Input id="window_minutes" type="number" {...register("window_minutes", { valueAsNumber: true })} />
+                <Input
+                  id="window_minutes"
+                  type="number"
+                  min="1"
+                  max="1440"
+                  placeholder="60"
+                  {...register("window_minutes", { valueAsNumber: true })}
+                />
                 {errors.window_minutes && <p className="text-xs text-destructive">{errors.window_minutes.message}</p>}
+                <p className="text-[11px] text-muted-foreground">
+                  Evaluation time window (e.g., last 60 minutes).
+                </p>
               </div>
             </div>
           )}

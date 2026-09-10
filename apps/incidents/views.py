@@ -453,7 +453,7 @@ class IncidentViewSet(BaseViewSetConfig, CustomResponseMixin, viewsets.ReadOnlyM
         if request.method == "GET":
             postmortem = getattr(incident, "postmortem", None)
             if not postmortem:
-                return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+                return Response(None, status=status.HTTP_200_OK)
             return Response(IncidentPostmortemSerializer(postmortem).data)
 
         elif request.method == "POST":

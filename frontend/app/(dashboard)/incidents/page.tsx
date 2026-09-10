@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Search, User } from "lucide-react";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useAuth } from "@/hooks/use-auth";
+import { getTriggerSummary } from "@/lib/incident-trigger-utils";
 
 export default function IncidentsPage() {
   const [page, setPage] = useState(1);
@@ -241,35 +242,20 @@ export default function IncidentsPage() {
                       </Link>
                     </TableCell>
                     <TableCell>
-                      <Link href={`/incidents/${incident.id}`} className="block max-w-[200px]">
+                      <Link href={`/incidents/${incident.id}`} className="block max-w-[240px]">
                         {(() => {
                           const rule = incident.alert_rule ? alertRuleMap.get(incident.alert_rule) : null;
-                          const metricType = tm.metric_type || tm.condition_type || rule?.metric;
-                          const actualVal =
-                            tm.metric_value !== undefined
-                              ? tm.metric_value
-                              : tm.actual_value !== undefined
-                              ? tm.actual_value
-                              : tm.overdue_by_seconds !== undefined
-                              ? `${tm.overdue_by_seconds}s`
-                              : tm.runtime_seconds !== undefined
-                              ? `${tm.runtime_seconds}s`
-                              : undefined;
-                          const thresholdVal = tm.threshold !== undefined ? tm.threshold : rule?.threshold;
+                          const summary = getTriggerSummary(tm, rule);
 
-                          if (metricType) {
-                            return (
-                              <div className="text-xs text-muted-foreground flex flex-col gap-0.5">
-                                <span className="font-medium text-foreground">{metricType.replace(/_/g, " ")}</span>
-                                <span>
-                                  {actualVal !== undefined ? `Actual: ${actualVal}` : "Triggered"}
-                                  {thresholdVal !== undefined ? ` (Threshold: ${thresholdVal})` : ""}
-                                </span>
-                              </div>
-                            );
-                          }
-
-                          return <span className="text-xs text-muted-foreground italic">Rule triggered</span>;
+                          return (
+                            <div className="text-xs flex flex-col gap-0.5">
+                              <span className="font-semibold text-foreground truncate">{summary.title}</span>
+                              <span className="text-muted-foreground text-[11px] truncate">
+                                {summary.primaryValue}
+                                {summary.secondaryValue ? ` (${summary.secondaryValue})` : ""}
+                              </span>
+                            </div>
+                          );
                         })()}
                       </Link>
                     </TableCell>

@@ -442,9 +442,16 @@ export async function deactivateRunbook(id: number): Promise<Runbook> {
 
 // ─── Postmortem API ─────────────────────────────────────────────────
 
-export async function getPostmortem(incidentId: number): Promise<Postmortem> {
-  const res = await apiClient.get<any>(`/incidents/${incidentId}/postmortem/`);
-  return res.data?.data ?? res.data;
+export async function getPostmortem(incidentId: number): Promise<Postmortem | null> {
+  try {
+    const res = await apiClient.get<any>(`/incidents/${incidentId}/postmortem/`);
+    return res.data?.data ?? res.data ?? null;
+  } catch (err: any) {
+    if (err?.status === 404 || err?.response?.status === 404) {
+      return null;
+    }
+    throw err;
+  }
 }
 
 export async function savePostmortem(

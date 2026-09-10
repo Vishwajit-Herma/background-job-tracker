@@ -108,20 +108,39 @@ export default function AlertsPage() {
   };
 
   const formatCondition = (rule: AlertRule) => {
-    if (rule.metric.includes("ANOMALY")) {
-      return "Statistical anomaly vs baseline";
+    switch (rule.metric) {
+      case "MISSED_EXECUTION":
+        return rule.threshold > 0
+          ? `is missed (+${rule.threshold}s extra grace buffer)`
+          : "is missed (immediate deadline)";
+      case "STALLED_EXECUTION":
+        return rule.threshold > 0
+          ? `exceeds max allowed runtime (+${rule.threshold}s buffer)`
+          : "exceeds max allowed runtime";
+      case "OVERDUE_EXECUTION":
+        return rule.threshold > 0
+          ? `exceeds max allowed queue delay (+${rule.threshold}s buffer)`
+          : "exceeds max allowed queue delay";
+      case "FAILURE_RATE_ANOMALY":
+        return "surges ≥ 3× above 7-day historical baseline";
+      case "RETRY_RATE_ANOMALY":
+        return "surges ≥ 3× above 7-day historical baseline";
+      case "DURATION_ANOMALY":
+        return "slows ≥ 2.5× above 7-day historical baseline";
+      case "EXECUTION_VOLUME_ANOMALY":
+        return "surges (≥ 4×) or drops (≤ 0.2×) vs historical baseline";
+      case "FAILURE_RATE":
+      case "RETRY_RATE":
+        return `exceeds ${rule.threshold}% over ${rule.window_minutes}m window`;
+      case "P95_DURATION":
+        return `exceeds ${
+          rule.threshold >= 1000
+            ? `${(rule.threshold / 1000).toFixed(1)}s (${rule.threshold}ms)`
+            : `${rule.threshold}ms`
+        } over ${rule.window_minutes}m window`;
+      default:
+        return `exceeds threshold (${rule.threshold})`;
     }
-    if (
-      rule.metric === "MISSED_EXECUTION" ||
-      rule.metric === "STALLED_EXECUTION" ||
-      rule.metric === "OVERDUE_EXECUTION"
-    ) {
-      return rule.threshold > 0
-        ? `Overdue by >= ${rule.threshold}s`
-        : "On reliability finding violation";
-    }
-    const isRate = rule.metric.includes("RATE");
-    return `>= ${rule.threshold}${isRate ? "%" : "ms"} over ${rule.window_minutes}m`;
   };
 
   return (

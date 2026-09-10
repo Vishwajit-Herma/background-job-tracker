@@ -360,10 +360,7 @@ export function PostmortemSection({ incidentId, teamId, hasManagePermission = fa
   const { data: postmortem, isLoading } = useQuery({
     queryKey: ["postmortem", incidentId],
     queryFn: () => getPostmortem(incidentId),
-    retry: (count, err: any) => {
-      if (err?.response?.status === 404) return false;
-      return count < 2;
-    },
+    retry: false,
   });
 
   // Local draft form state (mirrors postmortem fields)

@@ -37,8 +37,10 @@ import {
   Play,
   XCircle,
   SkipForward,
+  Layers,
 } from "lucide-react";
 import Link from "next/link";
+import { IncidentTriggerDetails } from "@/components/bjt/incidents/incident-trigger-details";
 import {
   Dialog,
   DialogContent,
@@ -743,114 +745,107 @@ export default function IncidentDetailsPage() {
         {/* ── Overview ── */}
         <TabsContent value="overview">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Trigger Details */}
-            <div className="rounded-xl border bg-card p-5 shadow-sm">
-              <h3 className="font-semibold mb-4 flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-primary" /> Trigger Details
-              </h3>
+            {/* Left Column: Comprehensive Rule-Type Aware Trigger Details */}
+            <IncidentTriggerDetails
+              triggerMetadata={tm}
+              alertRule={alertRule}
+              ruleId={incident.alert_rule}
+              jobId={incident.job}
+            />
+
+            {/* Right Column: Impact Scope & Target Details */}
+            <div className="rounded-xl border bg-card p-5 shadow-sm space-y-5 flex flex-col justify-between">
               <div className="space-y-4">
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium uppercase mb-1">Metric</p>
-                  <p className="text-sm font-medium">
-                    {(tm.metric_type || tm.condition_type || alertRule?.metric || "Unknown").replace(/_/g, " ")}
-                  </p>
+                <div className="flex items-center justify-between border-b pb-3.5">
+                  <div className="flex items-center gap-2 font-semibold text-foreground text-base">
+                    <Layers className="h-4 w-4 text-primary" /> Target & Impact Scope
+                  </div>
+                  <Badge variant={job ? "outline" : "secondary"} className="text-xs px-2.5 py-0.5 font-medium">
+                    {job ? "Job-Specific Target" : "Project-Wide Alert"}
+                  </Badge>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+
+                <div className="space-y-3 text-xs">
                   <div>
-                    <p className="text-xs text-muted-foreground font-medium uppercase mb-1">
-                      Actual Value
+                    <p className="text-[10px] text-muted-foreground uppercase font-semibold tracking-wider">
+                      Monitored Project
                     </p>
-                    <p className="text-xl font-mono text-destructive">
-                      {tm.metric_value !== undefined
-                        ? tm.metric_value
-                        : tm.actual_value !== undefined
-                        ? tm.actual_value
-                        : tm.overdue_by_seconds !== undefined
-                        ? `${tm.overdue_by_seconds}s`
-                        : tm.runtime_seconds !== undefined
-                        ? `${tm.runtime_seconds}s`
-                        : "–"}
+                    <p className="text-sm font-semibold text-foreground mt-0.5">
+                      {projects.find((p) => p.id === incident.project)?.name || `Project #${incident.project}`}
                     </p>
                   </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground font-medium uppercase mb-1">
-                      Threshold
-                    </p>
-                    <p className="text-xl font-mono">
-                      {tm.threshold !== undefined
-                        ? tm.threshold
-                        : alertRule?.threshold !== undefined
-                        ? alertRule.threshold
-                        : "–"}
-                    </p>
-                  </div>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium uppercase mb-1">Alert Rule</p>
-                  {alertRule ? (
-                    <Link
-                      href="/alerts"
-                      className="text-sm font-medium text-primary hover:underline flex items-center gap-1.5 bg-primary/5 w-fit px-2 py-1 rounded-md border border-primary/20"
-                    >
-                      <Activity className="h-3.5 w-3.5" />
-                      {alertRule.metric.replace(/_/g, " ")}{" "}
-                      {alertRule.metric.includes("ANOMALY") ? "(Anomaly)" : `> ${alertRule.threshold}`}
-                    </Link>
+
+                  {job ? (
+                    <div>
+                      <p className="text-[10px] text-muted-foreground uppercase font-semibold tracking-wider">
+                        Monitored Background Job
+                      </p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-sm font-semibold text-foreground">{job.name}</span>
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] px-1.5 py-0 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 uppercase"
+                        >
+                          {job.status}
+                        </Badge>
+                      </div>
+                    </div>
                   ) : (
-                    <p className="text-sm font-mono bg-muted px-2 py-1 rounded inline-block">
-                      {incident.alert_rule || "–"}
-                    </p>
+                    <div>
+                      <p className="text-[10px] text-muted-foreground uppercase font-semibold tracking-wider">
+                        Target Scope
+                      </p>
+                      <p className="text-xs text-foreground mt-0.5">
+                        Project-level alert rule evaluated across all background tasks.
+                      </p>
+                    </div>
                   )}
+
+                  <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border/50">
+                    <div>
+                      <p className="text-[10px] text-muted-foreground uppercase font-semibold">Triggered At</p>
+                      <p className="text-xs font-medium text-foreground mt-0.5">
+                        {new Date(incident.created_at).toLocaleString()}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-muted-foreground uppercase font-semibold">Current State</p>
+                      <p className="text-xs font-medium text-foreground mt-0.5">
+                        {incident.status === "RESOLVED"
+                          ? incident.resolution_type === "AUTOMATIC"
+                            ? "Auto-resolved (Recovered)"
+                            : "Manually Resolved"
+                          : `${incident.status.toLowerCase()} incident`}
+                      </p>
+                    </div>
+                  </div>
                 </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="space-y-2 pt-3 border-t border-border/50">
+                {incident.job ? (
+                  <>
+                    <Link href={`/jobs/${incident.job}/reliability`} className="block">
+                      <Button size="sm" variant="default" className="w-full h-8 text-xs gap-1.5 shadow-xs">
+                        <ShieldCheck className="h-3.5 w-3.5" /> View Job Reliability Activity
+                      </Button>
+                    </Link>
+                    <Link href={`/executions?job=${incident.job}`} className="block">
+                      <Button size="sm" variant="outline" className="w-full h-8 text-xs gap-1.5 shadow-none">
+                        <Activity className="h-3.5 w-3.5" /> View Recent Job Executions
+                      </Button>
+                    </Link>
+                  </>
+                ) : (
+                  <Link href={`/analytics`} className="block">
+                    <Button size="sm" variant="outline" className="w-full h-8 text-xs gap-1.5 shadow-none">
+                      <Activity className="h-3.5 w-3.5" /> View Project Analytics
+                    </Button>
+                  </Link>
+                )}
               </div>
             </div>
-
-            {/* Reliability Finding */}
-            {(tm.reliability_finding_id ||
-              [
-                "MISSED_EXECUTION",
-                "STALLED_EXECUTION",
-                "OVERDUE_EXECUTION",
-                "FAILURE_RATE_ANOMALY",
-                "RETRY_RATE_ANOMALY",
-                "DURATION_ANOMALY",
-                "EXECUTION_VOLUME_ANOMALY",
-              ].includes(tm.metric_type || alertRule?.metric || "") ||
-              (alertRule?.metric && alertRule.metric.includes("ANOMALY"))) && (
-              <div className="rounded-xl border border-primary/20 bg-primary/5 p-5 shadow-sm space-y-3">
-                <h3 className="font-semibold flex items-center gap-2 text-primary">
-                  <ShieldCheck className="h-4 w-4" /> Reliability Finding
-                </h3>
-                <div className="space-y-2 text-xs">
-                  <div>
-                    <p className="text-muted-foreground uppercase font-medium text-[10px]">Condition</p>
-                    <p className="font-semibold text-foreground text-sm mt-0.5">
-                      {(
-                        tm.condition_type ||
-                        tm.metric_type ||
-                        alertRule?.metric ||
-                        "Reliability Violation"
-                      ).replace(/_/g, " ")}
-                    </p>
-                  </div>
-                  {job && (
-                    <div>
-                      <p className="text-muted-foreground uppercase font-medium text-[10px]">Job</p>
-                      <p className="font-semibold text-foreground text-sm mt-0.5">{job.name}</p>
-                    </div>
-                  )}
-                  {incident.job && (
-                    <div className="pt-2">
-                      <Link href={`/jobs/${incident.job}/reliability`}>
-                        <Button size="sm" variant="default" className="w-full h-8 text-xs gap-1.5">
-                          <ShieldCheck className="h-3.5 w-3.5" /> View Job Reliability
-                        </Button>
-                      </Link>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
 
 
             {/* Notes (compact in overview) */}
