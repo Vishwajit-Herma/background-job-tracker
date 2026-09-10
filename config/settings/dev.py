@@ -6,9 +6,16 @@ DEBUG = True
 
 INSTALLED_APPS = ["daphne"] + INSTALLED_APPS  # noqa: F405
 
+BREVO_API_KEY = env("BREVO_API_KEY", default="")  # noqa: F405
 RESEND_API_KEY = env("RESEND_API_KEY", default="")  # noqa: F405
 EMAIL_HOST = env("EMAIL_HOST", default="")  # noqa: F405
-if RESEND_API_KEY:
+
+if BREVO_API_KEY:
+    EMAIL_BACKEND = env("EMAIL_BACKEND", default="anymail.backends.brevo.EmailBackend")  # noqa: F405
+    ANYMAIL = {
+        "BREVO_API_KEY": BREVO_API_KEY,
+    }
+elif RESEND_API_KEY:
     EMAIL_BACKEND = env("EMAIL_BACKEND", default="anymail.backends.resend.EmailBackend")  # noqa: F405
     ANYMAIL = {
         "RESEND_API_KEY": RESEND_API_KEY,

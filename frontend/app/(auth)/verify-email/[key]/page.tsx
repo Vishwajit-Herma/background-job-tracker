@@ -37,8 +37,14 @@ export default function VerifyEmailPage() {
     hasVerified.current = true;
 
     verifyEmail(decodedKey)
-      .then(() => {
+      .then(async () => {
         setStatus("success");
+        // Clear auto-login session cookie so "Go to Login" takes user cleanly to /login
+        try {
+          await apiClient.post("/auth/logout/");
+        } catch {
+          // ignore
+        }
       })
       .catch(() => {
         setStatus("error");
