@@ -41,6 +41,7 @@ class IngestionViewSet(viewsets.ViewSet):
 
     authentication_classes = [ProjectAPIKeyAuthentication]
     permission_classes = [HasActiveProjectAPIKey]
+    throttle_classes = []  # Explicitly disable default AnonRateThrottle (100/hr) for M2M ingestion
 
     def create(self, request):
         """

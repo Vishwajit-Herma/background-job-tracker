@@ -69,6 +69,8 @@ export function BaselineCard({ jobId, baseline, canManage = true }: BaselineCard
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="1">1 day</SelectItem>
+                  <SelectItem value="3">3 days</SelectItem>
                   <SelectItem value="7">7 days</SelectItem>
                   <SelectItem value="14">14 days</SelectItem>
                   <SelectItem value="30">30 days</SelectItem>

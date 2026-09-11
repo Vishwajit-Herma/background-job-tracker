@@ -66,7 +66,10 @@ def anomaly_test_setup(db):
 @pytest.mark.django_db
 def test_baseline_metrics_use_same_sample_window(anomaly_test_setup):
     job = anomaly_test_setup["job"]
-    base_time = timezone.now() - timedelta(days=2)
+    now = timezone.now()
+    Job.objects.filter(id=job.id).update(created_at=now - timedelta(days=8))
+    job.refresh_from_db()
+    base_time = now - timedelta(days=2)
 
     # 10 executions in 7-day window: 8 success (100ms), 2 failed (20% failure), 1 retried (10% retry)
     for i in range(10):
@@ -92,6 +95,38 @@ def test_baseline_metrics_use_same_sample_window(anomaly_test_setup):
     # 10 executions over 7 days (168 hours) -> 10 / 168 = 0.06
     assert baseline.avg_hourly_volume == 0.06
     assert baseline.p95_runtime_ms == 100.0
+
+
+@pytest.mark.django_db
+def test_baseline_hourly_volume_adapts_to_new_job_age(anomaly_test_setup):
+    job = anomaly_test_setup["job"]
+    now = timezone.now()
+    job_created = now - timedelta(hours=4)
+    Job.objects.filter(id=job.id).update(created_at=job_created)
+    job.refresh_from_db()
+
+    # 100 executions over the past 4 hours
+    for i in range(100):
+        t = job_created + timedelta(minutes=2 * i)
+        if t >= now:
+            t = now - timedelta(seconds=10)
+        Execution.objects.create(
+            job=job,
+            external_id=f"exec-newjob-{i}",
+            status=Execution.Status.SUCCESS,
+            retry_count=0,
+            duration_ms=150,
+            started_at=t,
+            last_event_at=t,
+            created_at=t,
+        )
+
+    # Baseline requested over 7 days, but job was added 4 hours ago
+    baseline = calculate_job_baseline(job, sample_window_days=7)
+    assert baseline.is_sufficient is True
+    assert baseline.total_executions_analyzed == 100
+    # ~100 executions over ~4 hours -> ~25.0/hr (not diluted across 168 hours to 0.6)
+    assert 23.0 <= baseline.avg_hourly_volume <= 27.0
 
 
 @pytest.mark.django_db

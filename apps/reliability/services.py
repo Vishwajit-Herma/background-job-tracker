@@ -106,8 +106,23 @@ def calculate_job_baseline(job, sample_window_days=7):
     failure_rate = round((failed_count / total_count * 100), 2) if total_count > 0 else 0.0
     retry_rate = round((retried_count / total_count * 100), 2) if total_count > 0 else 0.0
 
+    # Determine the effective active duration for the job in this sample window.
+    # For newly created jobs (e.g. created today), we avoid diluting volume across
+    # days when the job did not yet exist.
     hours_in_window = sample_window_days * 24.0
-    avg_hourly_volume = round(total_count / hours_in_window, 2) if hours_in_window > 0 else 0.0
+    earliest_activity = getattr(job, "created_at", None)
+    if executions:
+        first_exec_time = executions[0].get("created_at") or executions[0].get("started_at")
+        if first_exec_time and (earliest_activity is None or first_exec_time < earliest_activity):
+            earliest_activity = first_exec_time
+
+    if earliest_activity and earliest_activity > start_dt:
+        elapsed_hours = (now - earliest_activity).total_seconds() / 3600.0
+        effective_hours = min(hours_in_window, max(elapsed_hours, 1.0))
+    else:
+        effective_hours = hours_in_window
+
+    avg_hourly_volume = round(total_count / effective_hours, 2) if effective_hours > 0 else 0.0
 
     is_sufficient = len(intervals) >= 2 and total_count >= 3
 
@@ -125,6 +140,7 @@ def calculate_job_baseline(job, sample_window_days=7):
         "sample_start": start_dt.isoformat(),
         "sample_end": now.isoformat(),
         "total_executions": total_count,
+        "effective_sample_hours": round(effective_hours, 2),
         "intervals_count": len(intervals),
         "durations_count": len(durations),
         "failed_count": failed_count,

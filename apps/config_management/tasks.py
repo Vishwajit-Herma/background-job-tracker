@@ -3,6 +3,7 @@ from datetime import timedelta
 
 from celery import shared_task
 from django.apps import apps
+from django.core.management import call_command
 from django.utils import timezone
 
 from apps.config_management.models import AuditModel
@@ -47,3 +48,15 @@ def hard_delete_soft_deleted_records():
 
     logger.info("Total hard deleted records across all models: %d", total_deleted)
     return total_deleted
+
+
+@shared_task(name="config_management.clear_expired_sessions")
+def clear_expired_sessions():
+    """
+    Cleans up expired user sessions from the django_session database table.
+    """
+    try:
+        call_command("clearsessions")
+        logger.info("Expired sessions cleared successfully.")
+    except Exception:
+        logger.exception("Failed to clear expired sessions.")

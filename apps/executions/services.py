@@ -1,9 +1,14 @@
+import logging
+from datetime import timedelta
+
 from django.db import transaction
 from django.utils import timezone
 
 from apps.core.realtime import publish_execution_batch
 from apps.jobs.models import Job
 from .models import Execution, ExecutionEvent
+
+logger = logging.getLogger(__name__)
 
 
 def ingest_executions_batch(project, executions_data):
@@ -334,3 +339,70 @@ def ingest_executions_batch(project, executions_data):
             )
 
     return {"accepted": accepted, "duplicates": duplicates, "rejected": rejected}
+
+
+def prune_old_executions(
+    retention_days: int = 30,
+    batch_size: int = 5000,
+    dry_run: bool = False,
+) -> dict:
+    """
+    Hard deletes Execution records older than `retention_days`.
+    Cascades automatically to child ExecutionEvent records.
+
+    To prevent PostgreSQL table locks and memory exhaustion under high volume,
+    deletion is processed in transactional chunks of size `batch_size`.
+    """
+    if retention_days < 1:
+        raise ValueError("retention_days must be at least 1")
+    if batch_size < 1:
+        raise ValueError("batch_size must be at least 1")
+
+    cutoff = timezone.now() - timedelta(days=retention_days)
+    total_eligible = Execution.objects.filter(created_at__lt=cutoff).count()
+
+    if dry_run or total_eligible == 0:
+        logger.info(
+            "Prune executions (dry_run=%s): %d executions eligible for deletion (older than %s).",
+            dry_run,
+            total_eligible,
+            cutoff.isoformat(),
+        )
+        return {
+            "total_deleted": 0,
+            "total_eligible": total_eligible,
+            "cutoff": cutoff,
+            "batches": 0,
+        }
+
+    total_deleted = 0
+    batches = 0
+
+    while True:
+        batch_ids = list(
+            Execution.objects.filter(created_at__lt=cutoff).values_list("id", flat=True)[
+                :batch_size
+            ]
+        )
+        if not batch_ids:
+            break
+
+        with transaction.atomic():
+            _, breakdown = Execution.objects.filter(id__in=batch_ids).delete()
+            execs_deleted = breakdown.get("executions.Execution", len(batch_ids))
+            total_deleted += execs_deleted
+            batches += 1
+
+    logger.info(
+        "Prune executions completed: hard-deleted %d executions across %d batch(es) (cutoff=%s).",
+        total_deleted,
+        batches,
+        cutoff.isoformat(),
+    )
+
+    return {
+        "total_deleted": total_deleted,
+        "total_eligible": total_eligible,
+        "cutoff": cutoff,
+        "batches": batches,
+    }

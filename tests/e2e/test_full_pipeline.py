@@ -94,6 +94,9 @@ def failing_task(self):
     # forcing the worker to respect the broker defined in worker.py
     env.pop("CELERY_BROKER_URL", None)
     env.pop("CELERY_RESULT_BACKEND", None)
+    env.pop("BJT_SDK_API_KEY", None)
+    env["BACKGROUND_JOB_TRACKER_BASE_URL"] = live_server.url
+    env["BACKGROUND_JOB_TRACKER_API_KEY"] = api_key_str
 
     # Start the worker
     with (tmp_path / "worker_log.txt").open("w") as worker_log:

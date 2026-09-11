@@ -78,6 +78,9 @@ def real_task(self):
     env.pop("DJANGO_SETTINGS_MODULE", None)
     env.pop("CELERY_BROKER_URL", None)
     env.pop("CELERY_RESULT_BACKEND", None)
+    env.pop("BJT_SDK_API_KEY", None)
+    env["BACKGROUND_JOB_TRACKER_BASE_URL"] = live_server.url
+    env["BACKGROUND_JOB_TRACKER_API_KEY"] = api_key_str
 
     # Start the worker (using solo pool to simplify test setup)
     with (tmp_path / "worker1_log.txt").open("w") as worker_log:
@@ -195,6 +198,9 @@ def real_prefork_task(self):
     env.pop("DJANGO_SETTINGS_MODULE", None)
     env.pop("CELERY_BROKER_URL", None)
     env.pop("CELERY_RESULT_BACKEND", None)
+    env.pop("BJT_SDK_API_KEY", None)
+    env["BACKGROUND_JOB_TRACKER_BASE_URL"] = live_server.url
+    env["BACKGROUND_JOB_TRACKER_API_KEY"] = api_key_str
 
     # Start the worker with PREFORK pool, deliberately validating fork-safety of the SDK
     with (tmp_path / "worker2_log.txt").open("w") as worker_log:

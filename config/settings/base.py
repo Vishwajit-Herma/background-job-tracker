@@ -279,6 +279,7 @@ if CELERY_BROKER_URL.startswith("rediss://"):
 else:
     CELERY_BROKER_USE_SSL = None
 CELERY_RESULT_BACKEND = "django-db"
+CELERY_RESULT_EXPIRES = 60 * 60 * 24 * 7  # 7 days (prevents django_celery_results unbounded growth)
 CELERY_CACHE_BACKEND = "django-cache"
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes
@@ -295,20 +296,39 @@ CELERY_BEAT_SCHEDULE = {
     "evaluate-alert-rules": {
         "task": "alerts.evaluate_alert_rules",
         "schedule": crontab(minute="*"),  # Runs every minute
+        "options": {"expires": 60},
     },
     "recover-orphaned-deliveries": {
         "task": "notifications.recover_orphaned_deliveries",
         "schedule": crontab(minute="*/15"),  # Runs every 15 minutes
+        "options": {"expires": 900},
     },
     "evaluate-job-reliability": {
         "task": "reliability.evaluate_reliability",
         "schedule": crontab(minute="*"),  # Runs every minute
+        "options": {"expires": 60},
     },
     "recalculate-job-baselines": {
         "task": "reliability.recalculate_baselines",
         "schedule": crontab(hour="*/6", minute=0),  # Runs every 6 hours
     },
+    "prune-old-executions": {
+        "task": "executions.prune_old_executions",
+        "schedule": crontab(hour=2, minute=0),  # Runs daily at 2:00 AM UTC
+    },
+    "celery-backend-cleanup": {
+        "task": "celery.backend_cleanup",
+        "schedule": crontab(hour=4, minute=0),  # Runs daily at 4:00 AM UTC
+    },
+    "clear-expired-sessions": {
+        "task": "config_management.clear_expired_sessions",
+        "schedule": crontab(hour=3, minute=0, day_of_week=0),  # Runs every Sunday at 3:00 AM UTC
+    },
 }
+
+# Execution Telemetry Retention
+EXECUTIONS_RETENTION_DAYS = env.int("EXECUTIONS_RETENTION_DAYS", default=30)
+EXECUTIONS_PURGE_BATCH_SIZE = env.int("EXECUTIONS_PURGE_BATCH_SIZE", default=5000)
 
 
 # Email
