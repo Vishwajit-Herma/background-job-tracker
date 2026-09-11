@@ -30,8 +30,8 @@ class ExecutionReadPermission(BasePermission):
     """
 
     def has_permission(self, request, view):
-        # Read-only permission. Execution creation is strictly via API Key ingestion.
-        if request.method not in ["GET", "HEAD", "OPTIONS"]:
+        # Read/Cancel permission. Execution creation is strictly via API Key ingestion.
+        if request.method not in ["GET", "HEAD", "OPTIONS"] and getattr(view, "action", None) != "cancel":
             return False
 
         return request.user and request.user.is_authenticated

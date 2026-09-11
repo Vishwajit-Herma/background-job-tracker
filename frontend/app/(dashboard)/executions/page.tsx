@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getExecutions } from "@/lib/api/executions";
+import { getExecutions, cancelExecution, getExecutionEvents, Execution } from "@/lib/api/executions";
 import { getJobs, Job } from "@/lib/api/jobs";
 import { getProjects, Project } from "@/lib/api/projects";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -10,7 +10,6 @@ import { Loader2, Activity, Briefcase, ListChecks, ChevronDown } from "lucide-re
 import { getStatusBadgeVariant, getStatusIcon, formatDuration, FrameworkBadge } from "@/components/bjt/jobs/executions-sheet";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
-import { getExecutionEvents, Execution } from "@/lib/api/executions";
 import { AlertCircle, Server, AlertTriangle, CheckCircle2, RotateCw, XCircle, Clock, ChevronRight, ChevronLeft, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PaginationControls } from "@/components/bjt/pagination";
@@ -18,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search } from "lucide-react";
 import { useDebounce } from "@/hooks/use-debounce";
+import { toastError, toastSuccess } from "@/lib/toast";
 
 // Inline subset of ExecutionDetails to show when row is expanded
 function StandaloneExecutionDetails({ execution }: { execution: Execution }) {
@@ -126,6 +126,22 @@ export default function ExecutionsPage() {
     queryFn: () => getExecutions(undefined, { page, search: debouncedSearch, ordering, status: statusFilter !== "all" ? statusFilter : undefined }),
   });
 
+  const [cancellingId, setCancellingId] = useState<number | null>(null);
+
+  const handleCancelExecution = async (e: React.MouseEvent, executionId: number) => {
+    e.stopPropagation();
+    try {
+      setCancellingId(executionId);
+      await cancelExecution(executionId);
+      toastSuccess("Execution cancelled successfully");
+      refetch();
+    } catch (err: any) {
+      toastError("Failed to cancel execution", err);
+    } finally {
+      setCancellingId(null);
+    }
+  };
+
   const executions = paginatedExecutions?.data || [];
   const totalPages = paginatedExecutions?.totalPages || 1;
 
@@ -223,6 +239,7 @@ export default function ExecutionsPage() {
                 <TableHead>Duration</TableHead>
                 <TableHead>Started</TableHead>
                 <TableHead>Finished</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -230,6 +247,7 @@ export default function ExecutionsPage() {
                 const isExpanded = expandedId === execution.id;
                 const job = jobMap.get(execution.job as number);
                 const project = job ? projectMap.get(job.project as number) : null;
+                const isCancellable = execution.status === "running" || execution.status === "pending";
                 
                 return (
                   <React.Fragment key={execution.id}>
@@ -284,11 +302,29 @@ export default function ExecutionsPage() {
                       <TableCell className="py-3 text-sm text-muted-foreground">
                         {execution.finished_at ? new Date(execution.finished_at).toLocaleString() : "-"}
                       </TableCell>
+                      <TableCell className="py-3 text-right">
+                        {isCancellable && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={cancellingId === execution.id}
+                            onClick={(e) => handleCancelExecution(e, execution.id)}
+                            className="h-7 text-xs gap-1 shadow-none hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30"
+                          >
+                            {cancellingId === execution.id ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <XCircle className="h-3 w-3 text-destructive" />
+                            )}
+                            {cancellingId === execution.id ? "Cancelling..." : "Cancel"}
+                          </Button>
+                        )}
+                      </TableCell>
                     </TableRow>
                     
                     {isExpanded && (
                       <TableRow>
-                        <TableCell colSpan={8} className="p-0 border-b">
+                        <TableCell colSpan={9} className="p-0 border-b">
                           <StandaloneExecutionDetails execution={execution} />
                         </TableCell>
                       </TableRow>

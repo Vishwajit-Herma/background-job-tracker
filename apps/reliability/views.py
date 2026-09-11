@@ -12,6 +12,7 @@ from apps.config_management.views import BaseViewSetConfig, CustomBaseGenericVie
 from apps.executions.models import Execution
 from apps.jobs.models import Job
 from apps.projects.models import Project
+from apps.reliability.evaluators import evaluate_job_reliability
 from apps.reliability.models import JobExpectation, ReliabilityFinding
 from apps.reliability.permissions import ReliabilityPermission
 from apps.reliability.serializers import (
@@ -71,6 +72,35 @@ class ReliabilityFindingViewSet(
             qs = qs.filter(condition_type=condition_type)
 
         return qs.distinct()
+
+    @extend_schema(
+        summary="Resolve Reliability Finding",
+        description="Manually resolve/cancel an active stalled or overdue finding.",
+        responses={200: ReliabilityFindingSerializer},
+    )
+    @action(detail=True, methods=["post"])
+    def resolve(self, request, pk=None):
+        finding = self.get_object()
+        if finding.status != ReliabilityFinding.Status.ACTIVE:
+            return Response(
+                {"detail": "Finding is not active or already resolved."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if finding.execution and finding.execution.status in [
+            Execution.Status.RUNNING,
+            Execution.Status.PENDING,
+        ]:
+            finding.execution.status = Execution.Status.CANCELLED
+            finding.execution.finished_at = timezone.now()
+            finding.execution.error_message = f"Manually resolved by user ({request.user.email})"
+            finding.execution.save(update_fields=["status", "finished_at", "error_message"])
+
+        evaluate_job_reliability(finding.job_id)
+
+        finding.refresh_from_db()
+        serializer = self.get_serializer(finding)
+        return Response(serializer.data)
 
 
 class JobReliabilityViewSet(CustomBaseGenericViewSet):

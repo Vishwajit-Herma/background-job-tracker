@@ -192,6 +192,12 @@ def detect_stalled_and_overdue_executions(job, expectation, baseline, now):
     in_progress = Execution.objects.filter(
         job=job,
         status__in=[Execution.Status.RUNNING, Execution.Status.PENDING],
+    ).order_by("created_at")
+
+    latest_started_exec = (
+        Execution.objects.filter(job=job, started_at__isnull=False)
+        .order_by("-started_at")
+        .first()
     )
 
     current_stalled_execution_ids = set()
@@ -199,7 +205,30 @@ def detect_stalled_and_overdue_executions(job, expectation, baseline, now):
 
     for exec_obj in in_progress:
         if exec_obj.status == Execution.Status.RUNNING and max_runtime and exec_obj.started_at:
+            has_newer_exec = bool(
+                latest_started_exec
+                and latest_started_exec.id != exec_obj.id
+                and latest_started_exec.started_at
+                and exec_obj.started_at
+                and latest_started_exec.started_at > exec_obj.started_at
+            )
             runtime_seconds = (now - exec_obj.started_at).total_seconds()
+            stale_timeout_threshold = max(max_runtime * 3, 3600)
+            is_stale_timeout = runtime_seconds > stale_timeout_threshold
+
+            # Auto-discard execution if a newer task arrived for this job or runtime exceeds stale timeout threshold
+            if has_newer_exec or is_stale_timeout:
+                reason = (
+                    "Discarded: Newer execution arrived for job (worker restarted/lost)"
+                    if has_newer_exec
+                    else f"Execution timed out / abandoned (exceeded {stale_timeout_threshold}s)"
+                )
+                exec_obj.status = Execution.Status.FAILED
+                exec_obj.finished_at = now
+                exec_obj.error_message = reason
+                exec_obj.save(update_fields=["status", "finished_at", "error_message"])
+                continue
+
             if runtime_seconds > max_runtime:
                 current_stalled_execution_ids.add(exec_obj.id)
                 details = {
@@ -238,11 +267,25 @@ def detect_stalled_and_overdue_executions(job, expectation, baseline, now):
                     active_finding.last_evaluated_at = now
                     active_finding.save(update_fields=["details", "last_evaluated_at"])
 
-        elif exec_obj.status == Execution.Status.PENDING and max_queue_delay is not None:
+        elif exec_obj.status == Execution.Status.PENDING:
             event_time = exec_obj.last_event_at or exec_obj.created_at
             if event_time:
                 queued_seconds = (now - event_time).total_seconds()
-                if queued_seconds > max_queue_delay:
+                is_stale_queue = queued_seconds > 3600
+
+                if has_newer_exec or is_stale_queue:
+                    reason = (
+                        "Discarded: Newer execution arrived for job"
+                        if has_newer_exec
+                        else f"Execution queued delay timed out / abandoned (exceeded {int(queued_seconds)}s)"
+                    )
+                    exec_obj.status = Execution.Status.FAILED
+                    exec_obj.finished_at = now
+                    exec_obj.error_message = reason
+                    exec_obj.save(update_fields=["status", "finished_at", "error_message"])
+                    continue
+
+                if max_queue_delay is not None and queued_seconds > max_queue_delay:
                     current_overdue_execution_ids.add(exec_obj.id)
                     details = {
                         "execution_id": exec_obj.id,

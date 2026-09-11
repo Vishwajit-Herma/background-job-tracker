@@ -7,7 +7,11 @@ from .models import Execution, ExecutionEvent
 class ExecutionAdmin(admin.ModelAdmin):
     """
     Read-only operational data view for Executions.
+    Optimized for high-volume admin deletion and querying without 500 memory timeouts.
     """
+
+    show_full_result_count = False
+    list_per_page = 50
 
     list_display = (
         "external_id",
@@ -24,6 +28,31 @@ class ExecutionAdmin(admin.ModelAdmin):
     list_filter = ("status", "queue", "worker", "job__project")
     search_fields = ("external_id", "job__task_identifier", "error_message", "error_type")
     list_select_related = ("job", "job__project")
+    actions = ["fast_bulk_delete"]
+
+    @admin.action(description="Fast Bulk Delete Selected Executions (Prevents 500 Timeout)")
+    def fast_bulk_delete(self, request, queryset):
+        total_deleted = 0
+        batch_size = 1000
+        while True:
+            batch_ids = list(queryset.values_list("id", flat=True)[:batch_size])
+            if not batch_ids:
+                break
+            deleted_count, _ = Execution.objects.filter(id__in=batch_ids).delete()
+            total_deleted += deleted_count
+
+        self.message_user(
+            request,
+            f"Successfully deleted {total_deleted} execution(s).",
+        )
+
+    def delete_queryset(self, request, queryset):
+        batch_size = 1000
+        while True:
+            batch_ids = list(queryset.values_list("id", flat=True)[:batch_size])
+            if not batch_ids:
+                break
+            Execution.objects.filter(id__in=batch_ids).delete()
 
     @admin.display(description="Started At", ordering="started_at")
     def formatted_started_at(self, obj):
@@ -37,7 +66,7 @@ class ExecutionAdmin(admin.ModelAdmin):
             return localtime(obj.finished_at).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
         return "-"
 
-    # Executions should not be manually created, edited, or deleted in the admin.
+    # Executions should not be manually created or edited in the admin.
     def has_add_permission(self, request):
         return False
 
@@ -49,7 +78,11 @@ class ExecutionAdmin(admin.ModelAdmin):
 class ExecutionEventAdmin(admin.ModelAdmin):
     """
     Read-only operational data view for Execution Events.
+    Optimized for high-volume admin querying without 500 memory timeouts.
     """
+
+    show_full_result_count = False
+    list_per_page = 50
 
     list_display = (
         "event_id",
@@ -64,6 +97,31 @@ class ExecutionEventAdmin(admin.ModelAdmin):
     list_filter = ("status", "queue", "worker")
     search_fields = ("event_id", "execution__external_id", "error_message", "error_type")
     list_select_related = ("execution", "execution__job")
+    actions = ["fast_bulk_delete"]
+
+    @admin.action(description="Fast Bulk Delete Selected Execution Events (Prevents 500 Timeout)")
+    def fast_bulk_delete(self, request, queryset):
+        total_deleted = 0
+        batch_size = 1000
+        while True:
+            batch_ids = list(queryset.values_list("id", flat=True)[:batch_size])
+            if not batch_ids:
+                break
+            deleted_count, _ = ExecutionEvent.objects.filter(id__in=batch_ids).delete()
+            total_deleted += deleted_count
+
+        self.message_user(
+            request,
+            f"Successfully deleted {total_deleted} execution event(s).",
+        )
+
+    def delete_queryset(self, request, queryset):
+        batch_size = 1000
+        while True:
+            batch_ids = list(queryset.values_list("id", flat=True)[:batch_size])
+            if not batch_ids:
+                break
+            ExecutionEvent.objects.filter(id__in=batch_ids).delete()
 
     @admin.display(description="Event Timestamp", ordering="event_timestamp")
     def formatted_event_timestamp(self, obj):

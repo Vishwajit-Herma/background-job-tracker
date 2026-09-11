@@ -73,3 +73,22 @@ class TestExecutionAPI:
         url_detail = reverse("api:executions:execution-detail", kwargs={"pk": exec1.id})
         response_detail = api_client.get(url_detail)
         assert response_detail.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_cancel_running_execution(self, api_client, user1, project1):
+        job = Job.objects.create(project=project1, name="Test Job Cancel", task_identifier="tasks.cancel")
+        running_exec = Execution.objects.create(
+            job=job,
+            external_id="exec_running",
+            status=Execution.Status.RUNNING,
+            started_at=timezone.now(),
+            last_event_at=timezone.now(),
+        )
+
+        api_client.force_authenticate(user=user1)
+        url = reverse("api:executions:execution-cancel", kwargs={"pk": running_exec.id})
+        response = api_client.post(url)
+
+        assert response.status_code == status.HTTP_200_OK
+        running_exec.refresh_from_db()
+        assert running_exec.status == Execution.Status.CANCELLED
+        assert "Manually cancelled by user" in running_exec.error_message

@@ -6,7 +6,9 @@ from rest_framework.filters import SearchFilter, OrderingFilter
 from django.db import IntegrityError
 from django_filters.rest_framework import DjangoFilterBackend
 
+from django.utils import timezone
 from apps.config_management.views import CustomBaseViewSet
+from apps.reliability.evaluators import evaluate_job_reliability
 from .models import Execution, ExecutionEvent
 from .serializers import (
     ExecutionSerializer,
@@ -116,7 +118,7 @@ class ExecutionViewSet(CustomBaseViewSet):
 
     permission_classes = list(CustomBaseViewSet.permission_classes) + [ExecutionReadPermission]  # type: ignore[operator, list-item]
     serializer_class = ExecutionSerializer
-    http_method_names = ["get", "head", "options"]
+    http_method_names = ["get", "post", "head", "options"]
 
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ["job__project", "job", "status", "queue", "worker"]
@@ -160,4 +162,29 @@ class ExecutionViewSet(CustomBaseViewSet):
             return self.get_paginated_response(serializer.data)
 
         serializer = ExecutionEventSerializer(events_qs, many=True)
+        return Response(serializer.data)
+
+    @extend_schema(
+        summary="Cancel Execution",
+        description="Cancel an in-progress or stuck running execution and re-evaluate job reliability.",
+        responses={200: ExecutionSerializer},
+    )
+    @action(detail=True, methods=["post"])
+    def cancel(self, request, pk=None):
+        execution = self.get_object()
+        if execution.status not in [Execution.Status.RUNNING, Execution.Status.PENDING]:
+            return Response(
+                {"detail": f"Execution is in terminal state '{execution.status}' and cannot be cancelled."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        execution.status = Execution.Status.CANCELLED
+        execution.finished_at = timezone.now()
+        execution.error_message = f"Manually cancelled by user ({request.user.email})"
+        execution.save(update_fields=["status", "finished_at", "error_message"])
+
+        evaluate_job_reliability(execution.job_id)
+
+        execution.refresh_from_db()
+        serializer = self.get_serializer(execution)
         return Response(serializer.data)

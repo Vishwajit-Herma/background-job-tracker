@@ -1,13 +1,16 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ReliabilityFinding } from "@/lib/api/reliability";
+import { ReliabilityFinding, resolveReliabilityFinding } from "@/lib/api/reliability";
 import { formatReliabilityTime } from "@/lib/reliability-utils";
-import { History, AlertTriangle, CheckCircle2, AlertCircle, ExternalLink, ShieldCheck } from "lucide-react";
+import { History, AlertTriangle, CheckCircle2, AlertCircle, ExternalLink, ShieldCheck, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toastError, toastSuccess } from "@/lib/toast";
 
 interface ReliabilityActivityProps {
   activeFindings: ReliabilityFinding[];
@@ -36,6 +39,22 @@ function formatConditionType(type: string): string {
 }
 
 export function ReliabilityActivity({ activeFindings, recentFindings }: ReliabilityActivityProps) {
+  const [resolvingId, setResolvingId] = useState<number | null>(null);
+  const router = useRouter();
+
+  const handleResolve = async (findingId: number) => {
+    try {
+      setResolvingId(findingId);
+      await resolveReliabilityFinding(findingId);
+      toastSuccess("Reliability finding resolved");
+      router.refresh();
+    } catch (err: any) {
+      toastError("Failed to resolve finding", err);
+    } finally {
+      setResolvingId(null);
+    }
+  };
+
   // Combine findings removing duplicates (active findings first)
   const allFindingsMap = new Map<number, ReliabilityFinding>();
   activeFindings.forEach((f) => allFindingsMap.set(f.id, f));
@@ -143,16 +162,32 @@ export function ReliabilityActivity({ activeFindings, recentFindings }: Reliabil
                     </div>
                   </div>
 
-                  {/* Incident link if linked */}
-                  {finding.incident && (
-                    <div className="sm:text-right shrink-0">
+                  {/* Action Buttons */}
+                  <div className="flex items-center gap-2 sm:text-right shrink-0">
+                    {isActive && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={resolvingId === finding.id}
+                        onClick={() => handleResolve(finding.id)}
+                        className="h-7 text-xs gap-1.5 shadow-none hover:bg-emerald-50 dark:hover:bg-emerald-950/30 hover:text-emerald-600 dark:hover:text-emerald-400 hover:border-emerald-200 dark:hover:border-emerald-800"
+                      >
+                        {resolvingId === finding.id ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <CheckCircle2 className="h-3 w-3" />
+                        )}
+                        {resolvingId === finding.id ? "Resolving..." : "Resolve"}
+                      </Button>
+                    )}
+                    {finding.incident && (
                       <Link href={`/incidents/${finding.incident}`}>
                         <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5 shadow-none">
                           <ExternalLink className="h-3 w-3" /> View Incident #{finding.incident}
                         </Button>
                       </Link>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               );
             })}

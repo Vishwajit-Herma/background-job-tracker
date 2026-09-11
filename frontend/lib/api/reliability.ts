@@ -249,3 +249,10 @@ export async function getReliabilityFindings(
     totalItems: list.length,
   };
 }
+
+export async function resolveReliabilityFinding(findingId: number): Promise<ReliabilityFinding> {
+  const res = await apiClient.post<ReliabilityFinding | { data: ReliabilityFinding }>(
+    `/reliability/findings/${findingId}/resolve/`
+  );
+  return (res.data && "data" in res.data ? res.data.data : res.data) as ReliabilityFinding;
+}

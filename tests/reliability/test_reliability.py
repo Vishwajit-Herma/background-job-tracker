@@ -695,3 +695,120 @@ def test_true_concurrent_evaluator_execution(test_setup):
         status__in=[Incident.Status.OPEN, Incident.Status.ACKNOWLEDGED],
     )
     assert active_incidents.count() == 1
+
+
+@pytest.mark.django_db
+def test_auto_discard_stuck_execution_on_newer_execution_arrival(test_setup):
+    from apps.reliability.evaluators import evaluate_job_reliability
+
+    job = test_setup["job"]
+    now = timezone.now()
+
+    JobExpectation.objects.create(
+        job=job,
+        max_runtime_seconds=10,
+    )
+
+    # 1. Create an old running execution that stalled
+    exec_stalled = Execution.objects.create(
+        job=job,
+        external_id="exec_stalled_old",
+        status=Execution.Status.RUNNING,
+        started_at=now - timedelta(seconds=100),
+        last_event_at=now - timedelta(seconds=100),
+        created_at=now - timedelta(seconds=100),
+    )
+
+    # First evaluation: creates active STALLED finding
+    evaluate_job_reliability(job.id)
+    finding = ReliabilityFinding.objects.get(job=job, execution=exec_stalled)
+    assert finding.status == ReliabilityFinding.Status.ACTIVE
+
+    # 2. Newer execution arrives and succeeds
+    Execution.objects.create(
+        job=job,
+        external_id="exec_new_success",
+        status=Execution.Status.SUCCESS,
+        started_at=now - timedelta(seconds=10),
+        finished_at=now - timedelta(seconds=5),
+        last_event_at=now - timedelta(seconds=5),
+        created_at=now - timedelta(seconds=10),
+    )
+
+    # Second evaluation: auto-discards old execution and recovers finding
+    evaluate_job_reliability(job.id)
+    exec_stalled.refresh_from_db()
+    finding.refresh_from_db()
+
+    assert exec_stalled.status == Execution.Status.FAILED
+    assert "Discarded: Newer execution arrived" in exec_stalled.error_message
+    assert finding.status == ReliabilityFinding.Status.RECOVERED
+
+
+@pytest.mark.django_db
+def test_auto_timeout_stuck_execution_exceeding_stale_threshold(test_setup):
+    from apps.reliability.evaluators import evaluate_job_reliability
+
+    job = test_setup["job"]
+    now = timezone.now()
+
+    JobExpectation.objects.create(
+        job=job,
+        max_runtime_seconds=10,
+    )
+
+    # Execution running for over 1 hour (3600s threshold)
+    exec_very_old = Execution.objects.create(
+        job=job,
+        external_id="exec_very_old",
+        status=Execution.Status.RUNNING,
+        started_at=now - timedelta(seconds=4000),
+        last_event_at=now - timedelta(seconds=4000),
+        created_at=now - timedelta(seconds=4000),
+    )
+
+    evaluate_job_reliability(job.id)
+    exec_very_old.refresh_from_db()
+
+    assert exec_very_old.status == Execution.Status.FAILED
+    assert "Execution timed out" in exec_very_old.error_message
+
+
+@pytest.mark.django_db
+def test_manual_resolve_reliability_finding_api(test_setup):
+    from apps.reliability.evaluators import evaluate_job_reliability
+
+    job = test_setup["job"]
+    owner = test_setup["owner"]
+    now = timezone.now()
+
+    JobExpectation.objects.create(
+        job=job,
+        max_runtime_seconds=10,
+    )
+
+    exec_stalled = Execution.objects.create(
+        job=job,
+        external_id="exec_stalled_manual",
+        status=Execution.Status.RUNNING,
+        started_at=now - timedelta(seconds=50),
+        last_event_at=now - timedelta(seconds=50),
+        created_at=now - timedelta(seconds=50),
+    )
+
+    evaluate_job_reliability(job.id)
+    finding = ReliabilityFinding.objects.get(job=job, execution=exec_stalled)
+    assert finding.status == ReliabilityFinding.Status.ACTIVE
+
+    client = APIClient()
+    client.force_authenticate(user=owner)
+
+    response = client.post(f"/api/reliability/findings/{finding.id}/resolve/")
+    assert response.status_code == 200
+
+    finding.refresh_from_db()
+    exec_stalled.refresh_from_db()
+
+    assert exec_stalled.status == Execution.Status.CANCELLED
+    assert finding.status == ReliabilityFinding.Status.RECOVERED
+

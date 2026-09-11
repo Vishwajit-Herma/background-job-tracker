@@ -76,3 +76,8 @@ export async function getExecutionEvents(executionId: number): Promise<Execution
   const { data } = await apiClient.get(`/executions/${executionId}/events/`);
   return data.data ?? [];
 }
+
+export async function cancelExecution(executionId: number): Promise<Execution> {
+  const { data } = await apiClient.post(`/executions/${executionId}/cancel/`);
+  return data.data ?? data;
+}
