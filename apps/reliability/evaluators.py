@@ -126,6 +126,19 @@ def detect_missed_execution(job, expectation, baseline, now):
         execution__isnull=True,
     ).first()
 
+    # Do not re-trigger missed execution if a finding was recently recovered until a full new interval passes
+    last_recovered = ReliabilityFinding.objects.filter(
+        job=job,
+        condition_type=ReliabilityFinding.ConditionType.MISSED_EXECUTION,
+        status=ReliabilityFinding.Status.RECOVERED,
+        execution__isnull=True,
+    ).order_by("-recovered_at").first()
+
+    if last_recovered and last_recovered.recovered_at:
+        quiet_until = last_recovered.recovered_at + timedelta(seconds=expected_interval + grace_period)
+        if now < quiet_until:
+            return
+
     if now > threshold:
         overdue_by_seconds = int((now - threshold).total_seconds())
         details = {

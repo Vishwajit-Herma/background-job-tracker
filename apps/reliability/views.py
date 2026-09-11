@@ -96,7 +96,16 @@ class ReliabilityFindingViewSet(
             finding.execution.error_message = f"Manually resolved by user ({request.user.email})"
             finding.execution.save(update_fields=["status", "finished_at", "error_message"])
 
-        evaluate_job_reliability(finding.job_id)
+        from apps.reliability.evaluators import _recover_finding
+
+        _recover_finding(
+            finding,
+            {
+                "condition_type": finding.condition_type,
+                "recovered_at": timezone.now().isoformat(),
+                "reason": f"Manually resolved by user ({request.user.email})",
+            },
+        )
 
         finding.refresh_from_db()
         serializer = self.get_serializer(finding)

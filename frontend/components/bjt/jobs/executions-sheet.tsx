@@ -70,6 +70,31 @@ function ExecutionDetails({ execution }: { execution: Execution }) {
     queryFn: () => getExecutionEvents(execution.id),
   });
 
+  const displayEvents = [...events];
+  const lastEvent = displayEvents[displayEvents.length - 1];
+  const isTerminal = ["failed", "cancelled", "success"].includes(execution.status);
+
+  if (isTerminal && (!lastEvent || lastEvent.status !== execution.status)) {
+    displayEvents.push({
+      id: -999,
+      execution: execution.id,
+      event_id: `derived-${execution.status}`,
+      status: execution.status,
+      event_timestamp: execution.finished_at || execution.updated_at || new Date().toISOString(),
+      received_at: execution.updated_at || new Date().toISOString(),
+      started_at: execution.started_at,
+      finished_at: execution.finished_at,
+      duration_ms: execution.duration_ms,
+      queue: execution.queue,
+      worker: execution.worker,
+      retry_count: execution.retry_count,
+      error_type: execution.error_type || "",
+      error_message: execution.error_message || "",
+      traceback: execution.traceback || "",
+      metadata: {},
+    });
+  }
+
   return (
     <div className="mt-4 p-4 rounded-lg bg-muted/30 border space-y-6 animate-in slide-in-from-top-2 duration-200">
       
@@ -123,8 +148,8 @@ function ExecutionDetails({ execution }: { execution: Execution }) {
           <div className="flex items-start gap-2">
             <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
             <div>
-              <h4 className="font-medium text-destructive">{execution.error_type || "Error"}</h4>
-              <p className="text-sm text-destructive/80 mt-1">{execution.error_message}</p>
+              <h4 className="font-medium text-destructive">{execution.error_type || (execution.status === "cancelled" ? "Cancellation Reason" : "Failure Reason")}</h4>
+              <p className="text-sm text-destructive/80 mt-1 whitespace-pre-wrap">{execution.error_message}</p>
             </div>
           </div>
           {execution.traceback && (
@@ -143,19 +168,19 @@ function ExecutionDetails({ execution }: { execution: Execution }) {
         <h4 className="font-medium text-sm mb-3">Event Timeline</h4>
         {isLoading ? (
           <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
-        ) : events.length === 0 ? (
+        ) : displayEvents.length === 0 ? (
           <p className="text-sm text-muted-foreground italic">No events recorded.</p>
         ) : (
           <div className="space-y-4">
-            {events.map((event, i) => (
+            {displayEvents.map((event, i) => (
               <div key={event.id} className="flex gap-3 relative">
                 {/* Timeline connecting line */}
-                {i < events.length - 1 && (
+                {i < displayEvents.length - 1 && (
                   <div className="absolute left-2 top-6 bottom-[-16px] w-px bg-border" />
                 )}
                 {/* Icon */}
                 <div className="h-4 w-4 rounded-full bg-background border flex items-center justify-center shrink-0 mt-0.5 z-10">
-                  <div className={`h-2 w-2 rounded-full ${event.status === "success" ? "bg-green-500" : event.status === "failed" ? "bg-destructive" : "bg-primary"}`} />
+                  <div className={`h-2 w-2 rounded-full ${event.status === "success" ? "bg-green-500" : event.status === "failed" || event.status === "cancelled" ? "bg-destructive" : "bg-primary"}`} />
                 </div>
                 {/* Content */}
                 <div className="flex-1 space-y-1 pb-2 min-w-0">

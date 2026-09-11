@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { ReliabilityFinding, resolveReliabilityFinding } from "@/lib/api/reliability";
 import { formatReliabilityTime } from "@/lib/reliability-utils";
 import { History, AlertTriangle, CheckCircle2, AlertCircle, ExternalLink, ShieldCheck, Loader2 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { toastError, toastSuccess } from "@/lib/toast";
 
@@ -41,12 +42,17 @@ function formatConditionType(type: string): string {
 export function ReliabilityActivity({ activeFindings, recentFindings }: ReliabilityActivityProps) {
   const [resolvingId, setResolvingId] = useState<number | null>(null);
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   const handleResolve = async (findingId: number) => {
     try {
       setResolvingId(findingId);
       await resolveReliabilityFinding(findingId);
       toastSuccess("Reliability finding resolved");
+      await queryClient.invalidateQueries({ queryKey: ["job-reliability"] });
+      await queryClient.invalidateQueries({ queryKey: ["reliability-findings"] });
+      await queryClient.invalidateQueries({ queryKey: ["project-reliability"] });
+      await queryClient.invalidateQueries({ queryKey: ["projects"] });
       router.refresh();
     } catch (err: any) {
       toastError("Failed to resolve finding", err);
