@@ -1,12 +1,13 @@
+from django.db import IntegrityError
 from django.utils import timezone
 from rest_framework import viewsets, permissions, status, mixins
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
-from apps.core.realtime import publish_realtime_event
 from django.contrib.auth import get_user_model
-from apps.teams.models import Team, TeamMember, TeamInvitation
+from apps.core.realtime import publish_realtime_event
+from apps.teams.models import Team, TeamCreationSetting, TeamMember, TeamInvitation
 from .serializers import (
     TeamSerializer,
     TeamMemberSerializer,
@@ -42,16 +43,30 @@ class TeamViewSet(viewsets.ModelViewSet):
         ).distinct()
 
     def perform_create(self, serializer):
-        if not self.request.user.is_staff:
-            raise PermissionDenied("Only staff members can create teams.")
-        serializer.save(owner=self.request.user)
+        user = self.request.user
+        if not user.is_staff and not user.is_superuser:
+            max_limit = TeamCreationSetting.get_max_teams_limit()
+            if max_limit is not None:
+                current_active_teams = Team.objects.filter(owner=user, is_active=True).count()
+                if current_active_teams >= max_limit:
+                    raise ValidationError(
+                        {
+                            "detail": f"You have reached the maximum limit of {max_limit} active teams."
+                        }
+                    )
+        try:
+            team = serializer.save(owner=user)
+        except IntegrityError:
+            raise ValidationError(
+                {"name": "A team with this name already exists(globally). Please choose a different name."}
+            ) from None
+        publish_realtime_event("team.updated", team_id=team.id, payload={"action": "created"})
 
     def perform_destroy(self, instance):
         if instance.owner != self.request.user and not self.request.user.is_staff:
             raise PermissionDenied("Only the team owner or a staff member can delete the team.")
         team_id = instance.id
-        instance.is_active = False
-        instance.save()
+        instance.delete()
         publish_realtime_event("team.updated", team_id=team_id, payload={"action": "deleted"})
 
     def perform_update(self, serializer):

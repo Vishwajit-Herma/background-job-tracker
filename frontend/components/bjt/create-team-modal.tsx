@@ -39,6 +39,7 @@ export function CreateTeamModal({
     register,
     handleSubmit,
     reset,
+    setError,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -53,7 +54,23 @@ export function CreateTeamModal({
       onOpenChange(false);
     } catch (e: any) {
       const err = e as ApiError;
-      setErrorMsg(err.message || "Failed to create team");
+      const fieldErrors = err.errors as Record<string, unknown> | undefined;
+      const nameErr = fieldErrors?.name || fieldErrors?.slug;
+      if (nameErr) {
+        const msg = Array.isArray(nameErr) ? nameErr.join(", ") : String(nameErr);
+        setError("name", { type: "server", message: msg });
+      }
+
+      const detail =
+        (typeof fieldErrors?.detail === "string" ? (fieldErrors.detail as string) : null) ||
+        (Array.isArray(fieldErrors?.detail) ? (fieldErrors.detail as string[])[0] : null) ||
+        (Array.isArray(fieldErrors?.non_field_errors) ? (fieldErrors.non_field_errors as string[])[0] : null);
+
+      if (detail) {
+        setErrorMsg(detail);
+      } else if (!nameErr) {
+        setErrorMsg(err.message || "Failed to create team");
+      }
     }
   };
 

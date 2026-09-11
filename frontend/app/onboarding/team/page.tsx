@@ -50,7 +50,8 @@ export default function OnboardingTeamPage() {
       if (apiError.status === 400 && apiError.errors) {
         Object.keys(apiError.errors).forEach((key) => {
           if (key === "non_field_errors" || key === "detail") {
-            setGlobalError((apiError.errors as any)[key].join(", "));
+            const val = (apiError.errors as any)[key];
+            setGlobalError(Array.isArray(val) ? val.join(", ") : String(val));
           } else {
             setError(key as keyof TeamFormValues, {
               type: "server",

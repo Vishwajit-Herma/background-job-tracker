@@ -231,11 +231,9 @@ export default function TeamPage() {
             <h2 className="text-3xl font-bold tracking-tight">Teams</h2>
             <p className="text-muted-foreground mt-1">Manage your team memberships and invitations.</p>
           </div>
-          {user?.is_staff && (
-            <Button onClick={() => setIsCreateTeamModalOpen(true)}>
-              Create Team
-            </Button>
-          )}
+          <Button onClick={() => setIsCreateTeamModalOpen(true)}>
+            Create Team
+          </Button>
         </div>
 
         {isLoadingInvites ? (
@@ -249,18 +247,12 @@ export default function TeamPage() {
 
         <EmptyState 
           title="No team yet"
-          description={
-            user?.is_staff
-              ? "You do not belong to any team yet. Create your first team to get started."
-              : "You don't belong to any team yet. Accept an invitation above, or ask an admin to create one for you."
-          }
+          description="You do not belong to any team yet. Create your first team or accept an invitation above to get started."
           icon={<Users className="h-10 w-10 text-muted-foreground" />}
           action={
-            user?.is_staff ? (
-              <Button onClick={() => setIsCreateTeamModalOpen(true)}>
-                <UserPlus className="mr-2 h-4 w-4" /> Create Team
-              </Button>
-            ) : undefined
+            <Button onClick={() => setIsCreateTeamModalOpen(true)}>
+              <UserPlus className="mr-2 h-4 w-4" /> Create Team
+            </Button>
           }
         />
 
@@ -333,11 +325,9 @@ export default function TeamPage() {
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                {user?.is_staff && (
-                  <Button variant="outline" onClick={() => setIsCreateTeamModalOpen(true)}>
-                    Create Team
-                  </Button>
-                )}
+                <Button variant="outline" onClick={() => setIsCreateTeamModalOpen(true)}>
+                  Create Team
+                </Button>
                 {canManage && activeTab !== "settings" && (
                   <Button onClick={() => setIsInviteModalOpen(true)}>
                     <UserPlus className="mr-2 h-4 w-4" />

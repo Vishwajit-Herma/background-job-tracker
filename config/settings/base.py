@@ -400,3 +400,8 @@ GEMINI_MODEL = env.str("GEMINI_MODEL", default="gemini-3.6-flash")
 # gemini-3.6-flash with thinking can take 30-90s on large contexts.
 # Override with GEMINI_TIMEOUT env var if needed.
 GEMINI_TIMEOUT = env.int("GEMINI_TIMEOUT", default=60)
+
+# Team Management
+# Maximum active teams a regular user can create/own.
+# None, blank/empty string, or <= 0 means unlimited.
+MAX_TEAMS_PER_USER = env("MAX_TEAMS_PER_USER", default=3)

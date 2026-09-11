@@ -3,7 +3,7 @@
 from django.contrib import admin
 from django.utils.html import format_html
 
-from apps.teams.models import Team, TeamInvitation, TeamMember
+from apps.teams.models import Team, TeamCreationSetting, TeamInvitation, TeamMember
 
 
 class TeamMemberInline(admin.TabularInline):
@@ -121,3 +121,25 @@ class TeamInvitationAdmin(admin.ModelAdmin):
     def has_add_permission(self, request):
         """Disable add in admin (use app interface instead)."""
         return False
+
+
+@admin.register(TeamCreationSetting)
+class TeamCreationSettingAdmin(admin.ModelAdmin):
+    """Admin interface for global team creation settings."""
+
+    list_display = ["__str__", "max_teams_per_user", "updated_at"]
+    readonly_fields = ["updated_at"]
+
+    def has_add_permission(self, request):
+        """Allow only one global settings instance (singleton)."""
+        if TeamCreationSetting.objects.exists():
+            return False
+        return request.user.is_superuser
+
+    def has_change_permission(self, request, obj=None):
+        """Only superusers can modify global team creation settings."""
+        return request.user.is_superuser
+
+    def has_delete_permission(self, request, obj=None):
+        """Only superusers can delete global team creation settings."""
+        return request.user.is_superuser

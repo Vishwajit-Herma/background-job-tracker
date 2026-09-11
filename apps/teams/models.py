@@ -238,3 +238,51 @@ class TeamInvitation(models.Model):
         from apps.teams.utils import send_team_invitation_email
 
         send_team_invitation_email(self)
+
+
+class TeamCreationSetting(models.Model):
+    """
+    Global team creation configuration manageable by superusers in Django Admin.
+    Overrides MAX_TEAMS_PER_USER setting if configured in the database.
+    """
+
+    max_teams_per_user = models.PositiveIntegerField(
+        _("max teams per user"),
+        null=True,
+        blank=True,
+        help_text=_("Maximum active teams a user can create/own. Leave blank for unlimited."),
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = _("team creation setting")
+        verbose_name_plural = _("team creation settings")
+
+    def __str__(self):
+        limit = self.max_teams_per_user if self.max_teams_per_user is not None else _("Unlimited")
+        return f"Global Team Creation Limit ({limit})"
+
+    @classmethod
+    def get_max_teams_limit(cls) -> int | None:
+        """
+        Determine the maximum active teams allowed per user.
+
+        Precedence:
+        1. Database setting (if a TeamCreationSetting row exists).
+           - None means unlimited.
+           - An integer means that exact limit.
+        2. Django settings.MAX_TEAMS_PER_USER.
+           - None, empty string, or <= 0 means unlimited.
+        """
+        setting_obj = cls.objects.first()
+        if setting_obj is not None:
+            return setting_obj.max_teams_per_user
+
+        raw_val = getattr(settings, "MAX_TEAMS_PER_USER", None)
+        if raw_val in (None, "", False):
+            return None
+        try:
+            int_val = int(raw_val)
+            return int_val if int_val > 0 else None
+        except ValueError, TypeError:
+            return None

@@ -45,8 +45,27 @@ class TeamSerializer(serializers.ModelSerializer):
         return member.role if member else ("staff" if request.user.is_staff else None)
 
     def validate(self, attrs):
-        if not attrs.get("slug") and attrs.get("name"):
-            attrs["slug"] = slugify(attrs["name"])
+        name = attrs.get("name", getattr(self.instance, "name", ""))
+        slug = attrs.get("slug")
+        if not slug and name:
+            slug = slugify(name)
+            attrs["slug"] = slug
+
+        if not slug:
+            raise serializers.ValidationError(
+                {"name": "Team name must contain at least one alphanumeric character."}
+            )
+
+        qs = Team.objects.filter(slug=slug)
+        if self.instance:
+            qs = qs.exclude(pk=self.instance.pk)
+
+        if qs.exists():
+            field = "slug" if (self.initial_data and "slug" in self.initial_data) else "name"
+            raise serializers.ValidationError(
+                {field: "A team with this name already exists(globally). Please choose a different name."}
+            )
+
         return attrs
 
 

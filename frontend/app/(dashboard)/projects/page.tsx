@@ -1064,26 +1064,18 @@ function ProjectsPageContent() {
       <div className="flex-1 space-y-4 p-8 pt-6">
         <div className="flex items-center justify-between">
           <h2 className="text-3xl font-bold tracking-tight">Projects</h2>
-          {isGlobalStaff && (
-            <Button onClick={() => setCreateTeamOpen(true)}>
-              <Plus className="mr-2 h-4 w-4" /> Create Team
-            </Button>
-          )}
+          <Button onClick={() => setCreateTeamOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" /> Create Team
+          </Button>
         </div>
         <EmptyState
           title="No teams yet"
-          description={
-            isGlobalStaff
-              ? "You must create a team first before you can create and manage projects."
-              : "Join or create a team first to manage projects."
-          }
+          description="You must create a team first before you can create and manage projects."
           icon={<FolderOpen className="h-10 w-10 text-muted-foreground" />}
           action={
-            isGlobalStaff ? (
-              <Button onClick={() => setCreateTeamOpen(true)}>
-                <Plus className="mr-2 h-4 w-4" /> Create Team
-              </Button>
-            ) : undefined
+            <Button onClick={() => setCreateTeamOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" /> Create Team
+            </Button>
           }
         />
         {createTeamOpen && (

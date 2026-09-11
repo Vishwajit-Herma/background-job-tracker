@@ -20,7 +20,7 @@ from apps.teams.forms import (
     TeamMemberUpdateForm,
     TeamUpdateForm,
 )
-from apps.teams.models import Team, TeamInvitation, TeamMember
+from apps.teams.models import Team, TeamCreationSetting, TeamInvitation, TeamMember
 from apps.teams.permissions import (
     TeamAdminRequiredMixin,
     TeamMemberRequiredMixin,
@@ -52,8 +52,22 @@ class TeamCreateView(LoginRequiredMixin, CreateView):
     template_name = "teams/team_form.html"
 
     def form_valid(self, form):
-        """Set owner to current user."""
-        form.instance.owner = self.request.user
+        """Set owner to current user and validate limits."""
+        user = self.request.user
+        if not user.is_staff and not user.is_superuser:
+            max_limit = TeamCreationSetting.get_max_teams_limit()
+            if max_limit is not None:
+                current_active_teams = Team.objects.filter(owner=user, is_active=True).count()
+                if current_active_teams >= max_limit:
+                    form.add_error(
+                        None,
+                        _("You have reached the maximum limit of {} active teams.").format(
+                            max_limit
+                        ),
+                    )
+                    return self.form_invalid(form)
+
+        form.instance.owner = user
         response = super().form_valid(form)
         messages.success(
             self.request,
@@ -123,10 +137,9 @@ class TeamDeleteView(TeamOwnerRequiredMixin, DeleteView):
         return Team.objects.filter(is_active=True)
 
     def delete(self, request, *args, **kwargs):
-        """Soft delete the team."""
+        """Delete the team."""
         self.object = self.get_object()
-        self.object.is_active = False
-        self.object.save()
+        self.object.delete()
         messages.success(request, _("Team deleted successfully!"))
         return redirect(self.success_url)
 

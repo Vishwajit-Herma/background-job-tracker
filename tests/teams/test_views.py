@@ -3,8 +3,10 @@
 import pytest
 from django.contrib.auth import get_user_model
 from django.urls import reverse
+from rest_framework import status
+from rest_framework.test import APIClient
 
-from apps.teams.models import Team, TeamMember, TeamInvitation
+from apps.teams.models import Team, TeamCreationSetting, TeamInvitation, TeamMember
 
 User = get_user_model()
 
@@ -276,3 +278,133 @@ class TestTeamMemberViews:
         # Owner membership should still be active
         owner_member = TeamMember.objects.get(team=team, user=team_owner)
         assert owner_member.is_active is True
+
+
+@pytest.mark.django_db
+class TestTeamAPILimitAndCreation:
+    """Tests for team creation limits and non-staff self-serve creation."""
+
+    def test_non_staff_user_can_create_team_api(self, user):
+        client = APIClient()
+        client.force_authenticate(user=user)
+        response = client.post(
+            "/api/teams/", {"name": "User Alpha Team", "slug": "user-alpha-team"}
+        )
+        assert response.status_code == status.HTTP_201_CREATED
+        assert Team.objects.filter(slug="user-alpha-team", owner=user).exists()
+
+    def test_duplicate_team_name_returns_clean_validation_error(self, user):
+        client = APIClient()
+        client.force_authenticate(user=user)
+
+        # 1. Create first team with name "My Team"
+        res1 = client.post("/api/teams/", {"name": "My Team"})
+        assert res1.status_code == status.HTTP_201_CREATED
+
+        # 2. Try to create duplicate team with same name
+        other_user = User.objects.create_user(
+            email="other_creator@example.com", password="password123"
+        )
+        client.force_authenticate(user=other_user)
+        res2 = client.post("/api/teams/", {"name": "My Team"})
+        assert res2.status_code == status.HTTP_400_BAD_REQUEST
+        err_data = res2.data.get("errors", res2.data)
+        assert "A team with this name already exists" in str(err_data)
+
+    def test_team_limit_enforced_api(self, user, monkeypatch):
+        monkeypatch.setattr(
+            "apps.teams.models.TeamCreationSetting.get_max_teams_limit",
+            classmethod(lambda cls: 2),
+        )
+        client = APIClient()
+        client.force_authenticate(user=user)
+
+        # Create first 2 teams -> succeeds
+        res1 = client.post("/api/teams/", {"name": "Team 1", "slug": "team-1"})
+        assert res1.status_code == status.HTTP_201_CREATED
+
+        res2 = client.post("/api/teams/", {"name": "Team 2", "slug": "team-2"})
+        assert res2.status_code == status.HTTP_201_CREATED
+
+        # 3rd team -> blocked with 400 validation error
+        res3 = client.post("/api/teams/", {"name": "Team 3", "slug": "team-3"})
+        assert res3.status_code == status.HTTP_400_BAD_REQUEST
+        err_data = res3.data.get("errors", res3.data)
+        assert "maximum limit of 2 active teams" in str(err_data)
+
+    def test_team_limit_unlimited_when_none(self, user, monkeypatch):
+        monkeypatch.setattr(
+            "apps.teams.models.TeamCreationSetting.get_max_teams_limit",
+            classmethod(lambda cls: None),
+        )
+        client = APIClient()
+        client.force_authenticate(user=user)
+
+        for i in range(4):
+            res = client.post("/api/teams/", {"name": f"Team {i}", "slug": f"team-{i}"})
+            assert res.status_code == status.HTTP_201_CREATED
+
+    def test_db_setting_overrides_settings_file(self, user, settings):
+        settings.MAX_TEAMS_PER_USER = 10
+        TeamCreationSetting.objects.create(max_teams_per_user=1)
+        assert TeamCreationSetting.get_max_teams_limit() == 1
+
+        client = APIClient()
+        client.force_authenticate(user=user)
+        res1 = client.post("/api/teams/", {"name": "Team 1", "slug": "team-1"})
+        assert res1.status_code == status.HTTP_201_CREATED
+
+        res2 = client.post("/api/teams/", {"name": "Team 2", "slug": "team-2"})
+        assert res2.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_db_setting_blank_means_unlimited(self, user, settings):
+        settings.MAX_TEAMS_PER_USER = 1
+        # In DB, max_teams_per_user is None (blank)
+        TeamCreationSetting.objects.create(max_teams_per_user=None)
+        assert TeamCreationSetting.get_max_teams_limit() is None
+
+        client = APIClient()
+        client.force_authenticate(user=user)
+        for i in range(3):
+            res = client.post(
+                "/api/teams/", {"name": f"Unlimited Team {i}", "slug": f"unl-team-{i}"}
+            )
+            assert res.status_code == status.HTTP_201_CREATED
+
+    def test_staff_and_superuser_bypass_limit(self, user, monkeypatch):
+        monkeypatch.setattr(
+            "apps.teams.models.TeamCreationSetting.get_max_teams_limit",
+            classmethod(lambda cls: 1),
+        )
+        user.is_staff = True
+        user.save()
+
+        client = APIClient()
+        client.force_authenticate(user=user)
+        res1 = client.post("/api/teams/", {"name": "Staff Team 1", "slug": "staff-team-1"})
+        assert res1.status_code == status.HTTP_201_CREATED
+        res2 = client.post("/api/teams/", {"name": "Staff Team 2", "slug": "staff-team-2"})
+        assert res2.status_code == status.HTTP_201_CREATED
+
+    def test_delete_team_actually_deletes_team_from_database_and_allows_recreating_same_name(
+        self, user
+    ):
+        client = APIClient()
+        client.force_authenticate(user=user)
+
+        # 1. Create team
+        res1 = client.post("/api/teams/", {"name": "Disposable Team", "slug": "disposable-team"})
+        assert res1.status_code == status.HTTP_201_CREATED
+        team_id = res1.data.get("data", res1.data)["id"]
+
+        # 2. Delete team
+        del_res = client.delete(f"/api/teams/{team_id}/")
+        assert del_res.status_code == status.HTTP_204_NO_CONTENT
+
+        # 3. Assert completely deleted from DB (not just inactivated)
+        assert not Team.objects.filter(id=team_id).exists()
+
+        # 4. Can recreate team with exact same name/slug without collision
+        res2 = client.post("/api/teams/", {"name": "Disposable Team", "slug": "disposable-team"})
+        assert res2.status_code == status.HTTP_201_CREATED
+        assert Team.objects.filter(slug="disposable-team", owner=user).exists()
