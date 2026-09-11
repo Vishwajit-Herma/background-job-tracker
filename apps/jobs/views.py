@@ -13,7 +13,7 @@ from apps.executions.serializers import (
 )
 from apps.projects.models import Project
 from apps.incidents.models import Incident
-from django.db.models import Count, Q, Exists, OuterRef, Subquery, IntegerField
+from django.db.models import Count, Exists, IntegerField, OuterRef, Subquery
 from django.db.models.functions import Coalesce
 from .models import Job
 from .permissions import JobPermission
@@ -73,13 +73,34 @@ class JobViewSet(CustomBaseViewSet):
             .values("cnt")
         )
 
+        executions_subquery = (
+            Execution.objects.filter(
+                job=OuterRef("pk"),
+            )
+            .order_by()
+            .values("job")
+            .annotate(cnt=Count("id"))
+            .values("cnt")
+        )
+
+        active_incidents_subquery = (
+            Incident.objects.filter(
+                job=OuterRef("pk"),
+                status__in=["OPEN", "ACKNOWLEDGED"],
+            )
+            .order_by()
+            .values("job")
+            .annotate(cnt=Count("id"))
+            .values("cnt")
+        )
+
         base_qs = base_qs.select_related("project", "created_by", "modified_by").annotate(
-            executions_count=Count("executions", distinct=True),
+            executions_count=Coalesce(
+                Subquery(executions_subquery, output_field=IntegerField()), 0
+            ),
             success_count=Coalesce(Subquery(success_subquery, output_field=IntegerField()), 0),
-            active_incidents_count=Count(
-                "incidents",
-                filter=Q(incidents__status__in=["OPEN", "ACKNOWLEDGED"]),
-                distinct=True,
+            active_incidents_count=Coalesce(
+                Subquery(active_incidents_subquery, output_field=IntegerField()), 0
             ),
             has_critical_incident=Exists(critical_incidents),
         )

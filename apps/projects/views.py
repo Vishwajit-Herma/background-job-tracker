@@ -12,6 +12,7 @@ from apps.executions.serializers import (
     TrendResponseSerializer,
 )
 from apps.incidents.models import Incident
+from apps.jobs.models import Job
 from .models import APIKey, Project
 from .permissions import APIKeyPermission, ProjectPermission
 from .serializers import APIKeyCreateSerializer, APIKeySerializer, ProjectSerializer
@@ -83,17 +84,48 @@ class ProjectViewSet(CustomBaseViewSet):
             .values("cnt")
         )
 
+        jobs_subquery = (
+            Job.objects.filter(
+                project=OuterRef("pk"),
+                is_deleted=False,
+            )
+            .order_by()
+            .values("project")
+            .annotate(cnt=Count("id"))
+            .values("cnt")
+        )
+
+        executions_subquery = (
+            Execution.objects.filter(
+                job__project=OuterRef("pk"),
+                job__is_deleted=False,
+            )
+            .order_by()
+            .values("job__project")
+            .annotate(cnt=Count("id"))
+            .values("cnt")
+        )
+
+        active_incidents_subquery = (
+            Incident.objects.filter(
+                project=OuterRef("pk"),
+                status__in=["OPEN", "ACKNOWLEDGED"],
+            )
+            .filter(Q(job__isnull=True) | Q(job__is_deleted=False))
+            .order_by()
+            .values("project")
+            .annotate(cnt=Count("id"))
+            .values("cnt")
+        )
+
         base_qs = base_qs.select_related("team").annotate(
-            jobs_count=Count("jobs", filter=Q(jobs__is_deleted=False), distinct=True),
-            executions_count=Count(
-                "jobs__executions", filter=Q(jobs__is_deleted=False), distinct=True
+            jobs_count=Coalesce(Subquery(jobs_subquery, output_field=IntegerField()), 0),
+            executions_count=Coalesce(
+                Subquery(executions_subquery, output_field=IntegerField()), 0
             ),
             success_count=Coalesce(Subquery(success_subquery, output_field=IntegerField()), 0),
-            active_incidents_count=Count(
-                "incidents",
-                filter=Q(incidents__status__in=["OPEN", "ACKNOWLEDGED"])
-                & (Q(incidents__job__isnull=True) | Q(incidents__job__is_deleted=False)),
-                distinct=True,
+            active_incidents_count=Coalesce(
+                Subquery(active_incidents_subquery, output_field=IntegerField()), 0
             ),
             has_critical_incident=Exists(critical_incidents),
         )

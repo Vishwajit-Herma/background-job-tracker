@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTeam } from "@/components/bjt/team-provider";
@@ -8,6 +8,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { Team } from "@/lib/api/teams";
 import {
   getProjects,
+  getProjectsPaginated,
   getAPIKeys,
   createProject,
   updateProject,
@@ -18,6 +19,7 @@ import {
   APIKey,
   APIKeyCreated,
 } from "@/lib/api/projects";
+import { PaginationControls } from "@/components/bjt/pagination";
 import { JobsPanel } from "@/components/bjt/jobs/jobs-panel";
 import { ProjectReliabilitySummary } from "@/components/bjt/projects/project-reliability-summary";
 import { CreateTeamModal } from "@/components/bjt/create-team-modal";
@@ -1020,29 +1022,34 @@ function ProjectsPageContent() {
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 500);
   const [ordering, setOrdering] = useState("-created_at");
+  const [page, setPage] = useState(1);
 
-  // Fetch ALL projects across all member teams (backend handles isolation)
-  const { data: allProjects = [], isLoading, isError, refetch } = useQuery({
-    queryKey: ["projects", "all"],
-    queryFn: () => getProjects(), // no team filter = all accessible projects
+  // Fetch paginated projects across member teams
+  const { data: paginatedProjects, isLoading, isError, refetch } = useQuery({
+    queryKey: ["projects-paginated", page, teamFilter, debouncedSearch, ordering],
+    queryFn: () =>
+      getProjectsPaginated({
+        page,
+        team: teamFilter !== "all" ? Number(teamFilter) : undefined,
+        search: debouncedSearch || undefined,
+        ordering,
+      }),
     enabled: teams.length > 0,
   });
 
-  // Client-side filter by selected team, health, search text, and then sort
-  const projects = allProjects
-    .filter((p) => teamFilter === "all" || p.team === Number(teamFilter))
-    .filter((p) => healthFilter === "all" || p.operational_status?.toLowerCase() === healthFilter)
-    .filter((p) => {
-      if (!debouncedSearch) return true;
-      const s = debouncedSearch.toLowerCase();
-      return p.name.toLowerCase().includes(s) || (p.description && p.description.toLowerCase().includes(s));
-    })
-    .sort((a, b) => {
-      if (ordering === "name") return a.name.localeCompare(b.name);
-      if (ordering === "created_at") return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-      if (ordering === "-created_at") return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-      return 0;
-    });
+  const pagedProjects = paginatedProjects?.data || [];
+  const totalPages = paginatedProjects?.totalPages || 1;
+  const totalItems = paginatedProjects?.totalItems || 0;
+
+  // Filter projects by health if selected
+  const projects = pagedProjects.filter(
+    (p) => healthFilter === "all" || p.operational_status?.toLowerCase() === healthFilter
+  );
+
+  // Reset page when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [teamFilter, debouncedSearch, ordering, healthFilter]);
 
   if (isTeamLoading) {
     return (
@@ -1099,10 +1106,10 @@ function ProjectsPageContent() {
             {teams.length} team{teams.length !== 1 ? "s" : ""} ·{" "}
             {!isLoading && (
               <span className="font-medium text-foreground">
-                {allProjects.filter((p) => p.status === "active").length}
+                {totalItems}
               </span>
             )}{" "}
-            active projects
+            project{totalItems !== 1 ? "s" : ""}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -1230,6 +1237,16 @@ function ProjectsPageContent() {
               defaultExpanded={targetProjectId ? project.id === Number(targetProjectId) : i === 0}
             />
           ))}
+
+          {totalPages > 1 && (
+            <div className="pt-4 flex justify-end">
+              <PaginationControls
+                page={page}
+                totalPages={totalPages}
+                setPage={setPage}
+              />
+            </div>
+          )}
         </div>
       )}
 

@@ -36,6 +36,40 @@ export interface APIKeyCreated extends APIKey {
 
 // ─── Projects ─────────────────────────────────────────────────────────────────
 
+export interface PaginatedProjects {
+  data: Project[];
+  page: number;
+  totalPages: number;
+  totalItems: number;
+}
+
+export interface ProjectFilters {
+  team?: number;
+  status?: string;
+  search?: string;
+  ordering?: string;
+  page?: number;
+  limit?: number;
+}
+
+export async function getProjectsPaginated(filters: ProjectFilters = {}): Promise<PaginatedProjects> {
+  const params: Record<string, string | number> = {};
+  if (filters.team) params.team = filters.team;
+  if (filters.status) params.status = filters.status;
+  if (filters.search) params.search = filters.search;
+  if (filters.ordering) params.ordering = filters.ordering;
+  if (filters.page) params.page = filters.page;
+  if (filters.limit) params.limit = filters.limit;
+
+  const { data } = await apiClient.get<any>("/projects/", { params });
+  return {
+    data: Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [],
+    page: data?.page ?? 1,
+    totalPages: data?.totalPages ?? 1,
+    totalItems: data?.totalItems ?? 0,
+  };
+}
+
 export async function getProjects(
   teamId?: number, 
   filters: { search?: string; ordering?: string } = {}
