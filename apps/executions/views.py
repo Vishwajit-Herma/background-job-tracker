@@ -174,7 +174,9 @@ class ExecutionViewSet(CustomBaseViewSet):
         execution = self.get_object()
         if execution.status not in [Execution.Status.RUNNING, Execution.Status.PENDING]:
             return Response(
-                {"detail": f"Execution is in terminal state '{execution.status}' and cannot be cancelled."},
+                {
+                    "detail": f"Execution is in terminal state '{execution.status}' and cannot be cancelled."
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 

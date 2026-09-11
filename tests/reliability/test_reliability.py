@@ -811,4 +811,3 @@ def test_manual_resolve_reliability_finding_api(test_setup):
 
     assert exec_stalled.status == Execution.Status.CANCELLED
     assert finding.status == ReliabilityFinding.Status.RECOVERED
-

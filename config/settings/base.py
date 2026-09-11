@@ -396,8 +396,23 @@ ACCOUNT_ADAPTER = "apps.users.adapters.CustomAccountAdapter"
 
 # AI Reliability Assistant (Gemini)
 GEMINI_API_KEY = env.str("GEMINI_API_KEY", default="")
-GEMINI_MODEL = env.str("GEMINI_MODEL", default="gemini-3.6-flash")
-# gemini-3.6-flash with thinking can take 30-90s on large contexts.
+GEMINI_MODEL = env.str("GEMINI_MODEL", default="gemini-3.8-flash")
+GEMINI_FALLBACK_MODELS = env.list(
+    "GEMINI_FALLBACK_MODELS",
+    default=[
+        "gemini-3.8-flash",
+        "gemini-3.7-flash",
+        "gemini-3.6-flash",
+        "gemini-3.5-flash",
+        "gemini-3.5-flash-lite",
+        "gemini-3.1-flash-lite",
+    ],
+)
+# Cooldown duration in seconds when a model returns 429/quota exhausted (default: 1 hour)
+GEMINI_COOLDOWN_SECONDS = env.int("GEMINI_COOLDOWN_SECONDS", default=3600)
+# Short cooldown in seconds when a model returns 503 high demand (default: 60 seconds)
+GEMINI_DEMAND_COOLDOWN_SECONDS = env.int("GEMINI_DEMAND_COOLDOWN_SECONDS", default=60)
+# Models with thinking/large contexts can take 30-90s
 # Override with GEMINI_TIMEOUT env var if needed.
 GEMINI_TIMEOUT = env.int("GEMINI_TIMEOUT", default=60)
 

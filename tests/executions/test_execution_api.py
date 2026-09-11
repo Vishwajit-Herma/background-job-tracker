@@ -75,7 +75,9 @@ class TestExecutionAPI:
         assert response_detail.status_code == status.HTTP_404_NOT_FOUND
 
     def test_cancel_running_execution(self, api_client, user1, project1):
-        job = Job.objects.create(project=project1, name="Test Job Cancel", task_identifier="tasks.cancel")
+        job = Job.objects.create(
+            project=project1, name="Test Job Cancel", task_identifier="tasks.cancel"
+        )
         running_exec = Execution.objects.create(
             job=job,
             external_id="exec_running",

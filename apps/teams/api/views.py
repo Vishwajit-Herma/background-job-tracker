@@ -58,7 +58,9 @@ class TeamViewSet(viewsets.ModelViewSet):
             team = serializer.save(owner=user)
         except IntegrityError:
             raise ValidationError(
-                {"name": "A team with this name already exists(globally). Please choose a different name."}
+                {
+                    "name": "A team with this name already exists(globally). Please choose a different name."
+                }
             ) from None
         publish_realtime_event("team.updated", team_id=team.id, payload={"action": "created"})
 

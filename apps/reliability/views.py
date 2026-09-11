@@ -12,7 +12,6 @@ from apps.config_management.views import BaseViewSetConfig, CustomBaseGenericVie
 from apps.executions.models import Execution
 from apps.jobs.models import Job
 from apps.projects.models import Project
-from apps.reliability.evaluators import evaluate_job_reliability
 from apps.reliability.models import JobExpectation, ReliabilityFinding
 from apps.reliability.permissions import ReliabilityPermission
 from apps.reliability.serializers import (

@@ -63,7 +63,9 @@ class TeamSerializer(serializers.ModelSerializer):
         if qs.exists():
             field = "slug" if (self.initial_data and "slug" in self.initial_data) else "name"
             raise serializers.ValidationError(
-                {field: "A team with this name already exists(globally). Please choose a different name."}
+                {
+                    field: "A team with this name already exists(globally). Please choose a different name."
+                }
             )
 
         return attrs
