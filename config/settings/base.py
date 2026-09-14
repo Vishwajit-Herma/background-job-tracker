@@ -156,20 +156,21 @@ CACHES = {
         "LOCATION": env("REDIS_URL", default="redis://127.0.0.1:6379/0"),
         "OPTIONS": {
             "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            "IGNORE_EXCEPTIONS": True,
         },
         "KEY_PREFIX": "background_job_tracker",
     }
 }
 
-# Session
-SESSION_ENGINE = "django.contrib.sessions.backends.cache"
+# Session - cached_db persists sessions in PostgreSQL while caching in Redis (fail-safe)
+SESSION_ENGINE = "django.contrib.sessions.backends.cached_db"
 SESSION_CACHE_ALIAS = "default"
 
 # Channel Layers (Django Channels)
 REDIS_URL = env("REDIS_URL", default="redis://127.0.0.1:6379/0")
 CHANNEL_LAYERS = {
     "default": {
-        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "BACKEND": "apps.core.realtime.channel_layer.LowCommandRedisChannelLayer",
         "CONFIG": {
             "hosts": [REDIS_URL],
         },
@@ -278,6 +279,16 @@ if CELERY_BROKER_URL.startswith("rediss://"):
     }
 else:
     CELERY_BROKER_USE_SSL = None
+CELERY_BROKER_TRANSPORT_OPTIONS = {
+    "visibility_timeout": 3600,
+    "polling_interval": 30,
+    "health_check_interval": 300,
+    "fanout_prefix": True,
+    "fanout_patterns": True,
+    "socket_keepalive": True,
+    "socket_timeout": 45,
+    "socket_connect_timeout": 30,
+}
 CELERY_RESULT_BACKEND = "django-db"
 CELERY_RESULT_EXPIRES = 60 * 60 * 24 * 7  # 7 days (prevents django_celery_results unbounded growth)
 CELERY_CACHE_BACKEND = "django-cache"
@@ -287,6 +298,8 @@ CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = TIME_ZONE
+CELERY_WORKER_SEND_TASK_EVENTS = False
+CELERY_SEND_EVENTS = False
 
 CELERY_BEAT_SCHEDULE = {
     "hard-delete-soft-deleted-records": {
@@ -295,8 +308,8 @@ CELERY_BEAT_SCHEDULE = {
     },
     "evaluate-alert-rules": {
         "task": "alerts.evaluate_alert_rules",
-        "schedule": crontab(minute="*"),  # Runs every minute
-        "options": {"expires": 60},
+        "schedule": crontab(minute="*/15"),  # Runs every 15 minutes
+        "options": {"expires": 900},
     },
     "recover-orphaned-deliveries": {
         "task": "notifications.recover_orphaned_deliveries",
@@ -305,8 +318,8 @@ CELERY_BEAT_SCHEDULE = {
     },
     "evaluate-job-reliability": {
         "task": "reliability.evaluate_reliability",
-        "schedule": crontab(minute="*"),  # Runs every minute
-        "options": {"expires": 60},
+        "schedule": crontab(minute="*/15"),  # Runs every 15 minutes
+        "options": {"expires": 900},
     },
     "recalculate-job-baselines": {
         "task": "reliability.recalculate_baselines",

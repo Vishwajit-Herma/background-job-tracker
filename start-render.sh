@@ -5,7 +5,7 @@ echo "Running database migrations..."
 python manage.py migrate --noinput
 
 echo "Starting Celery worker..."
-celery -A config worker --loglevel=info --pool=solo --concurrency=1 &
+celery -A config worker --loglevel=info --pool=solo --concurrency=1 --without-gossip --without-mingle --without-heartbeat &
 WORKER_PID=$!
 
 echo "Starting Celery beat..."
