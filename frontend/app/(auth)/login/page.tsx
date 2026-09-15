@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AlertCircle } from "lucide-react";
 import { ApiError } from "@/lib/api/client";
+import { GoogleAuthButton } from "@/components/bjt/google-auth-button";
 
 const loginSchema = z.object({
   email: z.string().email("Please enter a valid email address."),
@@ -21,7 +22,19 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
   const { login, isLoggingIn } = useAuth();
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const error = params.get("error");
+      if (error === "oauth_error") {
+        return "Google sign-in was cancelled or encountered an authentication error.";
+      }
+      if (error === "oauth_unverified") {
+        return "Cannot link account: The Google email is not verified by Google.";
+      }
+    }
+    return null;
+  });
 
   const {
     register,
@@ -50,7 +63,18 @@ export default function LoginPage() {
         </p>
       </div>
 
-      <div className="grid gap-6">
+      <div className="grid gap-4">
+        <GoogleAuthButton label="Continue with Google" />
+
+        <div className="relative my-1">
+          <div className="absolute inset-0 flex items-center">
+            <span className="w-full border-t" />
+          </div>
+          <div className="relative flex justify-center text-xs uppercase">
+            <span className="bg-background px-2 text-muted-foreground">Or continue with</span>
+          </div>
+        </div>
+
         <form onSubmit={handleSubmit(onSubmit)}>
           <div className="grid gap-4">
             <div className="grid gap-2">
@@ -106,7 +130,7 @@ export default function LoginPage() {
       </div>
 
       <div className="text-center text-sm">
-        Don't have an account?{" "}
+        Don&apos;t have an account?{" "}
         <Link href="/register" className="underline underline-offset-4 hover:text-primary">
           Sign up
         </Link>

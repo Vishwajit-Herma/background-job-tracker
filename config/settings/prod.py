@@ -1,5 +1,7 @@
 """Production settings."""
 
+from urllib.parse import urlparse
+
 from .base import *  # noqa: F403, F401
 
 DEBUG = False
@@ -101,6 +103,19 @@ else:
 # Frontend & Site URLs
 FRONTEND_URL = env("FRONTEND_URL", default="https://background-job-tracker-wine.vercel.app")  # noqa: F405
 SITE_URL = env("SITE_URL", default=FRONTEND_URL)  # noqa: F405
+LOGIN_REDIRECT_URL = FRONTEND_URL
+LOGOUT_REDIRECT_URL = FRONTEND_URL
+USE_X_FORWARDED_HOST = True
+
+_frontend_host = urlparse(FRONTEND_URL).netloc
+if _frontend_host and _frontend_host not in ALLOWED_HOSTS:  # noqa: F405
+    ALLOWED_HOSTS.append(_frontend_host)  # noqa: F405
+
+if FRONTEND_URL:
+    if FRONTEND_URL not in CORS_ALLOWED_ORIGINS:  # noqa: F405
+        CORS_ALLOWED_ORIGINS.append(FRONTEND_URL)  # noqa: F405
+    if FRONTEND_URL not in CSRF_TRUSTED_ORIGINS:  # noqa: F405
+        CSRF_TRUSTED_ORIGINS.append(FRONTEND_URL)  # noqa: F405
 
 # Admin
 ADMINS = [

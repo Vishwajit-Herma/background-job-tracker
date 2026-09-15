@@ -71,7 +71,7 @@ services:
   celery-worker:
     build: .
     user: "${UID:-1000}:${GID:-1000}"
-    command: uv run celery -A config worker --loglevel=info
+    command: uv run celery -A config worker --loglevel=info --without-gossip --without-mingle --without-heartbeat
     volumes:
       - .:/app
     depends_on:

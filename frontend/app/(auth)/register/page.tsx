@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AlertCircle, Loader2 } from "lucide-react";
+import { GoogleAuthButton } from "@/components/bjt/google-auth-button";
 
 const registerSchema = z
   .object({
@@ -53,14 +54,14 @@ export default function RegisterPage() {
       if (apiError.status === 400 && apiError.errors) {
         // Map backend validation errors
         Object.keys(apiError.errors).forEach((key) => {
+          const errVal = apiError.errors?.[key];
+          const message = Array.isArray(errVal) ? errVal.join(", ") : String(errVal ?? "");
           if (key === "non_field_errors" || key === "detail") {
-            setGlobalError((apiError.errors as any)[key].join(", "));
+            setGlobalError(message);
           } else {
             setError(key as keyof RegisterFormValues, {
               type: "server",
-              message: Array.isArray((apiError.errors as any)[key]) 
-                ? (apiError.errors as any)[key].join(", ") 
-                : String((apiError.errors as any)[key]),
+              message,
             });
           }
         });
@@ -76,7 +77,7 @@ export default function RegisterPage() {
         <div className="flex flex-col space-y-2 text-center">
           <h1 className="text-2xl font-semibold tracking-tight">Check your email</h1>
           <p className="text-sm text-muted-foreground">
-            We've sent a verification link to your email address. Please verify your account to continue.
+            We&apos;ve sent a verification link to your email address. Please verify your account to continue.
           </p>
         </div>
         <Link href="/login" className="inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50">
@@ -94,7 +95,19 @@ export default function RegisterPage() {
           Enter your email below to create your account
         </p>
       </div>
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      <div className="grid gap-4">
+        <GoogleAuthButton label="Sign up with Google" />
+
+        <div className="relative my-1">
+          <div className="absolute inset-0 flex items-center">
+            <span className="w-full border-t" />
+          </div>
+          <div className="relative flex justify-center text-xs uppercase">
+            <span className="bg-background px-2 text-muted-foreground">Or continue with</span>
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="email">Email</Label>
           <Input
@@ -145,6 +158,7 @@ export default function RegisterPage() {
           Register
         </Button>
       </form>
+      </div>
 
       <div className="text-center text-sm">
         Already have an account?{" "}

@@ -50,6 +50,7 @@ THIRD_PARTY_APPS = [
     "allauth",
     "allauth.account",
     "allauth.socialaccount",
+    "allauth.socialaccount.providers.google",
     "dj_rest_auth",
     "dj_rest_auth.registration",
     "django_celery_beat",
@@ -162,9 +163,8 @@ CACHES = {
     }
 }
 
-# Session - cached_db persists sessions in PostgreSQL while caching in Redis (fail-safe)
-SESSION_ENGINE = "django.contrib.sessions.backends.cached_db"
-SESSION_CACHE_ALIAS = "default"
+# Session - Persist sessions directly in PostgreSQL to save Redis command quotas
+SESSION_ENGINE = "django.contrib.sessions.backends.db"
 
 # Channel Layers (Django Channels)
 REDIS_URL = env("REDIS_URL", default="redis://127.0.0.1:6379/0")
@@ -282,9 +282,7 @@ else:
 CELERY_BROKER_TRANSPORT_OPTIONS = {
     "visibility_timeout": 3600,
     "polling_interval": 30,
-    "health_check_interval": 300,
-    "fanout_prefix": True,
-    "fanout_patterns": True,
+    "health_check_interval": 600,
     "socket_keepalive": True,
     "socket_timeout": 45,
     "socket_connect_timeout": 30,
@@ -300,6 +298,7 @@ CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_WORKER_SEND_TASK_EVENTS = False
 CELERY_SEND_EVENTS = False
+CELERY_WORKER_ENABLE_REMOTE_CONTROL = False
 
 CELERY_BEAT_SCHEDULE = {
     "hard-delete-soft-deleted-records": {
@@ -406,6 +405,30 @@ REST_AUTH = {
 FRONTEND_URL = env("FRONTEND_URL", default="http://localhost:3000")
 
 ACCOUNT_ADAPTER = "apps.users.adapters.CustomAccountAdapter"
+SOCIALACCOUNT_ADAPTER = "apps.users.adapters.CustomSocialAccountAdapter"
+
+# Google OAuth Configuration
+GOOGLE_CLIENT_ID = env.str("GOOGLE_CLIENT_ID", default="")
+GOOGLE_CLIENT_SECRET = env.str("GOOGLE_CLIENT_SECRET", default="")
+
+SOCIALACCOUNT_PROVIDERS = {
+    "google": {
+        "APPS": [
+            {
+                "client_id": GOOGLE_CLIENT_ID,
+                "secret": GOOGLE_CLIENT_SECRET,
+                "key": "",
+            },
+        ],
+        "SCOPE": ["profile", "email"],
+        "AUTH_PARAMS": {"access_type": "online"},
+        "VERIFIED_EMAIL": False,
+    },
+}
+SOCIALACCOUNT_LOGIN_ON_GET = True
+LOGIN_REDIRECT_URL = FRONTEND_URL
+LOGOUT_REDIRECT_URL = FRONTEND_URL
+USE_X_FORWARDED_HOST = True
 
 # AI Reliability Assistant (Gemini)
 GEMINI_API_KEY = env.str("GEMINI_API_KEY", default="")

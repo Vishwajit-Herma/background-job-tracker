@@ -11,6 +11,10 @@ const nextConfig: NextConfig = {
         source: "/api/:path*",
         destination: `${process.env.DJANGO_API_URL || "http://localhost:8000"}/api/:path*/`,
       },
+      {
+        source: "/accounts/:path*",
+        destination: `${process.env.DJANGO_API_URL || "http://localhost:8000"}/accounts/:path*/`,
+      },
     ];
   },
 };
