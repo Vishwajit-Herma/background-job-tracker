@@ -18,6 +18,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getReliabilityReport } from "@/lib/api/projects";
 import { AnalyticsMetricDelta } from "@/lib/api/analytics";
 import Link from "next/link";
+import { useProject } from "@/components/bjt/project-provider";
 
 function formatRate(rate: number) {
   return `${rate.toFixed(1)}%`;
@@ -67,19 +68,19 @@ export function AnalyticsPageClient() {
   const searchParams = useSearchParams();
   const range = searchParams.get("range") || "24h";
   const { projects, isLoading: isWorkspaceLoading } = useWorkspace();
+  const { selectedProjectId } = useProject();
   
   const [projectId, setProjectId] = useState<number | null>(null);
 
   useEffect(() => {
-    const projectParam = searchParams.get("project");
-    if (projectParam && projectParam !== "all") {
-      setProjectId(parseInt(projectParam, 10));
-    } else if (projects.length > 0 && !projectParam) {
+    if (selectedProjectId !== "all") {
+      setProjectId(selectedProjectId);
+    } else if (projects.length > 0) {
       setProjectId(projects[0].id);
     } else {
       setProjectId(null);
     }
-  }, [searchParams, projects]);
+  }, [selectedProjectId, projects]);
 
   const { data: analytics, isLoading: isAnalyticsLoading, isError: isAnalyticsError, refetch: refetchAnalytics, isRefetching: isRefetchingAnalytics } = useProjectAnalytics(projectId, { range });
   const { data: trendData, isLoading: isTrendLoading, isError: isTrendError, refetch: refetchTrend, isRefetching: isRefetchingTrend } = useProjectAnalyticsTrend(projectId, { range });

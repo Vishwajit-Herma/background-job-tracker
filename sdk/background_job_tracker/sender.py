@@ -213,9 +213,9 @@ class BackgroundSender(threading.Thread):
         try:
             response = self.session.post(url, json=payload, timeout=10.0)
             if response.status_code in (400, 401, 403):
-                # Fatal client errors, no point in retrying
-                logger.error(
-                    f"Failed to ingest telemetry: {response.status_code} - {response.text}. Dropping batch."
+                # Expected rejection (e.g. project inactive/deleted or invalid key). Drop batch cleanly without raising an error.
+                logger.info(
+                    f"Telemetry batch dropped ({response.status_code}): {response.text}"
                 )
                 return True
             elif response.status_code >= 500 or response.status_code in (408, 429):
@@ -241,8 +241,8 @@ class BackgroundSender(threading.Thread):
         try:
             response = self.session.post(url, json=payload, timeout=10.0)
             if response.status_code in (400, 401, 403):
-                logger.error(
-                    f"Failed to sync task registry: {response.status_code} - {response.text}"
+                logger.info(
+                    f"Task registry sync skipped ({response.status_code}): {response.text}"
                 )
             elif response.status_code >= 500 or response.status_code in (408, 429):
                 logger.warning(f"Transient error syncing task registry: {response.status_code}")

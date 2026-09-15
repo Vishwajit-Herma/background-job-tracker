@@ -261,9 +261,11 @@ export async function getIncidents(
     status?: string;
     severity?: string;
     assigned_to__user?: number | string;
+    project?: number | string;
   } = {}
 ): Promise<PaginatedIncidents> {
   const params = new URLSearchParams();
+  if (filters.project && filters.project !== "all") params.append("project", filters.project.toString());
   if (filters.page) params.append("page", filters.page.toString());
   if (filters.search) params.append("search", filters.search);
   if (filters.ordering) params.append("ordering", filters.ordering);

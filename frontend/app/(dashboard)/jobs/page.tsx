@@ -19,6 +19,8 @@ import { getProjectReliability, ReliabilityState } from "@/lib/api/reliability";
 import { ReliabilityBadge } from "@/components/bjt/reliability/reliability-badge";
 import { useDebounce } from "@/hooks/use-debounce";
 import { PaginationControls } from "@/components/bjt/pagination";
+import { useProject } from "@/components/bjt/project-provider";
+import { ProjectSelectFilter } from "@/components/bjt/project-select-filter";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,6 +34,7 @@ function JobsPageContent() {
   const searchParams = useSearchParams();
   const { user } = useAuth();
   const isGlobalStaff = user?.is_staff ?? false;
+  const { selectedProjectId } = useProject();
 
   const [selectedJob, setSelectedJob] = useState<{ id: number; name: string } | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -65,8 +68,14 @@ function JobsPageContent() {
   const debouncedSearch = useDebounce(search, 500);
 
   const { data: paginatedJobs, isLoading: isLoadingJobs, isError: isJobsError, refetch } = useQuery({
-    queryKey: ["jobs-paginated", page, debouncedSearch, ordering, statusFilter],
-    queryFn: () => getJobsPaginated({ page, search: debouncedSearch, ordering, status: statusFilter !== "all" ? statusFilter : undefined }),
+    queryKey: ["jobs-paginated", page, debouncedSearch, ordering, statusFilter, selectedProjectId],
+    queryFn: () => getJobsPaginated({ 
+      page, 
+      search: debouncedSearch, 
+      ordering, 
+      status: statusFilter !== "all" ? statusFilter : undefined,
+      project: selectedProjectId !== "all" ? selectedProjectId : undefined,
+    }),
   });
 
   // Query project reliability maps for all active projects
@@ -157,6 +166,8 @@ function JobsPageContent() {
           />
         </div>
         <div className="flex flex-wrap w-full lg:w-auto gap-3">
+          {/* Project Filter */}
+          <ProjectSelectFilter className="w-full sm:w-44" />
           {/* Reliability Filter */}
           <div className="w-full sm:w-40">
             <Select value={reliabilityFilter} onValueChange={(val) => { if (val) handleReliabilityFilterChange(val); }}>

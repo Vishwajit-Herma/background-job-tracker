@@ -14,10 +14,13 @@ export function proxy(request: NextRequest) {
     url.pathname.startsWith("/reset-password") ||
     url.pathname.startsWith("/verify-email") ||
     url.pathname.startsWith("/accounts");
-  
+
+  // Static image/asset files in public/
+  const isStaticAsset = /\.(?:png|jpg|jpeg|gif|svg|webp|ico)$/i.test(url.pathname);
+
   // UX route guard: if no session cookie, redirect to /login for protected routes
   // NOTE: This is UX-only. Django must STILL protect the API!
-  if (!sessionId && !isAuthRoute && !url.pathname.startsWith("/_next") && !url.pathname.startsWith("/api") && !url.pathname.startsWith("/accounts")) {
+  if (!sessionId && !isAuthRoute && !isStaticAsset && !url.pathname.startsWith("/_next") && !url.pathname.startsWith("/api") && !url.pathname.startsWith("/accounts")) {
     url.pathname = "/login";
     return NextResponse.redirect(url);
   }
@@ -40,6 +43,6 @@ export function proxy(request: NextRequest) {
 export const config = {
   // Apply middleware to all routes except API, accounts, static assets, and Next internals
   matcher: [
-    "/((?!api|accounts|_next/static|_next/image|favicon.ico).*)",
+    "/((?!api|accounts|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };

@@ -51,10 +51,11 @@ export interface ExecutionEvent {
 
 export async function getExecutions(
   jobId?: number,
-  filters: { page?: number; search?: string; ordering?: string; status?: string } = {}
+  filters: { page?: number; search?: string; ordering?: string; status?: string; project?: number | string } = {}
 ): Promise<PaginatedResponse<Execution>> {
   const searchParams = new URLSearchParams();
   if (jobId) searchParams.append("job", jobId.toString());
+  if (filters.project && filters.project !== "all") searchParams.append("job__project", filters.project.toString());
   if (filters.page) searchParams.append("page", filters.page.toString());
   if (filters.search) searchParams.append("search", filters.search);
   if (filters.ordering) searchParams.append("ordering", filters.ordering);

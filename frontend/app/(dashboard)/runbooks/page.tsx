@@ -24,12 +24,14 @@ import {
   ChevronUp,
 } from "lucide-react";
 import { toastError, toastSuccess } from "@/lib/toast";
+import { useProject } from "@/components/bjt/project-provider";
+import { ProjectSelectFilter } from "@/components/bjt/project-select-filter";
 
 export default function RunbooksPage() {
   const queryClient = useQueryClient();
   const { projects, jobs } = useWorkspace();
+  const { selectedProjectId } = useProject();
 
-  const [selectedProject, setSelectedProject] = useState<string>("all");
   const [selectedTrigger, setSelectedTrigger] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -39,13 +41,13 @@ export default function RunbooksPage() {
   const { data: runbooks = [], isLoading } = useQuery({
     queryKey: [
       "runbooks",
-      selectedProject !== "all" ? Number(selectedProject) : undefined,
+      selectedProjectId !== "all" ? Number(selectedProjectId) : undefined,
       selectedTrigger !== "all" ? selectedTrigger : undefined,
       searchQuery,
     ],
     queryFn: () =>
       getRunbooks({
-        project: selectedProject !== "all" ? Number(selectedProject) : undefined,
+        project: selectedProjectId !== "all" ? Number(selectedProjectId) : undefined,
         trigger_type: selectedTrigger !== "all" ? selectedTrigger : undefined,
         search: searchQuery || undefined,
       }),
@@ -115,18 +117,7 @@ export default function RunbooksPage() {
           </div>
 
           {/* Project Filter */}
-          <select
-            className="flex h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm ring-offset-background focus:outline-none focus:ring-1 focus:ring-ring"
-            value={selectedProject}
-            onChange={(e) => setSelectedProject(e.target.value)}
-          >
-            <option value="all">All Projects</option>
-            {projects.map((p) => (
-              <option key={p.id} value={p.id.toString()}>
-                {p.name}
-              </option>
-            ))}
-          </select>
+          <ProjectSelectFilter className="w-full sm:w-44" />
 
           {/* Trigger Type Filter */}
           <select
@@ -304,7 +295,7 @@ export default function RunbooksPage() {
         open={isFormOpen}
         onOpenChange={setIsFormOpen}
         runbook={editingRunbook}
-        initialProjectId={selectedProject !== "all" ? Number(selectedProject) : undefined}
+        initialProjectId={selectedProjectId !== "all" ? Number(selectedProjectId) : undefined}
       />
     </div>
   );

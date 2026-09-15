@@ -192,7 +192,8 @@ def custom_exception_handler(exc, context):
         message = extract_first_error_message(response.data)
 
         if response.status_code == status.HTTP_400_BAD_REQUEST:
-            logger.warning(
+            log_func = logger.info if view_name in ("IngestionViewSet", "JobViewSet") else logger.warning
+            log_func(
                 "ValidationError in %s. user_id=%s errors=%s",
                 view_name,
                 user_id,
@@ -210,7 +211,8 @@ def custom_exception_handler(exc, context):
             )
 
         elif response.status_code in (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN):
-            logger.warning(
+            log_func = logger.info if view_name in ("IngestionViewSet", "JobViewSet") else logger.warning
+            log_func(
                 "Permission/Auth error in %s. user_id=%s error=%s", view_name, user_id, message
             )
             return CustomResponse.error(message=message, code=response.status_code)

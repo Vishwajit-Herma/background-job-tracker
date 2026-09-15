@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { 
-  LayoutDashboard, 
   FolderGit2, 
   Activity, 
   ListChecks, 
@@ -12,7 +11,6 @@ import {
   AlertTriangle,
   Users,
   Settings,
-  Key,
   LogOut,
   Shield,
   MessageSquare,
@@ -55,9 +53,15 @@ export function Sidebar({ className }: { className?: string }) {
   return (
     <div className={cn("flex h-full w-full flex-col border-r bg-muted/40", className)}>
       <div className="flex h-14 items-center border-b px-4 lg:h-[60px] lg:px-6">
-        <Link href="/" className="flex items-center gap-2 font-semibold">
-          <LayoutDashboard className="h-6 w-6" />
-          <span className="">BJT</span>
+        <Link href="/" className="flex items-center gap-2.5 font-semibold group">
+          <img
+            src="/bjt-logo-clean.png"
+            alt="Background Job Tracker Logo"
+            className="h-7 w-auto object-contain transition-transform group-hover:scale-105"
+          />
+          <span className="font-semibold text-sm tracking-tight text-foreground">
+            Background Job Tracker
+          </span>
         </Link>
       </div>
       <div className="flex-1 overflow-auto py-2">

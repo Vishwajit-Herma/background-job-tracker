@@ -18,6 +18,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Search } from "lucide-react";
 import { useDebounce } from "@/hooks/use-debounce";
 import { toastError, toastSuccess } from "@/lib/toast";
+import { useProject } from "@/components/bjt/project-provider";
+import { ProjectSelectFilter } from "@/components/bjt/project-select-filter";
 
 // Inline subset of ExecutionDetails to show when row is expanded
 function StandaloneExecutionDetails({ execution }: { execution: Execution }) {
@@ -167,11 +169,18 @@ export default function ExecutionsPage() {
   const [ordering, setOrdering] = useState("-created_at");
   const [statusFilter, setStatusFilter] = useState("all");
   const debouncedSearch = useDebounce(search, 500);
+  const { selectedProjectId } = useProject();
 
   // Fetch executions with pagination
   const { data: paginatedExecutions, isLoading, isError, refetch } = useQuery({
-    queryKey: ["executions-all", page, debouncedSearch, ordering, statusFilter],
-    queryFn: () => getExecutions(undefined, { page, search: debouncedSearch, ordering, status: statusFilter !== "all" ? statusFilter : undefined }),
+    queryKey: ["executions-all", page, debouncedSearch, ordering, statusFilter, selectedProjectId],
+    queryFn: () => getExecutions(undefined, { 
+      page, 
+      search: debouncedSearch, 
+      ordering, 
+      status: statusFilter !== "all" ? statusFilter : undefined,
+      project: selectedProjectId !== "all" ? selectedProjectId : undefined,
+    }),
   });
 
   const [cancellingId, setCancellingId] = useState<number | null>(null);
@@ -214,7 +223,8 @@ export default function ExecutionsPage() {
             className="pl-9 h-9"
           />
         </div>
-        <div className="flex w-full sm:w-auto gap-3">
+        <div className="flex w-full sm:w-auto gap-3 flex-wrap sm:flex-nowrap">
+          <ProjectSelectFilter className="w-full sm:w-44" />
           <div className="w-full sm:w-40">
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger className="h-9">

@@ -17,6 +17,8 @@ import { Search, User } from "lucide-react";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useAuth } from "@/hooks/use-auth";
 import { getTriggerSummary } from "@/lib/incident-trigger-utils";
+import { useProject } from "@/components/bjt/project-provider";
+import { ProjectSelectFilter } from "@/components/bjt/project-select-filter";
 
 export default function IncidentsPage() {
   const [page, setPage] = useState(1);
@@ -36,16 +38,18 @@ export default function IncidentsPage() {
   const [assigneeFilter, setAssigneeFilter] = useState("all");
   const debouncedSearch = useDebounce(search, 500);
   const { user } = useAuth();
+  const { selectedProjectId } = useProject();
 
   const { data: paginatedIncidents, isLoading, isError } = useQuery({
-    queryKey: ["incidents", page, debouncedSearch, ordering, statusFilter, severityFilter, assigneeFilter],
+    queryKey: ["incidents", page, debouncedSearch, ordering, statusFilter, severityFilter, assigneeFilter, selectedProjectId],
     queryFn: () => getIncidents({ 
       page, 
       search: debouncedSearch, 
       ordering, 
       status: statusFilter !== "all" ? statusFilter : undefined,
       severity: severityFilter !== "all" ? severityFilter : undefined,
-      assigned_to__user: assigneeFilter === "me" ? user?.id || (user as any)?.pk : undefined
+      assigned_to__user: assigneeFilter === "me" ? user?.id || (user as any)?.pk : undefined,
+      project: selectedProjectId !== "all" ? selectedProjectId : undefined,
     }),
   });
 
@@ -82,7 +86,8 @@ export default function IncidentsPage() {
             className="pl-9 h-9"
           />
         </div>
-        <div className="flex w-full sm:w-auto gap-3">
+        <div className="flex w-full sm:w-auto gap-3 flex-wrap sm:flex-nowrap">
+          <ProjectSelectFilter className="w-full sm:w-44" />
           <div className="w-full sm:w-40">
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger className="h-9">

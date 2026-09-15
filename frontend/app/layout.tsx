@@ -5,6 +5,10 @@ import { Providers } from "@/components/providers";
 export const metadata: Metadata = {
   title: "Background Job Tracker",
   description: "Monitor and manage background jobs seamlessly.",
+  icons: {
+    icon: "/bjt-icon.png",
+    apple: "/bjt-icon.png",
+  },
 };
 
 export default function RootLayout({

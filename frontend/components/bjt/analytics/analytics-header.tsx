@@ -4,8 +4,9 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { RefreshCwIcon } from "lucide-react";
-import { useWorkspace } from "@/hooks/use-workspace";
 import { useCallback } from "react";
+
+import { ProjectSelectFilter } from "../project-select-filter";
 
 interface AnalyticsHeaderProps {
   title: string;
@@ -24,14 +25,13 @@ const RANGE_OPTIONS = [
 
 export function AnalyticsHeader({
   title,
-  showProjectFilter = false,
+  showProjectFilter = true,
   onRefresh,
   isRefreshing = false,
 }: AnalyticsHeaderProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { projects } = useWorkspace();
 
   const rawRange = searchParams.get("range") || "24h";
   const currentRange =
@@ -46,7 +46,6 @@ export function AnalyticsHeader({
       : rawRange === "last_30_days"
       ? "30d"
       : rawRange;
-  const currentProject = searchParams.get("project") || "";
 
   const createQueryString = useCallback(
     (name: string, value: string) => {
@@ -67,12 +66,6 @@ export function AnalyticsHeader({
     }
   };
 
-  const handleProjectChange = (value: string | null) => {
-    if (value) {
-      router.push(pathname + "?" + createQueryString("project", value === "all" ? "" : value));
-    }
-  };
-
   return (
     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
       <div>
@@ -83,24 +76,7 @@ export function AnalyticsHeader({
       </div>
 
       <div className="flex items-center gap-2 flex-wrap">
-        {showProjectFilter && (
-          <Select value={currentProject || (projects.length > 0 ? projects[0].id.toString() : "")} onValueChange={handleProjectChange}>
-            <SelectTrigger className="w-[200px]">
-              <span data-slot="select-value" className="flex flex-1 text-left line-clamp-1">
-                {currentProject
-                  ? projects.find((p) => p.id.toString() === currentProject)?.name
-                  : (projects.length > 0 ? projects[0].name : "Select Project")}
-              </span>
-            </SelectTrigger>
-            <SelectContent>
-              {projects.map((p) => (
-                <SelectItem key={p.id} value={p.id.toString()}>
-                  {p.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
+        {showProjectFilter && <ProjectSelectFilter className="w-[200px]" />}
 
         <Select value={currentRange} onValueChange={handleRangeChange}>
           <SelectTrigger className="w-[160px]">
