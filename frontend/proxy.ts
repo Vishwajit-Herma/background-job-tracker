@@ -6,8 +6,10 @@ export function proxy(request: NextRequest) {
   const sessionId = request.cookies.get("sessionid");
   const url = request.nextUrl.clone();
   
-  // Public routes (Auth flow)
+  // Public routes (Auth flow & Landing page)
+  const isLandingPage = url.pathname === "/";
   const isAuthRoute = 
+    isLandingPage ||
     url.pathname === "/login" || 
     url.pathname === "/register" || 
     url.pathname === "/forgot-password" || 
@@ -25,9 +27,9 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Only redirect logged-in users away from login/register/forgot-password (guest-only routes)
-  // NEVER redirect away from /verify-email or /reset-password!
+  // Only redirect logged-in users away from login/register/forgot-password or landing page
   const isGuestOnlyRoute =
+    url.pathname === "/" ||
     url.pathname === "/login" ||
     url.pathname === "/register" ||
     url.pathname === "/forgot-password";
