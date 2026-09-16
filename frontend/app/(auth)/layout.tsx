@@ -11,7 +11,12 @@ export default function AuthLayout({
         <img
           src="/bjt-logo-clean.png"
           alt="Background Job Tracker Logo"
-          className="h-9 w-auto object-contain"
+          className="h-9 w-auto object-contain dark:hidden"
+        />
+        <img
+          src="/bjt-logo-dark.png"
+          alt="Background Job Tracker Logo"
+          className="h-9 w-auto object-contain hidden dark:block"
         />
         <span className="font-semibold text-lg tracking-tight text-foreground">
           Background Job Tracker

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { buttonVariants } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export function LandingNav() {
   return (
@@ -13,7 +14,12 @@ export function LandingNav() {
           <img
             src="/bjt-logo-clean.png"
             alt="BJT Logo"
-            className="h-8 w-auto object-contain"
+            className="h-8 w-auto object-contain dark:hidden"
+          />
+          <img
+            src="/bjt-logo-dark.png"
+            alt="BJT Logo"
+            className="h-8 w-auto object-contain hidden dark:block"
           />
           <div className="flex flex-col">
             <span className="font-bold text-base tracking-tight leading-none text-foreground">
@@ -49,8 +55,9 @@ export function LandingNav() {
           </a>
         </nav>
 
-        {/* Right CTA Actions */}
-        <div className="flex items-center gap-3">
+        {/* Right CTA Actions & Theme Toggle */}
+        <div className="flex items-center gap-2.5">
+          <ThemeToggle />
           <Link
             href="/login"
             className={buttonVariants({ variant: "ghost", size: "sm" })}

@@ -57,7 +57,12 @@ export function Sidebar({ className }: { className?: string }) {
           <img
             src="/bjt-logo-clean.png"
             alt="Background Job Tracker Logo"
-            className="h-7 w-auto object-contain transition-transform group-hover:scale-105"
+            className="h-7 w-auto object-contain transition-transform group-hover:scale-105 dark:hidden"
+          />
+          <img
+            src="/bjt-logo-dark.png"
+            alt="Background Job Tracker Logo"
+            className="h-7 w-auto object-contain transition-transform group-hover:scale-105 hidden dark:block"
           />
           <span className="font-semibold text-sm tracking-tight text-foreground">
             Background Job Tracker

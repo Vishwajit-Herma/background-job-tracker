@@ -207,6 +207,7 @@ function ProjectFormModal({
       }
       // Invalidate all project queries since we might be across teams
       queryClient.invalidateQueries({ queryKey: ["projects"] });
+      queryClient.invalidateQueries({ queryKey: ["projects-paginated"] });
       reset();
       onOpenChange(false);
     } catch (e: any) {
@@ -327,6 +328,7 @@ function ConfirmDeleteModal({
     try {
       await deleteProject(project.id);
       queryClient.invalidateQueries({ queryKey: ["projects"] });
+      queryClient.invalidateQueries({ queryKey: ["projects-paginated"] });
       onOpenChange(false);
     } catch (e: any) {
       setError((e as ApiError).message || "Failed to delete project.");
@@ -760,15 +762,27 @@ function ProjectRow({
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [toggling, setToggling] = useState(false);
+  const [currentStatus, setCurrentStatus] = useState(project.status);
+
+  useEffect(() => {
+    setCurrentStatus(project.status);
+  }, [project.status]);
 
   const handleToggleStatus = async () => {
+    const nextStatus = currentStatus === "active" ? "inactive" : "active";
+    setCurrentStatus(nextStatus);
     setToggling(true);
     try {
-      const newStatus = project.status === "active" ? "inactive" : "active";
-      await updateProject(project.id, { status: newStatus });
-      queryClient.invalidateQueries({ queryKey: ["projects"] });
-    } catch {}
-    setToggling(false);
+      await updateProject(project.id, { status: nextStatus });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["projects"] }),
+        queryClient.invalidateQueries({ queryKey: ["projects-paginated"] }),
+      ]);
+    } catch {
+      setCurrentStatus(project.status);
+    } finally {
+      setToggling(false);
+    }
   };
 
   const navItems = [
@@ -799,7 +813,7 @@ function ProjectRow({
         {/* Status dot */}
         <div
           className={`h-2.5 w-2.5 rounded-full shrink-0 ${
-            project.status === "active"
+            currentStatus === "active"
               ? "bg-green-500"
               : "bg-muted-foreground/40"
           }`}
@@ -963,10 +977,11 @@ function ProjectRow({
                      <div>
                        <label className="text-sm font-medium">Project Status</label>
                        <div className="flex items-center gap-2 mt-1">
-                          <Badge variant={project.status === "active" ? "default" : "secondary"}>{project.status}</Badge>
-                          <Button variant="outline" size="sm" onClick={handleToggleStatus} disabled={toggling}>
-                            {project.status === "active" ? "Deactivate" : "Activate"}
-                          </Button>
+                           <Badge variant={currentStatus === "active" ? "default" : "secondary"}>{currentStatus}</Badge>
+                           <Button variant="outline" size="sm" onClick={handleToggleStatus} disabled={toggling}>
+                             {toggling && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+                             {currentStatus === "active" ? "Deactivate" : "Activate"}
+                           </Button>
                        </div>
                      </div>
                    </div>

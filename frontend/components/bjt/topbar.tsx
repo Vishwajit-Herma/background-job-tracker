@@ -35,6 +35,7 @@ import { NotificationsPopover } from "./notifications/notifications-popover";
 import { useAuth } from "@/hooks/use-auth";
 import { UserAvatar } from "./user-avatar";
 import { ProjectSelectFilter } from "./project-select-filter";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const pageMeta: Record<string, { label: string; icon: React.ComponentType<{ className?: string }> }> = {
   "/projects": { label: "Projects", icon: FolderGit2 },
@@ -91,7 +92,12 @@ export function Topbar() {
           <img
             src="/bjt-logo-clean.png"
             alt="Background Job Tracker"
-            className="h-6 w-auto object-contain"
+            className="h-6 w-auto object-contain dark:hidden"
+          />
+          <img
+            src="/bjt-logo-dark.png"
+            alt="Background Job Tracker"
+            className="h-6 w-auto object-contain hidden dark:block"
           />
           <span className="font-semibold text-sm tracking-tight text-foreground truncate">
             Background Job Tracker
@@ -124,6 +130,9 @@ export function Topbar() {
 
       {/* Notification Bell */}
       <NotificationsPopover />
+
+      {/* Theme Toggle */}
+      <ThemeToggle />
 
       <div className="h-4 w-px bg-border/60 mx-0.5" />
 
