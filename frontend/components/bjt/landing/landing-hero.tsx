@@ -19,7 +19,8 @@ import {
   User,
   ShieldCheck,
   Zap,
-  ArrowUpRight
+  ArrowUpRight,
+  BookOpen
 } from "lucide-react";
 
 export function LandingHero() {
@@ -134,10 +135,13 @@ export function LandingHero() {
               <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1.5 transition-transform duration-300" />
             </Link>
             <a
-              href="#how-it-works"
-              className={buttonVariants({ variant: "outline", size: "lg", className: "w-full sm:w-auto px-6 font-medium border-border/80 hover:bg-muted/70 hover:scale-[1.02] hover:border-border transition-all duration-300" })}
+              href="https://background-job-tracker.readthedocs.io/en/latest/getting-started/sdk-quickstart/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className={buttonVariants({ variant: "outline", size: "lg", className: "w-full sm:w-auto px-6 font-medium border-border/80 hover:bg-muted/70 hover:scale-[1.02] hover:border-border transition-all duration-300 gap-2" })}
             >
-              <span>View How It Works</span>
+              <BookOpen className="h-4 w-4 text-muted-foreground" />
+              <span>View Docs ↗</span>
             </a>
           </div>
         </ScrollReveal>

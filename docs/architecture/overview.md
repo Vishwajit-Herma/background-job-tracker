@@ -1,256 +1,75 @@
 # Architecture Overview
 
-Background Job Tracker follows a modern Django architecture with clean separation of concerns and production-ready patterns.
+Background Job Tracker is designed for high-throughput, low-latency telemetry ingestion, robust multi-tenancy, and automated incident response.
 
-## Project Structure
+---
 
-```
-background_job_tracker/
-├── apps/                   # Django applications
-│   ├── core/              # Core functionality (health checks, utils, middleware)
-│   ├── users/             # Custom user model and authentication
-│   ├── api/               # API endpoints (DRF)
-│   ├── teams/             # Multi-tenancy (teams, invitations, RBAC)
-│   └── ...                # Additional apps as needed
-├── config/                 # Project configuration
-│   ├── settings/          # Split settings (base, dev, test, prod)
-│   ├── urls.py            # URL configuration
-│   ├── asgi.py            # ASGI application
-│   └── wsgi.py            # WSGI application
-├── static/                 # Static files (CSS, JS, images)
-├── media/                  # User uploads
-├── docs/                   # Project documentation
-│   ├── getting-started/   # Setup and first steps
-│   ├── architecture/      # This overview
-│   └── development/       # Testing and workflow
-├── tests/                  # Test suite
-├── deploy/                 # Deployment configurations
-│   └── k8s/               # Kubernetes (Helm + Kustomize)
-├── .github/
-│   └── workflows/         # GitHub Actions CI/CD
-├── Dockerfile             # Production container image
-├── docker-compose.yml     # Development environment
-├── Justfile               # Task runner (commands)
-├── pyproject.toml         # Python dependencies and tool config
-└── README.md
-```
+## 🏗️ High-Level System Design
 
-## Key Components
-
-### Django Apps
-
-- **core**: Core functionality shared across the project
-  - Health check endpoints (`/health/`)
-  - Middleware (security, logging, team context)
-  - Utility functions and helpers
-- Celery tasks
-- **users**: Custom user model and authentication
-  - Email-based authentication
-  - User profile management
-- Social authentication (Google, GitHub, etc.)
-- User impersonation for staff support
-
-- **api**: API layer
-- RESTful endpoints (Django REST Framework)
-  - OpenAPI/Swagger documentation
-  - Serializers and viewsets
-- Authentication (session + token)
-  - Permissions and throttling
-
-- **teams**: Multi-tenancy and team management
-  - Team model with RBAC (Owner, Admin, Member)
-  - Team invitations with email verification
-  - Team-scoped data access
-  - Per-team billing
-  - Audit logging
-
-### Settings Architecture
-
-Settings are environment-specific and split across files:
-
-- **`base.py`**: Common settings for all environments
-  - Installed apps and middleware
-  - Database and cache configuration
-  - Static and media file handling
-  - Security settings (CSRF, headers, allowed hosts)
-
-- **`dev.py`**: Development overrides
-  - `DEBUG = True`
-  - Django Debug Toolbar
-  - Permissive CORS for local frontend development
-  - Email backend → Mailpit (console)
-
-- **`test.py`**: Test configuration
-  - In-memory database for speed
-  - Disabled migrations where safe
-  - Test-specific settings
-
-- **`prod.py`**: Production hardening
-  - `DEBUG = False`
-  - Strict security headers (CSP, HSTS)
-  - Gunicorn WSGI server
-- Sentry error tracking
-### Deployment
-
-#### Kubernetes (Enterprise)
-- **Charts**: Helm for templated deployments
-- **Overlays**: Kustomize for environment-specific configs
-- **Features**: HPA, ingress, service mesh ready
-- **Database**: CloudNativePG operator for PostgreSQL
-- **Monitoring**: Prometheus + Grafana stack
-- **Best for**: Enterprise scale, multi-cluster, advanced orchestration
-
-## Data Flow
-
-### Request/Response Flow
-
-```
-User Request
-     ↓
-Load Balancer (ALB/Ingress)
-     ↓
-Django Middleware Stack
-     ├─ SecurityMiddleware (headers, SSL redirect)
-     ├─ SessionMiddleware (session management)
-     ├─ AuthenticationMiddleware (user authentication)
-├─ TeamContextMiddleware (team scoping)
-└─ WaffleMiddleware (feature flags)
-     ↓
-URL Router
-     ↓
-View / API Endpoint
-     ├─ Permission Checks
-├─ Business Logic
-     ├─ Database Queries (PostgreSQL)
-├─ Cache Lookups (Redis)
-└─ Background Tasks (Celery)
-↓
-Serialization / Template Rendering
-     ↓
-Response (JSON)
+```text
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    Customer App & Worker Fleet                          │
+│                                                                         │
+│   [ Celery / RQ Task Workers ]                                          │
+│         │                                                               │
+│         ▼  (Worker signals: prerun / success / failure / retry)         │
+│   [ BJT Python SDK (background-job-tracker) ]                           │
+│         │                                                               │
+│         ▼  (Non-blocking put_nowait)                                    │
+│   ┌───────────────────────────────────┐                                 │
+│   │   Bounded In-Memory Queue         │                                 │
+│   └─────────────────┬─────────────────┘                                 │
+│                     │ (Daemon batch drain)                              │
+│                     ▼                                                   │
+│   ┌───────────────────────────────────┐                                 │
+│   │   Background Daemon Sender Thread │                                 │
+│   │   - Batching & Backoff Retry      │                                 │
+│   └─────────────────┬─────────────────┘                                 │
+└─────────────────────┼───────────────────────────────────────────────────┘
+                      │
+                      │ HTTPS POST (/api/executions/ingest/)
+                      ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    Background Job Tracker Platform                      │
+│                                                                         │
+│   [ Django REST Ingestion API ] ──► [ Redis Broker & Cache ]            │
+│                                                 │                       │
+│                                                 ▼                       │
+│                                   [ BJT Background Workers ]            │
+│                                   - Real-time stream processing         │
+│                                   - Anomaly & Incident engine           │
+│                                                 │                       │
+│                  ┌──────────────────────────────┴────────────────────┐  │
+│                  ▼                              ▼                    ▼  │
+│   [( PostgreSQL DB )]        [ AI Reliability Engine ]      [ Alerts ]  │
+│   - Tasks & Executions       - Incident Investigation       - Email     │
+│   - Incidents & Assignments  - Traceback Analysis           - Webhooks  │
+│   - Runbooks & Postmortems   - Grounded Evidence & Plan     - In-App    │
+│   - Teams & API Keys                        │                           │
+│                  ▲                          │                           │
+│                  │                          │                           │
+│                  ▼                          ▼                           │
+│   [ Next.js 15 Web Dashboard & Real-Time Engine ]                       │
+│   - Incident assignment, triage, runbooks, and timeline audit logs      │
+│   - Real-time execution logs, p50/p95/p99 analytics, and dark mode      │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Background Task Flow
+---
 
-```
-View/API triggers task
-     ↓
-Celery.delay() → Redis (broker)
-     ↓
-Celery Worker picks up task
-     ↓
-Task execution
-     ├─ Database operations
-     ├─ External API calls
-     └─ Email sending
-     ↓
-Result stored in Redis (backend)
-     ↓
-Status available via Flower dashboard
-```
+## ⚡ Non-Blocking Telemetry Pipeline
 
-## Security Architecture
+1. **Microsecond Enqueue:** When tasks execute, worker signal handlers place telemetry events into an in-memory `queue.Queue`.
+2. **Asynchronous Daemon Thread:** A dedicated daemon thread flushes batches over HTTP/HTTPS.
+3. **Bounded Memory Protection:** If network connectivity to BJT is lost, the queue drops events when reaching capacity (`max_queue_size=10000`) rather than consuming worker memory or blocking task execution.
+4. **Process-Fork Safety:** The SDK detects PID changes in forked child processes (such as Celery's `prefork` pool) and spawns an isolated queue and sender thread per worker process.
 
-### Authentication & Authorization
+---
 
-1. **User Authentication**
-- Email/password via django-allauth
-   - Social OAuth (Google, GitHub, etc.)
-2. **Authorization**
-- Team-based permissions (Owner → Admin → Member)
-   - Per-resource access control
-- Django permissions system
-   - Custom decorators for view protection
+## 🏢 Tenancy & Data Isolation
 
-3. **Security Headers**
-   - Content Security Policy (CSP)
-   - HTTP Strict Transport Security (HSTS)
-   - X-Frame-Options (Clickjacking protection)
-   - X-Content-Type-Options (MIME sniffing protection)
-4. **Input Validation**
-   - Django form validation
-- DRF serializer validation
-- CSRF token protection
-## Database Design
-
-### Core Tables
-
-- `users_user`: Custom user model (email-based)
-- `teams_team`: Organization/team model
-- `teams_teammember`: Many-to-many with role
-- `teams_teaminvitation`: Pending invitations
-- `waffle_*`: Feature flag tables
-
-### Indexing Strategy
-
-- Foreign keys automatically indexed
-- Email fields (unique + indexed)
-- Team scoping queries optimized
-- Composite indexes for common query patterns
-
-## Observability
-
-### Logging
-- **Format**: Structured JSON logs
-- **Levels**: DEBUG → INFO → WARNING → ERROR → CRITICAL
-- **Context**: Request ID, user ID, team ID
-### Monitoring
-- **Error Tracking**: Sentry (real-time error alerts)
-- **Metrics**: Prometheus (custom metrics + Django metrics)
-- **Dashboards**: Grafana (pre-built dashboards)
-- **APM**: Application performance monitoring
-- **Health Checks**: `/health/` endpoint (database, cache, Redis)
-
-## Performance Optimization
-
-### Caching Strategy
-- **Backend**: Redis
-- **Cached Data**:
-  - Database query results (per-view caching)
-  - API responses (DRF throttling)
-- Team permissions (avoid repeated DB lookups)
-- Template fragments
-- **Cache Invalidation**: Signals on model save/delete
-### Database Optimization
-- Connection pooling (production)
-- Select/prefetch related for N+1 prevention
-- Database indexes on frequently queried fields
-- Query optimization with Django Debug Toolbar (dev)
-
-### Static Files
-- **Storage**: Local filesystem (development)
-- **Production**: WhiteNoise for efficient static serving
-- **Compression**: Gzip/Brotli enabled
-- **Cache Headers**: Long expiry for static assets
-
-## Design Decisions
-
-### Why Split Settings?
-- **Environment isolation**: Dev settings differ from prod
-- **Security**: Secrets never in version control
-- **Flexibility**: Easy to override per-environment
-- **Testing**: Optimized test configuration
-
-### Why Custom User Model?
-- **Email-based**: More modern than username
-- **Future-proof**: Easy to extend without migrations
-- **Django best practice**: Recommended in official docs
-
-### Why uv over Poetry?
-- **Speed**: 10-100x faster dependency resolution
-- **Simplicity**: Single binary, no Python dependency
-- **Standards**: Uses pyproject.toml (PEP 621)
-- **Compatibility**: Works with existing Poetry projects
-### Why Celery?
-- **Battle-tested**: Production-ready background tasks
-- **Scalable**: Horizontal worker scaling
-- **Monitoring**: Flower dashboard included
-- **Flexible**: Supports periodic tasks, chains, chords
-### Why Helm + Kustomize?
-- **Helm**: Package management, versioning, rollbacks
-- **Kustomize**: Environment-specific configs (GitOps-friendly)
-- **Together**: Best of both worlds (templating + patching)
-## Further Reading
-
-- [Getting Started](../getting-started/installation.md)
-- [Development Guide](../development/testing.md)
+Multi-tenancy is enforced at the database and query layer:
+- **Teams:** Represent customer organizations. Every user belongs to one or more teams with roles (`Owner`, `Admin`, `Member`).
+- **Projects:** Applications or environments (e.g. `production`, `staging`) belonging to a Team.
+- **API Keys:** Scoped to individual projects using secure SHA-256 hashes.
+- **Server-Side Isolation:** All querysets enforce team and project tenant scoping so Team A can never view or manipulate Team B's telemetry or incidents.

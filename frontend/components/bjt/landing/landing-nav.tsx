@@ -46,12 +46,20 @@ export function LandingNav() {
             Supported Stack
           </a>
           <a 
+            href="https://background-job-tracker.readthedocs.io/en/latest/getting-started/sdk-quickstart/" 
+            target="_blank" 
+            rel="noopener noreferrer" 
+            className="transition-colors hover:text-foreground inline-flex items-center gap-1"
+          >
+            Docs ↗
+          </a>
+          <a 
             href="https://pypi.org/project/background-job-tracker/" 
             target="_blank" 
             rel="noopener noreferrer" 
-            className="transition-colors hover:text-foreground inline-flex items-center gap-1 font-semibold text-primary"
+            className="transition-colors hover:text-foreground inline-flex items-center gap-1"
           >
-            PyPI Package ↗
+            PyPI ↗
           </a>
         </nav>
 
