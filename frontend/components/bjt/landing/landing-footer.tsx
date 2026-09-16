@@ -96,8 +96,8 @@ export function LandingFooter() {
           <div className="flex flex-wrap items-center gap-6 text-xs text-muted-foreground font-medium">
             <a href="#how-it-works" className="hover:text-foreground transition-colors">How It Works</a>
             <a href="#features" className="hover:text-foreground transition-colors">Features</a>
-            <a href="#code-example" className="hover:text-foreground transition-colors">SDK Code</a>
-            <a href="https://pypi.org/project/background-job-tracker/" target="_blank" rel="noopener noreferrer" className="text-primary font-semibold hover:underline">PyPI Package ↗</a>
+            <a href="https://background-job-tracker.readthedocs.io/en/latest/" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">Documentation ↗</a>
+            <a href="https://pypi.org/project/background-job-tracker/" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">PyPI Package ↗</a>
             <Link href="/login" className="hover:text-foreground transition-colors">Login</Link>
             <Link href="/register" className="hover:text-foreground transition-colors">Register</Link>
           </div>

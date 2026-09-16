@@ -1,5 +1,5 @@
 site_name: Background Job Tracker
-site_description: A Django Project to track Background jobs.
+site_description: Developer-first observability, real-time telemetry, and automated incident response for background jobs.
 site_author: Vishwajit Herma
 
 theme:
@@ -29,10 +29,16 @@ nav:
   - Home: index.md
   - Getting Started:
       - Installation: getting-started/installation.md
-  - Development:
-      - Testing: development/testing.md
+      - SDK Quickstart: getting-started/sdk-quickstart.md
+  - Features:
+      - AI Reliability Assistant: features/ai-reliability-assistant.md
+      - Incident Management & Runbooks: features/incident-management.md
+      - Alerting & Notifications: features/alerting-and-notifications.md
   - Architecture:
-      - Overview: architecture/overview.md
+      - System Overview: architecture/overview.md
+      - Domain Model: architecture/domain-model.md
+  - Development:
+      - Testing & Quality: development/testing.md
 
 markdown_extensions:
   - admonition
@@ -51,8 +57,3 @@ markdown_extensions:
 
 plugins:
   - search
-  - mkdocstrings:
-      handlers:
-        python:
-          options:
-            docstring_style: google
