@@ -25,3 +25,4 @@ class CustomUserDetailsSerializer(UserDetailsSerializer):
 
     class Meta(UserDetailsSerializer.Meta):
         fields = UserDetailsSerializer.Meta.fields + ("is_staff", "avatar_url")
+        read_only_fields = ("email", "is_staff")

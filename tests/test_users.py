@@ -130,6 +130,33 @@ def test_user_can_update_own_profile(user):
     assert updated_user.first_name == "Updated"
 
 
+@pytest.mark.django_db
+def test_user_details_serializer_email_is_read_only():
+    """Test that CustomUserDetailsSerializer marks email and is_staff as read-only."""
+    from apps.api.serializers import CustomUserDetailsSerializer
+
+    serializer = CustomUserDetailsSerializer()
+    assert "email" in serializer.fields
+    assert serializer.fields["email"].read_only is True
+    assert "is_staff" in serializer.fields
+    assert serializer.fields["is_staff"].read_only is True
+
+
+@pytest.mark.django_db
+def test_user_cannot_change_email_via_api(authenticated_api_client, user):
+    """Test that authenticated user cannot mutate email via /api/auth/user/ endpoint."""
+    original_email = user.email
+    response = authenticated_api_client.patch(
+        "/api/auth/user/",
+        {"email": "hacked@example.com", "first_name": "NewName"},
+        format="json",
+    )
+    assert response.status_code == 200
+    user.refresh_from_db()
+    assert user.email == original_email
+    assert user.first_name == "NewName"
+
+
 # User Query Tests
 
 

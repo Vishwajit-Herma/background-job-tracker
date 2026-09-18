@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { UserCircle, CheckCircle2, ExternalLink } from "lucide-react";
+import { Lock, CheckCircle2, ExternalLink } from "lucide-react";
 import { UserAvatar } from "@/components/bjt/user-avatar";
 import { ApiError } from "@/lib/api/client";
 
@@ -38,7 +38,6 @@ export default function SettingsPage() {
       await updateUser({
         first_name: firstName,
         last_name: lastName,
-        email: email,
       });
       setSuccessMsg("Profile updated successfully");
       
@@ -119,16 +118,21 @@ export default function SettingsPage() {
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="email">Email Address</Label>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="email">Email Address</Label>
+                  <span className="inline-flex items-center gap-1 text-xs text-muted-foreground font-normal">
+                    <Lock className="h-3 w-3" /> Locked
+                  </span>
+                </div>
                 <Input 
                   id="email" 
                   type="email"
                   value={email} 
-                  onChange={(e) => setEmail(e.target.value)} 
-                  disabled={isUpdating}
+                  disabled
+                  className="bg-muted/50 cursor-not-allowed text-muted-foreground"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Changing your email address may require you to re-verify it.
+                  Email address is linked to your account authentication and cannot be edited directly.
                 </p>
               </div>
 
