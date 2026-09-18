@@ -82,4 +82,4 @@ class User(AbstractBaseUser, PermissionsMixin):
         """Return the Gravatar URL computed from the user's email address."""
         email_clean = (self.email or "").strip().lower()
         email_hash = hashlib.md5(email_clean.encode("utf-8")).hexdigest()
-        return f"https://www.gravatar.com/avatar/{email_hash}?s=200&d=mp"
+        return f"https://www.gravatar.com/avatar/{email_hash}?s=200&d=404"

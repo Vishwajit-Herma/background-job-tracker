@@ -183,11 +183,62 @@ function md5(string: string): string {
   return (wordToHex(a) + wordToHex(b) + wordToHex(c) + wordToHex(d)).toLowerCase();
 }
 
+// Diverse, high-contrast, modern color schemes for initials avatar backgrounds
+const AVATAR_COLOR_PALETTES = [
+  {
+    bg: "bg-blue-100 text-blue-700 dark:bg-blue-950/80 dark:text-blue-300 ring-blue-500/25",
+  },
+  {
+    bg: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/80 dark:text-emerald-300 ring-emerald-500/25",
+  },
+  {
+    bg: "bg-purple-100 text-purple-700 dark:bg-purple-950/80 dark:text-purple-300 ring-purple-500/25",
+  },
+  {
+    bg: "bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 ring-amber-500/25",
+  },
+  {
+    bg: "bg-rose-100 text-rose-700 dark:bg-rose-950/80 dark:text-rose-300 ring-rose-500/25",
+  },
+  {
+    bg: "bg-indigo-100 text-indigo-700 dark:bg-indigo-950/80 dark:text-indigo-300 ring-indigo-500/25",
+  },
+  {
+    bg: "bg-teal-100 text-teal-700 dark:bg-teal-950/80 dark:text-teal-300 ring-teal-500/25",
+  },
+  {
+    bg: "bg-cyan-100 text-cyan-800 dark:bg-cyan-950/80 dark:text-cyan-300 ring-cyan-500/25",
+  },
+  {
+    bg: "bg-orange-100 text-orange-800 dark:bg-orange-950/80 dark:text-orange-300 ring-orange-500/25",
+  },
+  {
+    bg: "bg-violet-100 text-violet-700 dark:bg-violet-950/80 dark:text-violet-300 ring-violet-500/25",
+  },
+  {
+    bg: "bg-pink-100 text-pink-700 dark:bg-pink-950/80 dark:text-pink-300 ring-pink-500/25",
+  },
+  {
+    bg: "bg-lime-100 text-lime-800 dark:bg-lime-950/80 dark:text-lime-300 ring-lime-500/25",
+  },
+];
+
+// Returns a deterministic palette based on user email or ID so users with the same initials (e.g. JD) get different bg colors
+function getDeterministicPalette(seed: string) {
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) {
+    hash = (hash << 5) - hash + seed.charCodeAt(i);
+    hash |= 0;
+  }
+  const index = Math.abs(hash) % AVATAR_COLOR_PALETTES.length;
+  return AVATAR_COLOR_PALETTES[index];
+}
+
 function getGravatarUrl(email: string): string {
   const cleanEmail = email.trim().toLowerCase();
   if (!cleanEmail) return "";
   const hash = md5(cleanEmail);
-  return `https://www.gravatar.com/avatar/${hash}?s=200&d=mp`;
+  return `https://www.gravatar.com/avatar/${hash}?s=200&d=404`;
 }
 
 export function UserAvatar({
@@ -201,27 +252,39 @@ export function UserAvatar({
   const [hasError, setHasError] = React.useState(false);
 
   const email = user?.email || rawEmail || "";
-  const firstName = user?.first_name || "";
-  const lastName = user?.last_name || "";
-  const fullName = rawName || `${firstName} ${lastName}`.trim();
+  const firstName = user?.first_name?.trim() || "";
+  const lastName = user?.last_name?.trim() || "";
+  const fullName = rawName?.trim() || `${firstName} ${lastName}`.trim();
   const displayName = fullName || email || "User";
 
+  // Initials logic: Only compute from actual names. If no name exists, initials is empty to fallback to default avatar image/icon.
   const initials = React.useMemo(() => {
     if (firstName && lastName) {
       return `${firstName[0]}${lastName[0]}`.toUpperCase();
     }
-    if (displayName && displayName !== "User") {
-      const parts = displayName.trim().split(" ");
+    if (fullName && fullName !== "User") {
+      const parts = fullName.split(/\s+/).filter(Boolean);
       if (parts.length >= 2) {
-        return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+        return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
       }
-      return displayName[0].toUpperCase();
+      if (parts.length === 1 && parts[0].length > 0) {
+        return parts[0][0].toUpperCase();
+      }
     }
-    if (email) {
-      return email[0].toUpperCase();
+    if (firstName) {
+      return firstName[0].toUpperCase();
+    }
+    if (lastName) {
+      return lastName[0].toUpperCase();
     }
     return "";
-  }, [firstName, lastName, displayName, email]);
+  }, [firstName, lastName, fullName]);
+
+  // Seed for background color differentiation (e.g. two users with same initials "JD" get different bg colors based on email/id)
+  const colorSeed = (user?.email || rawEmail || "") + (user?.first_name || "") + (user?.last_name || "") + (rawName || "");
+  const palette = React.useMemo(() => {
+    return getDeterministicPalette(colorSeed || email || displayName || "user");
+  }, [colorSeed, email, displayName]);
 
   const src = user?.avatar_url || rawAvatarUrl || (email ? getGravatarUrl(email) : undefined);
 
@@ -233,8 +296,9 @@ export function UserAvatar({
   return (
     <div
       className={cn(
-        "relative flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted font-medium select-none text-muted-foreground shadow-sm ring-1 ring-border/50",
+        "relative flex shrink-0 items-center justify-center overflow-hidden rounded-full font-medium select-none shadow-sm ring-1 ring-border/50",
         sizeClasses[size],
+        initials ? palette.bg : "bg-muted text-muted-foreground",
         className
       )}
       title={displayName}
@@ -248,10 +312,11 @@ export function UserAvatar({
           onError={() => setHasError(true)}
         />
       ) : initials ? (
-        <span className="font-semibold tracking-wider text-foreground/80">{initials}</span>
+        <span className="font-semibold tracking-wider">{initials}</span>
       ) : (
         <UserCircle className={cn("text-muted-foreground", iconSizes[size])} />
       )}
     </div>
   );
 }
+

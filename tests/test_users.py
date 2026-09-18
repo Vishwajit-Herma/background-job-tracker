@@ -56,7 +56,7 @@ def test_user_avatar_url(user):
     import hashlib
 
     expected_hash = hashlib.md5(user.email.strip().lower().encode("utf-8")).hexdigest()
-    assert user.avatar_url == f"https://www.gravatar.com/avatar/{expected_hash}?s=200&d=mp"
+    assert user.avatar_url == f"https://www.gravatar.com/avatar/{expected_hash}?s=200&d=404"
 
 
 # Authentication Tests
