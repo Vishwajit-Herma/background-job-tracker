@@ -42,7 +42,9 @@ poetry add background-job-tracker
 
 ```bash
 export BACKGROUND_JOB_TRACKER_API_KEY="bjt_live_xxxxxxxxxxxxxxxx"
-export BACKGROUND_JOB_TRACKER_BASE_URL="http://localhost:8000"  # or https://your-bjt-api.example.com
+# Set to your BJT backend API ingestion URL (NOT the frontend dashboard URL)
+# For local dev: http://localhost:8000 | For self-hosted/production: https://your-bjt-api.example.com
+export BACKGROUND_JOB_TRACKER_BASE_URL="http://localhost:8000"
 ```
 
 ---
@@ -150,7 +152,7 @@ tracker.shutdown(timeout=5.0)
 | Option | Environment Variable | Default | Description |
 |---|---|---|---|
 | `api_key` | `BACKGROUND_JOB_TRACKER_API_KEY` | *Required* | Project API key. |
-| `base_url` | `BACKGROUND_JOB_TRACKER_BASE_URL` | `http://localhost:8000` | Ingestion API base URL. |
+| `base_url` | `BACKGROUND_JOB_TRACKER_BASE_URL` | `http://localhost:8000` | Backend API ingestion URL (e.g. `http://localhost:8000` for local dev or `https://your-bjt-api.example.com` for production). Must point to the backend API, not the frontend. |
 | `batch_size` | `batch_size` | `100` | Max batch size before flushing to API. |
 | `flush_interval` | `flush_interval` | `5.0` | Max interval (seconds) before flushing. |
 | `max_queue_size`| `max_queue_size` | `10000` | In-memory queue limit for safe drop under disconnection. |

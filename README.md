@@ -35,9 +35,6 @@
 - [Quickstart: Local Development](#-quickstart-local-development)
   - [1. Start Full Backend via Docker Compose](#1-start-full-backend-via-docker-compose)
   - [2. Start Frontend Dashboard](#2-start-frontend-dashboard)
-- [SDK Quickstart](#-sdk-quickstart)
-  - [Celery Integration (Django, FastAPI, Flask, Standalone)](#1-celery-integration)
-  - [Python RQ Integration](#2-python-rq-integration)
 - [Documentation](#-documentation)
 - [Testing & Code Quality](#-testing--code-quality)
 - [Contributing](#-contributing)
@@ -153,7 +150,7 @@ Background task queues (Celery, Python RQ, etc.) are critical to modern applicat
 | **Package Management** | `uv` (Fast Python package installer and resolver) |
 | **API Documentation** | OpenAPI 3.0 via `drf-spectacular` / Swagger UI / Redoc |
 | **Frontend Dashboard** | Next.js 15 (App Router), React 19, TypeScript, Tailwind CSS, TanStack Query, Radix UI, Lucide Icons |
-| **Python SDK** | Python 3.8 – 3.13 (`background-job-tracker` on PyPI) |
+| **Python SDK** | Python 3.8 – 3.14 (`background-job-tracker` on PyPI) |
 | **Infrastructure** | Docker & Docker Compose |
 
 ---
@@ -238,59 +235,6 @@ npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) to access the interactive web dashboard.
-
----
-
-## 🔌 SDK Quickstart
-
-Install the official SDK from PyPI:
-
-```bash
-pip install background-job-tracker
-```
-
-### 1. Celery Integration
-
-Add 3 lines to your `celery.py`:
-
-```python
-import os
-from celery import Celery
-from background_job_tracker import Tracker
-from background_job_tracker.integrations.celery import CeleryIntegration
-
-app = Celery("my_app")
-app.config_from_object("django.conf:settings", namespace="CELERY")
-app.autodiscover_tasks()
-
-# Initialize Tracker SDK
-tracker = Tracker(
-    api_key=os.environ["BACKGROUND_JOB_TRACKER_API_KEY"],
-    base_url=os.getenv("BACKGROUND_JOB_TRACKER_BASE_URL", "https://app.jobtracker.io"),
-)
-CeleryIntegration(app=app, tracker=tracker)
-```
-
-### 2. Python RQ Integration
-
-Attach the integration to your worker:
-
-```python
-import os
-from redis import Redis
-from rq import Worker, Queue
-from background_job_tracker import Tracker
-from background_job_tracker.integrations.rq import RQIntegration
-
-tracker = Tracker(api_key=os.environ["BACKGROUND_JOB_TRACKER_API_KEY"])
-rq_integration = RQIntegration(tracker=tracker, modules=["my_app.tasks"])
-
-if __name__ == "__main__":
-    redis_conn = Redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"))
-    worker = Worker([Queue("default", connection=redis_conn)], connection=redis_conn)
-    rq_integration.attach(worker)
-    worker.work()
-```
 
 ---
 

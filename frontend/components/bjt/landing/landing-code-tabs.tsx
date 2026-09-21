@@ -19,9 +19,10 @@ app.config_from_object("django.conf:settings", namespace="CELERY")
 app.autodiscover_tasks()
 
 # 2. Initialize BJT Telemetry (Reads credentials from environment)
+# Point base_url to your BJT backend API (e.g., http://localhost:8000 or https://your-bjt-api.example.com)
 tracker = Tracker(
     api_key=os.getenv("BACKGROUND_JOB_TRACKER_API_KEY"),
-    base_url=os.getenv("BACKGROUND_JOB_TRACKER_BASE_URL", "https://app.jobtracker.io"),
+    base_url=os.getenv("BACKGROUND_JOB_TRACKER_BASE_URL", "http://localhost:8000"),
 )
 
 # 3. Attach CeleryIntegration - zero-config signal hooks for task lifecycle
@@ -46,10 +47,10 @@ app = FastAPI(title="My Async API")
 # 1. Configure Celery instance for FastAPI
 celery_app = Celery("fastapi_worker", broker=os.getenv("REDIS_URL", "redis://localhost:6379/0"))
 
-# 2. Initialize BJT Tracker & Attach Integration
+# 2. Initialize BJT Tracker & Attach Integration (point base_url to backend API)
 tracker = Tracker(
     api_key=os.getenv("BACKGROUND_JOB_TRACKER_API_KEY"),
-    base_url=os.getenv("BACKGROUND_JOB_TRACKER_BASE_URL", "https://app.jobtracker.io"),
+    base_url=os.getenv("BACKGROUND_JOB_TRACKER_BASE_URL", "http://localhost:8000"),
 )
 CeleryIntegration(app=celery_app, tracker=tracker)
 
@@ -153,8 +154,8 @@ tracker.shutdown(timeout=5.0)`,
   rest: {
     title: "REST Telemetry API (Any Language)",
     lang: "bash",
-    code: `# Ingest execution events from Node, Go, Rust, or Ruby
-curl -X POST https://app.jobtracker.io/api/v1/executions/batch/ \\
+    code: `# Ingest execution events from Node, Go, Rust, or Ruby (point to your BJT backend API)
+curl -X POST http://localhost:8000/api/executions/ingest/ \\
   -H "X-API-Key: bjt_live_xxxxxxxxxxxxxxxx" \\
   -H "Content-Type: application/json" \\
   -d '{
