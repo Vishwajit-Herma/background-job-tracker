@@ -40,10 +40,11 @@ uv run ruff format --check .
 
 ## 📦 SDK Tests
 
-The Python SDK includes a dedicated test suite verifying signals, batching, and Celery prefork safety:
+The Python SDK is maintained in its dedicated repository ([`Vishwajit-Herma/background-job-tracker-sdk`](https://github.com/Vishwajit-Herma/background-job-tracker-sdk)) with a test suite verifying signals, batching, and Celery prefork safety:
 
 ```bash
-cd sdk
+git clone https://github.com/Vishwajit-Herma/background-job-tracker-sdk.git
+cd background-job-tracker-sdk
 
 # Install dev dependencies
 pip install -e ".[all,dev]"

@@ -39,11 +39,10 @@ Every webhook delivery includes security headers:
 import hmac
 import hashlib
 
+
 def verify_bjt_webhook(payload_bytes: bytes, secret: str, signature_header: str) -> bool:
-    expected_signature = "sha256=" + hmac.new(
-        secret.encode("utf-8"),
-        payload_bytes,
-        hashlib.sha256
-    ).hexdigest()
+    expected_signature = (
+        "sha256=" + hmac.new(secret.encode("utf-8"), payload_bytes, hashlib.sha256).hexdigest()
+    )
     return hmac.compare_digest(expected_signature, signature_header)
 ```

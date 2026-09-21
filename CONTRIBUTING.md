@@ -249,8 +249,8 @@ Include:
 ## Questions?
 
 - Check the [documentation](docs/)
-- Search existing [issues](https://github.com/Vishwajit Herma/background_job_tracker/issues)
-- Ask in [discussions](https://github.com/Vishwajit Herma/background_job_tracker/discussions)
+- Search existing [issues](https://github.com/Vishwajit-Herma/background-job-tracker/issues)
+- Ask in [discussions](https://github.com/Vishwajit-Herma/background-job-tracker/discussions)
 
 ## Code of Conduct
 

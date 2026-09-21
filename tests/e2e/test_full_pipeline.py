@@ -86,7 +86,7 @@ def failing_task(self):
 """)
 
     env = os.environ.copy()
-    env["PYTHONPATH"] = os.path.abspath("sdk") + ":" + env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = env.get("PYTHONPATH", "")
     # Remove DJANGO_SETTINGS_MODULE so the worker doesn't auto-load the platform's Django settings!
     # This simulates a truly external customer application worker.
     env.pop("DJANGO_SETTINGS_MODULE", None)

@@ -38,5 +38,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Docker Compose development environment
 - MkDocs documentation
 
-[Unreleased]: https://github.com/Vishwajit Herma/background_job_tracker/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/Vishwajit Herma/background_job_tracker/releases/tag/v0.1.0
+[Unreleased]: https://github.com/Vishwajit-Herma/background-job-tracker/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/Vishwajit-Herma/background-job-tracker/releases/tag/v0.1.0

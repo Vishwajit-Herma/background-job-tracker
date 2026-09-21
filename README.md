@@ -185,10 +185,6 @@ Background task queues (Celery, Python RQ, etc.) are critical to modern applicat
 │   │   └── ui/                         # Base UI primitives (buttons, dialogs, dropdowns, inputs)
 │   ├── hooks/                          # Custom React hooks (useAuth, useDebounce, etc.)
 │   └── lib/                            # API clients, TanStack Query hooks, and TypeScript types
-├── sdk/                                # Official Python SDK (background-job-tracker on PyPI)
-│   ├── background_job_tracker/         # Core Tracker client, bounded queue, and daemon sender thread
-│   ├── integrations/                   # Drop-in Celery and RQ integrations
-│   └── tests/                          # SDK unit, integration, and fork-safety test suite
 ├── static/                             # Backend static files and brand assets
 ├── templates/                          # Django email and authentication HTML templates
 ├── tests/                              # Comprehensive backend test suite (pytest)
@@ -329,9 +325,12 @@ uv run ruff check .
 uv run ruff format --check .
 ```
 
-### SDK Tests
+### SDK Tests (Standalone Repository)
+The SDK lives in a dedicated repository: [github.com/Vishwajit-Herma/background-job-tracker-sdk](https://github.com/Vishwajit-Herma/background-job-tracker-sdk)
+
 ```bash
-cd sdk
+cd background-job-tracker-sdk
+pip install -e ".[all,dev]"
 pytest
 ```
 

@@ -199,23 +199,14 @@ wheels = [
 [[package]]
 name = "background-job-tracker"
 version = "0.1.2"
-source = { editable = "sdk" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "requests" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "build", marker = "extra == 'dev'", specifier = ">=1.0.0" },
-    { name = "celery", marker = "extra == 'all'", specifier = ">=5.0.0" },
-    { name = "celery", marker = "extra == 'celery'", specifier = ">=5.0.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
-    { name = "requests", specifier = ">=2.28.0" },
-    { name = "rq", marker = "extra == 'all'", specifier = ">=1.10.0" },
-    { name = "rq", marker = "extra == 'rq'", specifier = ">=1.10.0" },
-    { name = "twine", marker = "extra == 'dev'", specifier = ">=5.0.0" },
+sdist = { url = "https://files.pythonhosted.org/packages/a6/9c/0959fd0a1a85b5d8ffed33a68043987f8aa60686a4884e695b1d1db7035e/background_job_tracker-0.1.2.tar.gz", hash = "sha256:50b680b2a2860677a326f9ad3d97f75a6b6a8293bf5d064e91a068b3784776b2", size = 29608, upload-time = "2026-09-10T11:40:55.155Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f6/1f/cb327188e8a49448e6584b71e592579a10b86b5848c0466ac1e966f60484/background_job_tracker-0.1.2-py3-none-any.whl", hash = "sha256:affafe05b49e542b1c6f9d50c3e74419e419892e0d3e8302d540ae22dd6be679", size = 21627, upload-time = "2026-09-10T11:40:53.514Z" },
 ]
-provides-extras = ["celery", "rq", "all", "dev"]
 
 [[package]]
 name = "background-job-tracker-server"
@@ -287,7 +278,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "background-job-tracker", editable = "sdk" },
+    { name = "background-job-tracker", specifier = ">=0.1.2" },
     { name = "celery", extras = ["redis"], specifier = ">=5.4.0" },
     { name = "channels", specifier = ">=4.3.2" },
     { name = "channels-redis", specifier = ">=4.3.0" },

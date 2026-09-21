@@ -74,7 +74,7 @@ def real_task(self):
 """)
 
     env = os.environ.copy()
-    env["PYTHONPATH"] = os.path.abspath("sdk") + ":" + env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = env.get("PYTHONPATH", "")
     env.pop("DJANGO_SETTINGS_MODULE", None)
     env.pop("CELERY_BROKER_URL", None)
     env.pop("CELERY_RESULT_BACKEND", None)
@@ -194,7 +194,7 @@ def real_prefork_task(self):
 """)
 
     env = os.environ.copy()
-    env["PYTHONPATH"] = os.path.abspath("sdk") + ":" + env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = env.get("PYTHONPATH", "")
     env.pop("DJANGO_SETTINGS_MODULE", None)
     env.pop("CELERY_BROKER_URL", None)
     env.pop("CELERY_RESULT_BACKEND", None)

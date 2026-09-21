@@ -3,6 +3,7 @@
 The official Python SDK (`background-job-tracker`) provides drop-in telemetry integration for Celery, Python RQ, and custom worker scripts.
 
 [![PyPI Version](https://img.shields.io/pypi/v/background-job-tracker?color=blue&logo=pypi&logoColor=white)](https://pypi.org/project/background-job-tracker/)
+[![GitHub Repo](https://img.shields.io/badge/GitHub-SDK%20Repo-181717?logo=github&logoColor=white)](https://github.com/Vishwajit-Herma/background-job-tracker-sdk)
 
 ---
 
@@ -62,7 +63,9 @@ app.config_from_object("django.conf:settings", namespace="CELERY")
 app.autodiscover_tasks()
 
 # Initialize BJT Tracker
-tracker = Tracker()  # Automatically reads BACKGROUND_JOB_TRACKER_API_KEY and BACKGROUND_JOB_TRACKER_BASE_URL
+tracker = (
+    Tracker()
+)  # Automatically reads BACKGROUND_JOB_TRACKER_API_KEY and BACKGROUND_JOB_TRACKER_BASE_URL
 CeleryIntegration(app=app, tracker=tracker)
 ```
 
@@ -118,21 +121,23 @@ from background_job_tracker import Tracker
 tracker = Tracker(api_key="bjt_live_xxxxxxxxxxxxxxxx")
 
 # Enqueue an execution event
-tracker.enqueue_event({
-    "task_identifier": "reports.generate_monthly_pdf",
-    "external_id": "job_984572049",
-    "status": "success",  # "running" | "success" | "failure" | "retry" | "revoked"
-    "duration_seconds": 2.45,
-    "started_at": "2026-09-16T12:00:00.000000Z",
-    "completed_at": "2026-09-16T12:00:02.450000Z",
-    "worker": "worker-node-1",
-    "queue": "reports",
-    "retry_count": 0,
-    "metadata": {
-        "report_id": 402,
-        "format": "pdf",
-    },
-})
+tracker.enqueue_event(
+    {
+        "task_identifier": "reports.generate_monthly_pdf",
+        "external_id": "job_984572049",
+        "status": "success",  # "running" | "success" | "failure" | "retry" | "revoked"
+        "duration_seconds": 2.45,
+        "started_at": "2026-09-16T12:00:00.000000Z",
+        "completed_at": "2026-09-16T12:00:02.450000Z",
+        "worker": "worker-node-1",
+        "queue": "reports",
+        "retry_count": 0,
+        "metadata": {
+            "report_id": 402,
+            "format": "pdf",
+        },
+    }
+)
 
 # Flush on process shutdown
 tracker.shutdown(timeout=5.0)
