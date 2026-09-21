@@ -7,6 +7,7 @@ from django.db import IntegrityError
 from django_filters.rest_framework import DjangoFilterBackend
 
 from django.utils import timezone
+from django.db.models import Q
 from apps.config_management.views import CustomBaseViewSet
 from apps.reliability.evaluators import evaluate_job_reliability
 from .models import Execution, ExecutionEvent
@@ -122,7 +123,14 @@ class ExecutionViewSet(CustomBaseViewSet):
 
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ["job__project", "job", "status", "queue", "worker"]
-    search_fields = ["external_id", "error_message"]
+    search_fields = [
+        "external_id",
+        "job__name",
+        "job__task_identifier",
+        "worker",
+        "queue",
+        "error_message",
+    ]
     ordering_fields = ["started_at", "duration_ms", "created_at"]
     ordering = ["-created_at"]
 
@@ -143,6 +151,38 @@ class ExecutionViewSet(CustomBaseViewSet):
             .distinct()
         )
         return qs
+
+    def filter_queryset(self, queryset):
+        search_query = self.request.query_params.get("search", "").strip()
+
+        # Apply other filter backends (DjangoFilterBackend, OrderingFilter)
+        for backend in list(self.filter_backends):
+            if backend is not SearchFilter:
+                queryset = backend().filter_queryset(self.request, queryset, self)
+
+        if search_query:
+            clean_term = search_query.lstrip("#").strip()
+            if clean_term.isdigit():
+                queryset = queryset.filter(
+                    Q(id=int(clean_term))
+                    | Q(external_id__icontains=search_query)
+                    | Q(job__name__icontains=search_query)
+                    | Q(job__task_identifier__icontains=search_query)
+                    | Q(worker__icontains=search_query)
+                    | Q(queue__icontains=search_query)
+                    | Q(error_message__icontains=search_query)
+                )
+            else:
+                queryset = queryset.filter(
+                    Q(external_id__icontains=search_query)
+                    | Q(job__name__icontains=search_query)
+                    | Q(job__task_identifier__icontains=search_query)
+                    | Q(worker__icontains=search_query)
+                    | Q(queue__icontains=search_query)
+                    | Q(error_message__icontains=search_query)
+                )
+
+        return queryset
 
     @extend_schema(
         summary="Execution Timeline",

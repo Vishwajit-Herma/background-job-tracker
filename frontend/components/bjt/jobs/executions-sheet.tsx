@@ -65,16 +65,23 @@ export function FrameworkBadge({ framework }: { framework?: string | null }) {
 // ─── Execution Details Sub-Panel ──────────────────────────────────────────────
 
 function ExecutionDetails({ execution }: { execution: Execution }) {
-  const { data: events = [], isLoading } = useQuery({
+  const { data: rawEvents = [], isLoading } = useQuery({
     queryKey: ["execution-events", execution.id],
     queryFn: () => getExecutionEvents(execution.id),
   });
 
-  const displayEvents = [...events];
-  const lastEvent = displayEvents[displayEvents.length - 1];
-  const isTerminal = ["failed", "cancelled", "success"].includes(execution.status);
+  // Sort events chronologically (oldest -> newest: running -> success)
+  const events = [...rawEvents].sort(
+    (a, b) => new Date(a.event_timestamp).getTime() - new Date(b.event_timestamp).getTime()
+  );
 
-  if (isTerminal && (!lastEvent || lastEvent.status !== execution.status)) {
+  const displayEvents = [...events];
+  const isTerminal = ["failed", "cancelled", "success"].includes(execution.status);
+  const hasTerminalEvent = displayEvents.some((e) =>
+    ["failed", "cancelled", "success"].includes(e.status)
+  );
+
+  if (isTerminal && !hasTerminalEvent) {
     displayEvents.push({
       id: -999,
       execution: execution.id,

@@ -393,3 +393,61 @@ class TestServices:
         events = ExecutionEvent.objects.filter(execution=exec_obj)
         assert events.count() == 1
         assert events[0].event_id == "EVT-123"
+
+    def test_auto_recover_stalled_finding_on_terminal_ingestion(self, project1):
+        from apps.reliability.models import ReliabilityFinding
+
+        job = Job.objects.create(
+            project=project1, name="Stalled Job", task_identifier="tasks.stalled"
+        )
+        now = timezone.now()
+
+        # Ingest RUNNING event
+        ingest_executions_batch(
+            project1,
+            [
+                {
+                    "event_id": "evt-run-1",
+                    "external_id": "ext_stalled",
+                    "task_identifier": "tasks.stalled",
+                    "status": "running",
+                    "event_timestamp": now - timedelta(seconds=20),
+                    "started_at": now - timedelta(seconds=20),
+                }
+            ],
+        )
+
+        exec_obj = Execution.objects.get(job=job, external_id="ext_stalled")
+
+        # Create active STALLED_EXECUTION finding on this running execution
+        finding = ReliabilityFinding.objects.create(
+            job=job,
+            execution=exec_obj,
+            condition_type=ReliabilityFinding.ConditionType.STALLED_EXECUTION,
+            severity=ReliabilityFinding.Severity.CRITICAL,
+            status=ReliabilityFinding.Status.ACTIVE,
+            details={"runtime_seconds": 20, "max_runtime_seconds": 5},
+            detected_at=now - timedelta(seconds=10),
+        )
+
+        # Now ingest SUCCESS terminal event
+        result = ingest_executions_batch(
+            project1,
+            [
+                {
+                    "event_id": "evt-succ-1",
+                    "external_id": "ext_stalled",
+                    "task_identifier": "tasks.stalled",
+                    "status": "success",
+                    "event_timestamp": now,
+                    "started_at": now - timedelta(seconds=20),
+                    "finished_at": now,
+                    "duration_ms": 20000,
+                }
+            ],
+        )
+
+        assert result["accepted"] == 1
+        finding.refresh_from_db()
+        assert finding.status == ReliabilityFinding.Status.RECOVERED
+        assert finding.recovered_at is not None

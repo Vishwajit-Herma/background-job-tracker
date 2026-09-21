@@ -330,6 +330,38 @@ def ingest_executions_batch(project, executions_data):
                 id__in=verified_job_ids, verification_status=Job.VerificationStatus.UNVERIFIED
             ).update(verification_status=Job.VerificationStatus.VERIFIED, last_verified_at=now)
 
+        # Auto-recover active STALLED_EXECUTION findings for executions that reached a terminal status
+        terminal_exec_ids = [
+            e.id
+            for e in (executions_to_update + executions_to_create)
+            if getattr(e, "id", None)
+            and e.status
+            in [Execution.Status.SUCCESS, Execution.Status.FAILED, Execution.Status.CANCELLED]
+        ]
+        if terminal_exec_ids:
+            try:
+                from apps.reliability.evaluators import _recover_finding
+                from apps.reliability.models import ReliabilityFinding
+
+                stalled_findings = ReliabilityFinding.objects.filter(
+                    execution_id__in=terminal_exec_ids,
+                    condition_type=ReliabilityFinding.ConditionType.STALLED_EXECUTION,
+                    status=ReliabilityFinding.Status.ACTIVE,
+                ).select_related("execution")
+                for sf in stalled_findings:
+                    _recover_finding(
+                        sf,
+                        {
+                            "condition_type": ReliabilityFinding.ConditionType.STALLED_EXECUTION,
+                            "recovered_at": now.isoformat(),
+                            "execution_id": sf.execution_id,
+                            "final_status": sf.execution.status if sf.execution else None,
+                            "auto_recovered_on_ingest": True,
+                        },
+                    )
+            except Exception:
+                logger.exception("Failed to auto-recover stalled findings during ingestion")
+
         if accepted > 0:
             affected_job_ids = list(job_ids)
             publish_execution_batch(

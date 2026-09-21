@@ -23,16 +23,24 @@ import { ProjectSelectFilter } from "@/components/bjt/project-select-filter";
 
 // Inline subset of ExecutionDetails to show when row is expanded
 function StandaloneExecutionDetails({ execution }: { execution: Execution }) {
-  const { data: events = [], isLoading } = useQuery({
+  const { data: rawEvents = [], isLoading } = useQuery({
     queryKey: ["execution-events", execution.id],
     queryFn: () => getExecutionEvents(execution.id),
   });
 
-  const displayEvents = [...events];
-  const lastEvent = displayEvents[displayEvents.length - 1];
-  const isTerminal = ["failed", "cancelled", "success"].includes(execution.status);
+  // Sort events chronologically (oldest -> newest: e.g. running -> success)
+  const events = [...rawEvents].sort(
+    (a, b) => new Date(a.event_timestamp).getTime() - new Date(b.event_timestamp).getTime()
+  );
 
-  if (isTerminal && (!lastEvent || lastEvent.status !== execution.status)) {
+  const displayEvents = [...events];
+  const isTerminal = ["failed", "cancelled", "success"].includes(execution.status);
+  const hasTerminalEvent = displayEvents.some((e) =>
+    ["failed", "cancelled", "success"].includes(e.status)
+  );
+
+  // If execution is in terminal state in DB but no terminal telemetry event was explicitly recorded, append a single derived terminal event
+  if (isTerminal && !hasTerminalEvent) {
     displayEvents.push({
       id: -999,
       execution: execution.id,
@@ -78,7 +86,37 @@ function StandaloneExecutionDetails({ execution }: { execution: Execution }) {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div className="min-w-0 flex flex-col space-y-1.5">
+          <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Execution ID</p>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-mono font-bold text-foreground bg-primary/10 border border-primary/25 px-2 py-1 rounded">
+              #{execution.id}
+            </span>
+            <button
+              onClick={() => navigator.clipboard.writeText(execution.id.toString())}
+              className="p-1 hover:bg-muted rounded text-muted-foreground transition-colors"
+              title="Copy Execution ID"
+            >
+              <Copy className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+        <div className="min-w-0 flex flex-col space-y-1.5">
+          <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">External UUID</p>
+          <div className="flex items-center gap-2">
+            <code className="text-xs font-mono text-foreground bg-background/50 p-1.5 rounded border truncate block flex-1" title={execution.external_id}>
+              {execution.external_id}
+            </code>
+            <button
+              onClick={() => navigator.clipboard.writeText(execution.external_id)}
+              className="p-1 hover:bg-muted rounded text-muted-foreground transition-colors"
+              title="Copy External ID"
+            >
+              <Copy className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
         <div className="min-w-0 flex flex-col space-y-1.5">
           <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Framework</p>
           <div className="mt-1">
@@ -87,13 +125,13 @@ function StandaloneExecutionDetails({ execution }: { execution: Execution }) {
         </div>
         <div className="min-w-0 flex flex-col space-y-1.5">
           <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Worker</p>
-          <p className="text-sm break-words leading-relaxed text-foreground bg-background/50 p-2 rounded border">
+          <p className="text-xs font-mono break-all leading-relaxed text-foreground bg-background/50 p-2 rounded border max-w-full overflow-hidden">
             {execution.worker || "-"}
           </p>
         </div>
         <div className="min-w-0 flex flex-col space-y-1.5">
           <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Queue</p>
-          <p className="text-sm font-mono break-words leading-relaxed text-foreground bg-background/50 p-2 rounded border">
+          <p className="text-xs font-mono break-all leading-relaxed text-foreground bg-background/50 p-2 rounded border max-w-full overflow-hidden">
             {execution.queue || "default"}
           </p>
         </div>
@@ -214,10 +252,10 @@ export default function ExecutionsPage() {
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3 items-center justify-between bg-card p-3 rounded-md border">
-        <div className="relative w-full sm:w-72">
+        <div className="relative w-full sm:w-80">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search executions by ID..."
+            placeholder="Search by ID (#), UUID, Job Name, or Worker..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9 h-9"
@@ -293,7 +331,7 @@ export default function ExecutionsPage() {
                 <TableHead>Status</TableHead>
                 <TableHead>Job / Project</TableHead>
                 <TableHead>Framework</TableHead>
-                <TableHead>External ID</TableHead>
+                <TableHead>Execution / External ID</TableHead>
                 <TableHead>Duration</TableHead>
                 <TableHead>Started</TableHead>
                 <TableHead>Finished</TableHead>
@@ -335,20 +373,37 @@ export default function ExecutionsPage() {
                         <FrameworkBadge framework={execution.framework} />
                       </TableCell>
                       <TableCell className="py-3">
-                        <div className="flex items-center gap-1.5 group">
-                          <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono truncate max-w-[120px] inline-block" title={execution.external_id}>
-                            {execution.external_id}
-                          </code>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              navigator.clipboard.writeText(execution.external_id);
-                            }}
-                            className="opacity-0 group-hover:opacity-100 p-1 hover:bg-muted rounded text-muted-foreground transition-opacity"
-                            title="Copy full ID"
-                          >
-                            <Copy className="h-3 w-3" />
-                          </button>
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-1.5 group">
+                            <span className="text-xs font-mono font-semibold text-foreground bg-primary/10 border border-primary/20 px-1.5 py-0.5 rounded">
+                              #{execution.id}
+                            </span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigator.clipboard.writeText(execution.id.toString());
+                              }}
+                              className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-muted rounded text-muted-foreground transition-opacity"
+                              title="Copy Execution ID"
+                            >
+                              <Copy className="h-3 w-3" />
+                            </button>
+                          </div>
+                          <div className="flex items-center gap-1.5 group">
+                            <code className="text-[11px] bg-muted px-1.5 py-0.5 rounded font-mono truncate max-w-[130px] inline-block text-muted-foreground" title={execution.external_id}>
+                              {execution.external_id}
+                            </code>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigator.clipboard.writeText(execution.external_id);
+                              }}
+                              className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-muted rounded text-muted-foreground transition-opacity"
+                              title="Copy External ID"
+                            >
+                              <Copy className="h-3 w-3" />
+                            </button>
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell className="py-3 text-sm text-muted-foreground">

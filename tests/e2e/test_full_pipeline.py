@@ -1,4 +1,5 @@
 import os
+import sys
 import time
 import pytest
 import subprocess
@@ -102,6 +103,8 @@ def failing_task(self):
     with (tmp_path / "worker_log.txt").open("w") as worker_log:
         worker_proc = subprocess.Popen(
             [
+                sys.executable,
+                "-m",
                 "celery",
                 "-A",
                 "worker.app",

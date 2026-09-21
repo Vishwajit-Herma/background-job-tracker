@@ -94,3 +94,37 @@ class TestExecutionAPI:
         running_exec.refresh_from_db()
         assert running_exec.status == Execution.Status.CANCELLED
         assert "Manually cancelled by user" in running_exec.error_message
+
+    def test_search_executions(self, api_client, user1, setup_data):
+        exec1, exec2 = setup_data
+
+        api_client.force_authenticate(user=user1)
+        url = reverse("api:executions:execution-list")
+
+        # Search by exact numeric ID
+        res = api_client.get(url, {"search": str(exec1.id)})
+        assert res.status_code == status.HTTP_200_OK
+        results = res.data.get("data", res.data)
+        assert len(results) == 1
+        assert results[0]["id"] == exec1.id
+
+        # Search by prefixed numeric ID (#8779 style)
+        res = api_client.get(url, {"search": f"#{exec2.id}"})
+        assert res.status_code == status.HTTP_200_OK
+        results = res.data.get("data", res.data)
+        assert len(results) == 1
+        assert results[0]["id"] == exec2.id
+
+        # Search by external ID
+        res = api_client.get(url, {"search": "exec_1"})
+        assert res.status_code == status.HTTP_200_OK
+        results = res.data.get("data", res.data)
+        assert len(results) == 1
+        assert results[0]["id"] == exec1.id
+
+        # Search by error message
+        res = api_client.get(url, {"search": "Boom"})
+        assert res.status_code == status.HTTP_200_OK
+        results = res.data.get("data", res.data)
+        assert len(results) == 1
+        assert results[0]["id"] == exec2.id

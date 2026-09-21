@@ -284,7 +284,7 @@ def get_job_reliability_overview(job):
     if expectation and expectation.max_runtime_seconds:
         max_runtime_seconds = expectation.max_runtime_seconds
     elif baseline and baseline.is_sufficient and baseline.p95_runtime_ms:
-        max_runtime_seconds = int(max(1, round(baseline.p95_runtime_ms / 1000 * 1.5)))
+        max_runtime_seconds = max(15, int(round(baseline.p95_runtime_ms / 1000 * 3.0)))
 
     next_expected_at = None
     missed_after_at = None

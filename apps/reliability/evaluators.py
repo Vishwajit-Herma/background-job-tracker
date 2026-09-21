@@ -196,10 +196,14 @@ def detect_stalled_and_overdue_executions(job, expectation, baseline, now):
     Strictly configuration-driven for queue delay; does not trigger unless configured.
     """
     max_runtime = None
+    grace_buffer = 10
     if expectation and expectation.max_runtime_seconds:
         max_runtime = expectation.max_runtime_seconds
+        if expectation.grace_period_seconds is not None and expectation.grace_period_seconds > 0:
+            grace_buffer = expectation.grace_period_seconds
     elif baseline and baseline.is_sufficient and baseline.p95_runtime_ms:
-        max_runtime = int(max(1, round(baseline.p95_runtime_ms / 1000 * 1.5)))
+        # Minimum 15s to prevent false positives from asynchronous SDK batch flush intervals
+        max_runtime = max(15, int(round(baseline.p95_runtime_ms / 1000 * 3.0)))
 
     # Only evaluate queue delay if explicitly configured on expectation
     max_queue_delay = (
@@ -246,7 +250,8 @@ def detect_stalled_and_overdue_executions(job, expectation, baseline, now):
                 exec_obj.save(update_fields=["status", "finished_at", "error_message"])
                 continue
 
-            if runtime_seconds > max_runtime:
+            effective_stalled_limit = max_runtime + grace_buffer
+            if runtime_seconds > effective_stalled_limit:
                 current_stalled_execution_ids.add(exec_obj.id)
                 details = {
                     "execution_id": exec_obj.id,
@@ -254,6 +259,7 @@ def detect_stalled_and_overdue_executions(job, expectation, baseline, now):
                     "started_at": exec_obj.started_at.isoformat(),
                     "runtime_seconds": int(runtime_seconds),
                     "max_runtime_seconds": max_runtime,
+                    "grace_buffer_seconds": grace_buffer,
                     "exceeded_by_seconds": int(runtime_seconds - max_runtime),
                 }
                 active_finding = ReliabilityFinding.objects.filter(
