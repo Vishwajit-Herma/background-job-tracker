@@ -30,10 +30,12 @@ nav:
   - Getting Started:
       - Installation: getting-started/installation.md
       - SDK Quickstart: getting-started/sdk-quickstart.md
+      - Platform & Dashboard Guide: features/platform-guide.md
   - Features:
       - AI Reliability Assistant: features/ai-reliability-assistant.md
       - Incident Management & Runbooks: features/incident-management.md
       - Alerting & Notifications: features/alerting-and-notifications.md
+      - Platform & Dashboard Guide: features/platform-guide.md
   - Architecture:
       - System Overview: architecture/overview.md
       - Domain Model: architecture/domain-model.md

@@ -47,6 +47,7 @@ BJT does **not** act as a task broker or execute customer code. Your worker flee
 |---|---|
 | [**Installation**](getting-started/installation.md) | Step-by-step guide to run BJT backend and frontend locally using Docker Compose. |
 | [**SDK Quickstart**](getting-started/sdk-quickstart.md) | 3-line drop-in setup for Celery (Django, FastAPI, Flask, Standalone) and Python RQ. |
+| [**Platform & Dashboard Guide**](features/platform-guide.md) | Visual guide explaining all sidebar sections, reliability baselines, API keys, and admin tools. |
 | [**AI Reliability Assistant**](features/ai-reliability-assistant.md) | Grounded incident investigation, traceback analysis, and recommendation generation. |
 | [**Incident Management**](features/incident-management.md) | Incident triage, team assignment, mitigation runbooks, and postmortems. |
 | [**Alerting & Notifications**](features/alerting-and-notifications.md) | Rule evaluation, policy configuration, and delivery channels (Email, Webhooks, In-App). |
