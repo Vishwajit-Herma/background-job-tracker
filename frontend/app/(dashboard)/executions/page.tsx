@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { getExecutions, cancelExecution, getExecutionEvents, Execution } from "@/lib/api/executions";
 import { getJobs, Job } from "@/lib/api/jobs";
@@ -185,9 +186,11 @@ function StandaloneExecutionDetails({ execution }: { execution: Execution }) {
   );
 }
 
-export default function ExecutionsPage() {
+function ExecutionsPageContent() {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [page, setPage] = useState(1);
+  const searchParams = useSearchParams();
+  const projectParam = searchParams.get("project");
 
   // Fetch contextual data to display nice names
   const { data: projects = [] } = useQuery<Project[]>({
@@ -209,15 +212,22 @@ export default function ExecutionsPage() {
   const debouncedSearch = useDebounce(search, 500);
   const { selectedProjectId } = useProject();
 
+  const effectiveProjectId =
+    projectParam !== null && projectParam !== undefined
+      ? projectParam === "all"
+        ? "all"
+        : parseInt(projectParam, 10) || "all"
+      : selectedProjectId;
+
   // Fetch executions with pagination
   const { data: paginatedExecutions, isLoading, isError, refetch } = useQuery({
-    queryKey: ["executions-all", page, debouncedSearch, ordering, statusFilter, selectedProjectId],
+    queryKey: ["executions-all", page, debouncedSearch, ordering, statusFilter, effectiveProjectId],
     queryFn: () => getExecutions(undefined, { 
       page, 
       search: debouncedSearch, 
       ordering, 
       status: statusFilter !== "all" ? statusFilter : undefined,
-      project: selectedProjectId !== "all" ? selectedProjectId : undefined,
+      project: effectiveProjectId !== "all" && !isNaN(effectiveProjectId as number) ? (effectiveProjectId as number) : undefined,
     }),
   });
 
@@ -462,3 +472,12 @@ export default function ExecutionsPage() {
     </div>
   );
 }
+
+export default function ExecutionsPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-sm text-muted-foreground">Loading executions...</div>}>
+      <ExecutionsPageContent />
+    </Suspense>
+  );
+}
+

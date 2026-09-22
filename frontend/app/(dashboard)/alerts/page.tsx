@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getPaginatedAlertRules, deleteAlertRule, updateAlertRule, AlertRule } from "@/lib/api/alerts";
 import { getProjects, Project } from "@/lib/api/projects";
@@ -21,8 +22,10 @@ import { useAuth } from "@/hooks/use-auth";
 import { useProject } from "@/components/bjt/project-provider";
 import { ProjectSelectFilter } from "@/components/bjt/project-select-filter";
 
-export default function AlertsPage() {
+function AlertsPageContent() {
   const queryClient = useQueryClient();
+  const searchParams = useSearchParams();
+  const projectParam = searchParams.get("project");
   const [modalOpen, setModalOpen] = useState(false);
   const [ruleToEdit, setRuleToEdit] = useState<AlertRule | null>(null);
   const [page, setPage] = useState(1);
@@ -31,6 +34,13 @@ export default function AlertsPage() {
   const isGlobalStaff = Boolean(user?.is_staff);
   const { projects, jobs, teamMap, projectMap, jobMap, isLoading: isLoadingWorkspace } = useWorkspace();
   const { selectedProjectId } = useProject();
+
+  const effectiveProjectId =
+    projectParam !== null && projectParam !== undefined
+      ? projectParam === "all"
+        ? "all"
+        : parseInt(projectParam, 10) || "all"
+      : selectedProjectId;
 
   const manageableProjects = projects.filter(p => {
     if (isGlobalStaff) return true;
@@ -45,13 +55,13 @@ export default function AlertsPage() {
 
   // Fetch alert rules with server-side pagination
   const { data: paginatedRules, isLoading } = useQuery({
-    queryKey: ["alert-rules", page, debouncedSearch, ordering, statusFilter, selectedProjectId],
+    queryKey: ["alert-rules", page, debouncedSearch, ordering, statusFilter, effectiveProjectId],
     queryFn: () => getPaginatedAlertRules({ 
       page, 
       search: debouncedSearch, 
       ordering, 
       is_active: statusFilter !== "all" ? statusFilter === "true" : undefined,
-      project: selectedProjectId !== "all" ? selectedProjectId : undefined,
+      project: effectiveProjectId !== "all" && !isNaN(effectiveProjectId as number) ? (effectiveProjectId as number) : undefined,
     }),
   });
 
@@ -331,3 +341,12 @@ export default function AlertsPage() {
     </div>
   );
 }
+
+export default function AlertsPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-sm text-muted-foreground">Loading alerts...</div>}>
+      <AlertsPageContent />
+    </Suspense>
+  );
+}
+

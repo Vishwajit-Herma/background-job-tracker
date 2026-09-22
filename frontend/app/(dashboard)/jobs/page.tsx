@@ -32,9 +32,17 @@ import {
 function JobsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const projectParam = searchParams?.get("project");
   const { user } = useAuth();
   const isGlobalStaff = user?.is_staff ?? false;
   const { selectedProjectId } = useProject();
+
+  const effectiveProjectId =
+    projectParam !== null && projectParam !== undefined
+      ? projectParam === "all"
+        ? "all"
+        : parseInt(projectParam, 10) || "all"
+      : selectedProjectId;
 
   const [selectedJob, setSelectedJob] = useState<{ id: number; name: string } | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -68,13 +76,13 @@ function JobsPageContent() {
   const debouncedSearch = useDebounce(search, 500);
 
   const { data: paginatedJobs, isLoading: isLoadingJobs, isError: isJobsError, refetch } = useQuery({
-    queryKey: ["jobs-paginated", page, debouncedSearch, ordering, statusFilter, selectedProjectId],
+    queryKey: ["jobs-paginated", page, debouncedSearch, ordering, statusFilter, effectiveProjectId],
     queryFn: () => getJobsPaginated({ 
       page, 
       search: debouncedSearch, 
       ordering, 
       status: statusFilter !== "all" ? statusFilter : undefined,
-      project: selectedProjectId !== "all" ? selectedProjectId : undefined,
+      project: effectiveProjectId !== "all" && !isNaN(effectiveProjectId as number) ? (effectiveProjectId as number) : undefined,
     }),
   });
 

@@ -1,6 +1,7 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { getProjects, Project } from "@/lib/api/projects";
 import { useTeam } from "./team-provider";
@@ -16,6 +17,33 @@ interface ProjectContextType {
 const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
 
 const STORAGE_KEY = "bjt_selected_project_id";
+
+function UrlProjectSyncer({
+  selectedProjectId,
+  setSelectedProjectId,
+}: {
+  selectedProjectId: number | "all";
+  setSelectedProjectId: (id: number | "all") => void;
+}) {
+  const searchParams = useSearchParams();
+  const projectParam = searchParams.get("project");
+
+  useEffect(() => {
+    if (!projectParam) return;
+    if (projectParam === "all") {
+      if (selectedProjectId !== "all") {
+        setSelectedProjectId("all");
+      }
+    } else {
+      const parsed = parseInt(projectParam, 10);
+      if (!isNaN(parsed) && parsed !== selectedProjectId) {
+        setSelectedProjectId(parsed);
+      }
+    }
+  }, [projectParam, selectedProjectId, setSelectedProjectId]);
+
+  return null;
+}
 
 export function ProjectProvider({ children }: { children: React.ReactNode }) {
   const { activeTeam } = useTeam();
@@ -81,6 +109,12 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         isLoading,
       }}
     >
+      <Suspense fallback={null}>
+        <UrlProjectSyncer
+          selectedProjectId={selectedProjectId}
+          setSelectedProjectId={setSelectedProjectId}
+        />
+      </Suspense>
       {children}
     </ProjectContext.Provider>
   );

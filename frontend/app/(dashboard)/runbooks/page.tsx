@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getRunbooks, deleteRunbook, deactivateRunbook, Runbook } from "@/lib/api/incidents";
 import { useWorkspace } from "@/hooks/use-workspace";
@@ -27,10 +28,19 @@ import { toastError, toastSuccess } from "@/lib/toast";
 import { useProject } from "@/components/bjt/project-provider";
 import { ProjectSelectFilter } from "@/components/bjt/project-select-filter";
 
-export default function RunbooksPage() {
+function RunbooksPageContent() {
   const queryClient = useQueryClient();
+  const searchParams = useSearchParams();
+  const projectParam = searchParams.get("project");
   const { projects, jobs } = useWorkspace();
   const { selectedProjectId } = useProject();
+
+  const effectiveProjectId =
+    projectParam !== null && projectParam !== undefined
+      ? projectParam === "all"
+        ? "all"
+        : parseInt(projectParam, 10) || "all"
+      : selectedProjectId;
 
   const [selectedTrigger, setSelectedTrigger] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -41,13 +51,13 @@ export default function RunbooksPage() {
   const { data: runbooks = [], isLoading } = useQuery({
     queryKey: [
       "runbooks",
-      selectedProjectId !== "all" ? Number(selectedProjectId) : undefined,
+      effectiveProjectId !== "all" ? Number(effectiveProjectId) : undefined,
       selectedTrigger !== "all" ? selectedTrigger : undefined,
       searchQuery,
     ],
     queryFn: () =>
       getRunbooks({
-        project: selectedProjectId !== "all" ? Number(selectedProjectId) : undefined,
+        project: effectiveProjectId !== "all" ? Number(effectiveProjectId) : undefined,
         trigger_type: selectedTrigger !== "all" ? selectedTrigger : undefined,
         search: searchQuery || undefined,
       }),
@@ -295,8 +305,17 @@ export default function RunbooksPage() {
         open={isFormOpen}
         onOpenChange={setIsFormOpen}
         runbook={editingRunbook}
-        initialProjectId={selectedProjectId !== "all" ? Number(selectedProjectId) : undefined}
+        initialProjectId={effectiveProjectId !== "all" && !isNaN(effectiveProjectId as number) ? Number(effectiveProjectId) : undefined}
       />
     </div>
   );
 }
+
+export default function RunbooksPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-sm text-muted-foreground">Loading runbooks...</div>}>
+      <RunbooksPageContent />
+    </Suspense>
+  );
+}
+

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { getIncidents } from "@/lib/api/incidents";
 import { getProjects, Project } from "@/lib/api/projects";
@@ -20,8 +21,10 @@ import { getTriggerSummary } from "@/lib/incident-trigger-utils";
 import { useProject } from "@/components/bjt/project-provider";
 import { ProjectSelectFilter } from "@/components/bjt/project-select-filter";
 
-export default function IncidentsPage() {
+function IncidentsPageContent() {
   const [page, setPage] = useState(1);
+  const searchParams = useSearchParams();
+  const projectParam = searchParams.get("project");
 
   const { data: projects = [] } = useQuery<Project[]>({ queryKey: ["projects"], queryFn: () => getProjects() });
   const { data: jobs = [] } = useQuery({ queryKey: ["jobs"], queryFn: () => getJobs() });
@@ -40,8 +43,15 @@ export default function IncidentsPage() {
   const { user } = useAuth();
   const { selectedProjectId } = useProject();
 
+  const effectiveProjectId =
+    projectParam !== null && projectParam !== undefined
+      ? projectParam === "all"
+        ? "all"
+        : parseInt(projectParam, 10) || "all"
+      : selectedProjectId;
+
   const { data: paginatedIncidents, isLoading, isError } = useQuery({
-    queryKey: ["incidents", page, debouncedSearch, ordering, statusFilter, severityFilter, assigneeFilter, selectedProjectId],
+    queryKey: ["incidents", page, debouncedSearch, ordering, statusFilter, severityFilter, assigneeFilter, effectiveProjectId],
     queryFn: () => getIncidents({ 
       page, 
       search: debouncedSearch, 
@@ -49,7 +59,7 @@ export default function IncidentsPage() {
       status: statusFilter !== "all" ? statusFilter : undefined,
       severity: severityFilter !== "all" ? severityFilter : undefined,
       assigned_to__user: assigneeFilter === "me" ? user?.id || (user as any)?.pk : undefined,
-      project: selectedProjectId !== "all" ? selectedProjectId : undefined,
+      project: effectiveProjectId !== "all" && !isNaN(effectiveProjectId as number) ? (effectiveProjectId as number) : undefined,
     }),
   });
 
@@ -290,3 +300,12 @@ export default function IncidentsPage() {
     </div>
   );
 }
+
+export default function IncidentsPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-sm text-muted-foreground">Loading incidents...</div>}>
+      <IncidentsPageContent />
+    </Suspense>
+  );
+}
+

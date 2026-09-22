@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useEffect, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import Link from "next/link";
+import { useSearchParams, useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTeam } from "@/components/bjt/team-provider";
+import { useProject } from "@/components/bjt/project-provider";
 import { useAuth } from "@/hooks/use-auth";
 import { Team } from "@/lib/api/teams";
 import {
@@ -751,8 +753,10 @@ function ProjectRow({
   manageableTeams: Team[];
   defaultExpanded: boolean;
 }) {
+  const router = useRouter();
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const { setSelectedProjectId } = useProject();
   const team = teamMap.get(project.team);
   const isGlobalStaff = user?.is_staff ?? false;
   const userRole = memberRoleForProject(team, isGlobalStaff);
@@ -874,8 +878,14 @@ function ProjectRow({
             <DropdownMenuItem onClick={() => setExpanded(true)}>
               <FolderOpen className="mr-2 h-4 w-4" /> Open
             </DropdownMenuItem>
-            <DropdownMenuItem render={<a href={`/analytics?project=${project.id}`} />}>
+            <DropdownMenuItem onClick={() => { setSelectedProjectId(project.id); router.push(`/analytics?project=${project.id}`); }}>
               <Activity className="mr-2 h-4 w-4" /> Analytics
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => { setSelectedProjectId(project.id); router.push(`/alerts?project=${project.id}`); }}>
+              <Bell className="mr-2 h-4 w-4" /> Alerts
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => { setSelectedProjectId(project.id); router.push(`/incidents?project=${project.id}`); }}>
+              <AlertTriangle className="mr-2 h-4 w-4" /> Incidents
             </DropdownMenuItem>
             {canManage && (
               <>
@@ -908,13 +918,14 @@ function ProjectRow({
                 {navItems.map((item) => {
                   if (item.href) {
                     return (
-                      <a
+                      <Link
                         key={item.id}
                         href={item.href}
+                        onClick={() => setSelectedProjectId(project.id)}
                         className="px-3 py-1.5 text-sm font-medium transition-colors text-muted-foreground hover:text-foreground flex items-center gap-1.5 whitespace-nowrap"
                       >
                         <item.icon className="h-4 w-4" /> {item.label} <ExternalLink className="h-3 w-3 opacity-50" />
-                      </a>
+                      </Link>
                     );
                   }
                   return (

@@ -67,12 +67,30 @@ function buildTrend(
 export function AnalyticsPageClient() {
   const searchParams = useSearchParams();
   const range = searchParams.get("range") || "24h";
+  const projectParam = searchParams.get("project");
   const { projects, isLoading: isWorkspaceLoading } = useWorkspace();
-  const { selectedProjectId } = useProject();
+  const { selectedProjectId, setSelectedProjectId } = useProject();
   
-  const [projectId, setProjectId] = useState<number | null>(null);
+  const [projectId, setProjectId] = useState<number | null>(() => {
+    if (projectParam && projectParam !== "all") {
+      const parsed = parseInt(projectParam, 10);
+      if (!isNaN(parsed)) return parsed;
+    }
+    if (selectedProjectId !== "all") return selectedProjectId;
+    return null;
+  });
 
   useEffect(() => {
+    if (projectParam && projectParam !== "all") {
+      const parsed = parseInt(projectParam, 10);
+      if (!isNaN(parsed)) {
+        setProjectId(parsed);
+        if (selectedProjectId !== parsed) {
+          setSelectedProjectId(parsed);
+        }
+        return;
+      }
+    }
     if (selectedProjectId !== "all") {
       setProjectId(selectedProjectId);
     } else if (projects.length > 0) {
@@ -80,7 +98,7 @@ export function AnalyticsPageClient() {
     } else {
       setProjectId(null);
     }
-  }, [selectedProjectId, projects]);
+  }, [projectParam, selectedProjectId, projects, setSelectedProjectId]);
 
   const { data: analytics, isLoading: isAnalyticsLoading, isError: isAnalyticsError, refetch: refetchAnalytics, isRefetching: isRefetchingAnalytics } = useProjectAnalytics(projectId, { range });
   const { data: trendData, isLoading: isTrendLoading, isError: isTrendError, refetch: refetchTrend, isRefetching: isRefetchingTrend } = useProjectAnalyticsTrend(projectId, { range });
