@@ -86,7 +86,9 @@ logs/
 
 # Database backups
 *.dump
+*.sql
 *.sql.gz
+backups/
 
 # Agents
 .agents/
