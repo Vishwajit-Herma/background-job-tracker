@@ -23,6 +23,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Trash2, ArrowUp, ArrowDown, Loader2, BookOpen } from "lucide-react";
 
 const TRIGGER_TYPES: { value: RunbookTriggerType | ""; label: string }[] = [
@@ -228,37 +229,46 @@ export function RunbookFormDialog({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold uppercase text-muted-foreground">Project *</Label>
-              <select
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm ring-offset-background focus:outline-none focus:ring-1 focus:ring-ring"
-                value={projectId || ""}
-                onChange={(e) => {
-                  const pid = Number(e.target.value);
-                  setProjectId(pid);
-                  setJobId(null);
+              <Select
+                value={projectId ? String(projectId) : undefined}
+                onValueChange={(val) => {
+                  if (val) {
+                    setProjectId(Number(val));
+                    setJobId(null);
+                  }
                 }}
               >
-                {projects.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger className="w-full h-9">
+                  <SelectValue placeholder="Select Project" />
+                </SelectTrigger>
+                <SelectContent>
+                  {projects.map((p) => (
+                    <SelectItem key={p.id} value={String(p.id)}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold uppercase text-muted-foreground">Target Job (Optional)</Label>
-              <select
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm ring-offset-background focus:outline-none focus:ring-1 focus:ring-ring"
-                value={jobId || ""}
-                onChange={(e) => setJobId(e.target.value ? Number(e.target.value) : null)}
+              <Select
+                value={jobId ? String(jobId) : "all"}
+                onValueChange={(val) => setJobId(val === "all" ? null : Number(val))}
               >
-                <option value="">All Jobs in Project</option>
-                {availableJobs.map((j) => (
-                  <option key={j.id} value={j.id}>
-                    {j.name}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger className="w-full h-9">
+                  <SelectValue placeholder="All Jobs in Project" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Jobs in Project</SelectItem>
+                  {availableJobs.map((j) => (
+                    <SelectItem key={j.id} value={String(j.id)}>
+                      {j.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
@@ -276,17 +286,21 @@ export function RunbookFormDialog({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold uppercase text-muted-foreground">Incident Trigger Matching</Label>
-              <select
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm ring-offset-background focus:outline-none focus:ring-1 focus:ring-ring"
-                value={triggerType}
-                onChange={(e) => setTriggerType(e.target.value)}
+              <Select
+                value={triggerType || "any"}
+                onValueChange={(val) => setTriggerType(val === "any" ? "" : (val as RunbookTriggerType))}
               >
-                {TRIGGER_TYPES.map((t) => (
-                  <option key={t.value} value={t.value}>
-                    {t.label}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger className="w-full h-9">
+                  <SelectValue placeholder="Select Trigger" />
+                </SelectTrigger>
+                <SelectContent>
+                  {TRIGGER_TYPES.map((t) => (
+                    <SelectItem key={t.value || "any"} value={t.value || "any"}>
+                      {t.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="flex items-center space-x-2 pt-5">

@@ -27,6 +27,7 @@ import {
 import { toastError, toastSuccess } from "@/lib/toast";
 import { useProject } from "@/components/bjt/project-provider";
 import { ProjectSelectFilter } from "@/components/bjt/project-select-filter";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 function RunbooksPageContent() {
   const queryClient = useQueryClient();
@@ -130,20 +131,26 @@ function RunbooksPageContent() {
           <ProjectSelectFilter className="w-full sm:w-44" />
 
           {/* Trigger Type Filter */}
-          <select
-            className="flex h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm ring-offset-background focus:outline-none focus:ring-1 focus:ring-ring"
+          <Select
             value={selectedTrigger}
-            onChange={(e) => setSelectedTrigger(e.target.value)}
+            onValueChange={(val) => {
+              if (val) setSelectedTrigger(val);
+            }}
           >
-            <option value="all">All Triggers</option>
-            <option value="FAILURE_RATE_ANOMALY">Failure Rate Anomaly</option>
-            <option value="RETRY_RATE_ANOMALY">Retry Rate Anomaly</option>
-            <option value="DURATION_ANOMALY">Duration Anomaly</option>
-            <option value="EXECUTION_VOLUME_ANOMALY">Execution Volume Anomaly</option>
-            <option value="MISSED_EXECUTION">Missed Execution</option>
-            <option value="STALLED_EXECUTION">Stalled Execution</option>
-            <option value="OVERDUE_EXECUTION">Overdue Execution</option>
-          </select>
+            <SelectTrigger className="w-full sm:w-56 h-9">
+              <SelectValue placeholder="All Triggers" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Triggers</SelectItem>
+              <SelectItem value="FAILURE_RATE_ANOMALY">Failure Rate Anomaly</SelectItem>
+              <SelectItem value="RETRY_RATE_ANOMALY">Retry Rate Anomaly</SelectItem>
+              <SelectItem value="DURATION_ANOMALY">Duration Anomaly</SelectItem>
+              <SelectItem value="EXECUTION_VOLUME_ANOMALY">Execution Volume Anomaly</SelectItem>
+              <SelectItem value="MISSED_EXECUTION">Missed Execution</SelectItem>
+              <SelectItem value="STALLED_EXECUTION">Stalled Execution</SelectItem>
+              <SelectItem value="OVERDUE_EXECUTION">Overdue Execution</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         <span className="text-xs text-muted-foreground self-center">

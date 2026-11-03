@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from "@/components/ui/button";
 import { Loader2, ShieldAlert, Trash2 } from "lucide-react";
 import { Project } from "@/lib/api/projects";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 function extractFieldErrors(err: ApiError): Record<string, string> {
   const fe: Record<string, string> = {};
@@ -57,6 +58,8 @@ export function JobFormModal({
     handleSubmit,
     reset,
     setError,
+    setValue,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<JobFormValues>({
     resolver: zodResolver(jobSchema),
@@ -67,6 +70,8 @@ export function JobFormModal({
       description: job?.description ?? "",
     },
   });
+
+  const selectedProject = watch("project") ?? projectId ?? projects?.[0]?.id;
 
   const onSubmit = async (values: JobFormValues) => {
     setServerError(null);
@@ -124,17 +129,23 @@ export function JobFormModal({
               <label className="text-sm font-medium" htmlFor="job-project">
                 Project <span className="text-destructive">*</span>
               </label>
-              <select
-                id="job-project"
-                {...register("project", { valueAsNumber: true })}
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              <Select
+                value={selectedProject ? String(selectedProject) : undefined}
+                onValueChange={(val) => {
+                  if (val) setValue("project", Number(val), { shouldValidate: true });
+                }}
               >
-                {projects.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger id="job-project" className="w-full">
+                  <SelectValue placeholder="Select project..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {projects.map((p) => (
+                    <SelectItem key={p.id} value={String(p.id)}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               {errors.project && (
                 <p className="text-xs text-destructive">{errors.project.message}</p>
               )}

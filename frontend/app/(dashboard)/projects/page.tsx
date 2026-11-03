@@ -188,6 +188,8 @@ function ProjectFormModal({
     handleSubmit,
     reset,
     setError,
+    setValue,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<ProjectFormValues>({
     resolver: zodResolver(projectSchema),
@@ -197,6 +199,8 @@ function ProjectFormModal({
       team: project?.team ?? defaultTeamId ?? manageableTeams[0]?.id,
     },
   });
+
+  const selectedTeam = watch("team") ?? defaultTeamId ?? manageableTeams[0]?.id;
 
   const onSubmit = async (values: ProjectFormValues) => {
     setServerError(null);
@@ -245,17 +249,23 @@ function ProjectFormModal({
               <label className="text-sm font-medium" htmlFor="proj-team">
                 Team <span className="text-destructive">*</span>
               </label>
-              <select
-                id="proj-team"
-                {...register("team", { valueAsNumber: true })}
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              <Select
+                value={selectedTeam ? String(selectedTeam) : undefined}
+                onValueChange={(val) => {
+                  if (val) setValue("team", Number(val), { shouldValidate: true });
+                }}
               >
-                {manageableTeams.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name} ({t.my_role})
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger id="proj-team" className="w-full">
+                  <SelectValue placeholder="Select team..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {manageableTeams.map((t) => (
+                    <SelectItem key={t.id} value={String(t.id)}>
+                      {t.name} ({t.my_role})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               {errors.team && (
                 <p className="text-xs text-destructive">{errors.team.message}</p>
               )}

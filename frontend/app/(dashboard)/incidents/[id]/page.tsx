@@ -621,7 +621,7 @@ export default function IncidentDetailsPage() {
               <User className="h-4 w-4 text-muted-foreground" />
               {hasManagePermission ? (
                 <select
-                  className="bg-background border border-input rounded px-2 py-0.5 text-xs focus:outline-none focus:border-primary font-medium cursor-pointer"
+                  className="bg-background text-foreground border border-input rounded px-2 py-0.5 text-xs focus:outline-none focus:border-primary font-medium cursor-pointer"
                   value={incident.assigned_to ?? ""}
                   onChange={(e) => {
                     const val = e.target.value ? Number(e.target.value) : null;

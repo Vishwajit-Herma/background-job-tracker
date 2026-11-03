@@ -179,7 +179,7 @@ function ActionItemRow({ item, incidentId, canEdit, isReadOnly, teamMembers }: A
           <div className="flex items-center gap-1">
             <User className="h-3.5 w-3.5 text-muted-foreground" />
             <select
-              className="border border-input bg-background rounded px-2 py-1 text-xs"
+              className="border border-input bg-background text-foreground rounded px-2 py-1 text-xs"
               value={editOwner ?? ""}
               onChange={(e) => setEditOwner(e.target.value ? Number(e.target.value) : null)}
             >
@@ -203,7 +203,7 @@ function ActionItemRow({ item, incidentId, canEdit, isReadOnly, teamMembers }: A
           </div>
 
           <select
-            className="border border-input bg-background rounded px-2 py-1 text-xs ml-auto"
+            className="border border-input bg-background text-foreground rounded px-2 py-1 text-xs ml-auto"
             value={editStatus}
             onChange={(e) => setEditStatus(e.target.value as ActionItemStatus)}
           >
@@ -244,7 +244,7 @@ function ActionItemRow({ item, incidentId, canEdit, isReadOnly, teamMembers }: A
           </p>
           {canUpdateStatus ? (
             <select
-              className="text-[11px] border border-input bg-background rounded px-1.5 py-0.5 font-medium cursor-pointer"
+              className="text-[11px] border border-input bg-background text-foreground rounded px-1.5 py-0.5 font-medium cursor-pointer"
               value={item.status}
               disabled={statusOnlyMutation.isPending}
               onChange={(e) => statusOnlyMutation.mutate(e.target.value as ActionItemStatus)}
@@ -667,7 +667,7 @@ export function PostmortemSection({ incidentId, teamId, hasManagePermission = fa
               <div className="flex items-center gap-1">
                 <User className="h-3.5 w-3.5 text-muted-foreground" />
                 <select
-                  className="border border-input bg-background rounded px-2 py-1 text-xs"
+                  className="border border-input bg-background text-foreground rounded px-2 py-1 text-xs"
                   value={newItemOwner ?? ""}
                   onChange={(e) => setNewItemOwner(e.target.value ? Number(e.target.value) : null)}
                 >

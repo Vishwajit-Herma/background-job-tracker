@@ -16,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { inviteUser } from "@/lib/api/teams";
 import { ApiError } from "@/lib/api/client";
 
@@ -44,11 +45,15 @@ export function InviteMemberModal({
     register,
     handleSubmit,
     reset,
+    setValue,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<InviteFormValues>({
     resolver: zodResolver(inviteSchema),
     defaultValues: { role: "member" },
   });
+
+  const selectedRole = watch("role") ?? "member";
 
   const onSubmit = async (data: InviteFormValues) => {
     setErrorMsg(null);
@@ -90,15 +95,21 @@ export function InviteMemberModal({
           </div>
           <div className="space-y-2">
             <Label htmlFor="role">Role</Label>
-            <select
-              id="role"
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-              {...register("role")}
+            <Select
+              value={selectedRole}
+              onValueChange={(val) => {
+                if (val) setValue("role", val as "owner" | "admin" | "member", { shouldValidate: true });
+              }}
             >
-              <option value="member">Member</option>
-              <option value="admin">Admin</option>
-              {canInviteOwner && <option value="owner">Owner</option>}
-            </select>
+              <SelectTrigger id="role" className="w-full">
+                <SelectValue placeholder="Select role" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="member">Member</SelectItem>
+                <SelectItem value="admin">Admin</SelectItem>
+                {canInviteOwner && <SelectItem value="owner">Owner</SelectItem>}
+              </SelectContent>
+            </Select>
           </div>
           
           {errorMsg && (
